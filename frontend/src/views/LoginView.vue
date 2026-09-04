@@ -42,7 +42,29 @@
         </div>
       </template>
 
-      <!-- Form untuk Admin & Penjaga -->
+      <!-- Form untuk Guru -->
+      <template v-else-if="selectedRole === 'guru'">
+        <div class="form-group">
+          <label>NIP</label>
+          <input
+            v-model="form.nip"
+            type="text"
+            placeholder="Masukkan NIP"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input
+            v-model="form.password"
+            type="password"
+            placeholder="Masukkan password"
+            required
+          />
+       </div>
+      </template>
+
+      <!-- Form untuk Admin -->
       <template v-else>
         <div class="form-group">
           <label>Username</label>
@@ -52,7 +74,7 @@
             placeholder="Masukkan username"
             required
           />
-        </div>
+          </div>
         <div class="form-group">
           <label>Password</label>
           <input
@@ -79,8 +101,8 @@ const router = useRouter()
 
 const roles = [
   { value: 'siswa', label: 'Siswa' },
-  { value: 'admin', label: 'Admin' },
-  { value: 'penjaga', label: 'Penjaga Perpustakaan' }
+  { value: 'guru', label: 'Guru' },
+  { value: 'admin', label: 'Admin' }
 ]
 
 const selectedRole = ref('siswa')
@@ -89,7 +111,8 @@ const form = ref({
   nis: '',
   tanggalLahir: '',
   username: '',
-  password: ''
+  password: '',
+  nip: ''
 })
 
 // Label yang ditampilkan di tombol
@@ -104,7 +127,8 @@ watch(selectedRole, () => {
     nis: '',
     tanggalLahir: '',
     username: '',
-    password: ''
+    password: '',
+    nip: ''
   }
 })
 
@@ -115,7 +139,7 @@ function handleLogin() {
       tanggalLahir: form.value.tanggalLahir
     })
     // Nanti diganti dengan API call
-   router.push('/dashboard')
+   router.push('/siswa')
   } 
   
   else if (selectedRole.value === 'admin') {
@@ -127,13 +151,13 @@ function handleLogin() {
     router.push('/admin') // contoh route
   } 
   
-  else if (selectedRole.value === 'penjaga') {
-    console.log('Login Penjaga:', {
-      username: form.value.username,
+  else if (selectedRole.value === 'guru') {
+    console.log('Login Guru:', {
+      username: form.value.nip,
       password: form.value.password
     })
     // Nanti diganti dengan API call
-    router.push('/penjaga') // contoh route
+    router.push('/guru')
   }
 }
 </script>

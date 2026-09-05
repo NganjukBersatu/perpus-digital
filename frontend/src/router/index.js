@@ -7,6 +7,7 @@ import DashboardGuruLayout from '../views/guru/DashboardGuruLayout.vue'
 import DashboardGuruView from '../views/guru/DashboardGuruView.vue'
 import GuruKatalogView from '../views/guru/GuruKatalogView.vue'
 import GuruFavoritView from '../views/guru/GuruFavoritView.vue'
+import ScanBukuPage from '../views/admin/ScanBukuPage.vue'
 
 const ComingSoon = {
   props: {
@@ -113,6 +114,11 @@ const router = createRouter({
           props: { title: 'Bantuan' }
         }
       ]
+    },
+    {
+      path: '/admin/pinjam',
+      name: 'admin-pinjam',
+      component: ScanBukuPage
     }
   ]
 })

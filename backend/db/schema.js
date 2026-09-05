@@ -31,6 +31,8 @@ const peminjaman = pgTable("peminjaman", {
   anggotaId: integer("anggota_id").notNull().references(() => anggota.id),
   tanggalPinjam: date("tanggal_pinjam"),
   tanggalKembali: date("tanggal_kembali"),
+  tanggalDikembalikan: date("tanggal_dikembalikan"),
+  denda: integer("denda").default(0),
 })
 
 module.exports = { buku, eksemplarBuku, anggota, peminjaman }

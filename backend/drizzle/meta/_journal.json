@@ -15,6 +15,13 @@
       "when": 1788577919142,
       "tag": "0001_silky_bloodstorm",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788598032421,
+      "tag": "0002_broken_sage",
+      "breakpoints": true
     }
   ]
 }

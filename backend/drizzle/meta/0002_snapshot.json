@@ -1,0 +1,262 @@
+{
+  "id": "e0169a24-4bbf-4251-9295-3ba51a0fed29",
+  "prevId": "b3eb01d3-7102-4735-a057-5510a22180d3",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.buku": {
+      "name": "buku",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "judul": {
+          "name": "judul",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "penulis": {
+          "name": "penulis",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "penerbit": {
+          "name": "penerbit",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "isbn": {
+          "name": "isbn",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.eksemplar_buku": {
+      "name": "eksemplar_buku",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "buku_id": {
+          "name": "buku_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "barcode": {
+          "name": "barcode",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'tersedia'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "eksemplar_buku_buku_id_buku_id_fk": {
+          "name": "eksemplar_buku_buku_id_buku_id_fk",
+          "tableFrom": "eksemplar_buku",
+          "tableTo": "buku",
+          "columnsFrom": [
+            "buku_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "eksemplar_buku_barcode_unique": {
+          "name": "eksemplar_buku_barcode_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "barcode"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.anggota": {
+      "name": "anggota",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "nama": {
+          "name": "nama",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kelas": {
+          "name": "kelas",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.peminjaman": {
+      "name": "peminjaman",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "nama": {
+          "name": "nama",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kelas": {
+          "name": "kelas",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "eksemplar_id": {
+          "name": "eksemplar_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "anggota_id": {
+          "name": "anggota_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tanggal_pinjam": {
+          "name": "tanggal_pinjam",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tanggal_kembali": {
+          "name": "tanggal_kembali",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tanggal_dikembalikan": {
+          "name": "tanggal_dikembalikan",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "denda": {
+          "name": "denda",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "peminjaman_eksemplar_id_eksemplar_buku_id_fk": {
+          "name": "peminjaman_eksemplar_id_eksemplar_buku_id_fk",
+          "tableFrom": "peminjaman",
+          "tableTo": "eksemplar_buku",
+          "columnsFrom": [
+            "eksemplar_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "peminjaman_anggota_id_anggota_id_fk": {
+          "name": "peminjaman_anggota_id_anggota_id_fk",
+          "tableFrom": "peminjaman",
+          "tableTo": "anggota",
+          "columnsFrom": [
+            "anggota_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

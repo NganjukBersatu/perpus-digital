@@ -17,10 +17,18 @@ const eksemplarBuku = pgTable("eksemplar_buku", {
   createdAt: timestamp("created_at").defaultNow(),
 })
 
+const kelas = pgTable("kelas", {
+  id: serial("id").primaryKey(),
+  namaKelas: varchar("nama_kelas", { length: 50 }).unique().notNull(),
+})
+
 const anggota = pgTable("anggota", {
   id: serial("id").primaryKey(),
   nama: varchar("nama", { length: 255 }).notNull(),
   kelas: varchar("kelas", { length: 50 }),
+  nip: varchar("nip", { length: 50 }),
+  mapel: varchar("mapel", { length: 100 }),
+  peran: varchar("peran", { length: 20 }).notNull().default("siswa"),
 })
 
 const peminjaman = pgTable("peminjaman", {
@@ -35,4 +43,4 @@ const peminjaman = pgTable("peminjaman", {
   denda: integer("denda").default(0),
 })
 
-module.exports = { buku, eksemplarBuku, anggota, peminjaman }
+module.exports = { buku, eksemplarBuku, anggota, peminjaman, kelas }

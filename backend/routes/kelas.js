@@ -1,6 +1,6 @@
 const { Router } = require("express")
 const { asc } = require("drizzle-orm")
-const { db } = require("../db/client")
+const db = require("../db/index") // sesuaikan path file koneksi drizzle kamu
 const { kelas } = require("../db/schema")
 
 const router = Router()

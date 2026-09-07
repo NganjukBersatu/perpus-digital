@@ -22,6 +22,27 @@
       "when": 1788598032421,
       "tag": "0002_broken_sage",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788743430797,
+      "tag": "0003_broken_drax",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788745561856,
+      "tag": "0004_bouncy_epoch",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788752014716,
+      "tag": "0005_lush_dexter_bennett",
+      "breakpoints": true
     }
   ]
 }

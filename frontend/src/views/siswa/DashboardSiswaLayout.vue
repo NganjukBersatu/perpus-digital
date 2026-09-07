@@ -87,7 +87,7 @@ function logout() {
           <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
         </svg>
         <div class="brand-text">
-          <div class="brand-title">MANAGEMENT PERPUS</div>
+          <div class="brand-title">PERPUSTAKAAN DIGITAL</div>
           <div class="brand-sub">SMK NEGERI 1 KERTOSONO</div>
         </div>
         <button class="sidebar-toggle-inside" @click="toggleSidebar">

@@ -10,6 +10,7 @@ import GuruFavoritView from '../views/guru/GuruFavoritView.vue'
 import ScanBukuPage from '../views/admin/ScanBukuPage.vue'
 import DashboardAdminLayout from '../views/admin/DashboardAdminLayout.vue'
 import DashboardAdminView from '../views/admin/DashboardAdminView.vue'
+import DataBukuPage from '../views/admin/DataBukuPage.vue'
 
 const ComingSoon = {
   props: {
@@ -139,8 +140,7 @@ const router = createRouter({
         {
           path: 'data-buku',
           name: 'admin-data-buku',
-          component: ComingSoon,
-          props: { title: 'Data Buku' }
+          component: DataBukuPage
         },
         {
           path: 'kategori-buku',

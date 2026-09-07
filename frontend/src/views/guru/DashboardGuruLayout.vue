@@ -42,7 +42,7 @@ function logout() {
           <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
         </svg>
         <div class="brand-text">
-          <div class="brand-title">PERPUSTAKAAN DIGITAL</div>
+          <div class="brand-title">MANAGEMENT PERPUS</div>
           <div class="brand-sub">SMK NEGERI 1 KERTOSONO</div>
         </div>
         <button class="sidebar-toggle-inside" @click="toggleSidebar">
@@ -59,7 +59,7 @@ function logout() {
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
               <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
-            Beranda
+            <span class="nav-label">Beranda</span>
           </span>
         </router-link>
 
@@ -70,7 +70,7 @@ function logout() {
               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
               <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
             </svg>
-            Katalog Buku
+            <span class="nav-label">Katalog Buku</span>
           </span>
         </router-link>
         <router-link to="/guru/favorit" class="nav-item" active-class="active">
@@ -79,7 +79,7 @@ function logout() {
               <path d="M20.59 13.41L11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .58 1.42l9.58 9.58a2 2 0 0 0 2.83 0l4.36-4.36a2 2 0 0 0 0-2.82z" />
               <line x1="7" y1="7" x2="7.01" y2="7" />
             </svg>
-            Buku Favorit
+            <span class="nav-label">Buku Favorit</span>
           </span>
         </router-link>
         <router-link to="/guru/rekomendasi" class="nav-item" active-class="active">
@@ -87,7 +87,7 @@ function logout() {
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 3v4M12 17v4M4.2 4.2l2.8 2.8M17 17l2.8 2.8M3 12h4M17 12h4M4.2 19.8l2.8-2.8M17 7l2.8-2.8" />
             </svg>
-            Rekomendasi
+            <span class="nav-label">Rekomendasi</span>
           </span>
         </router-link>
 
@@ -100,7 +100,7 @@ function logout() {
               <line x1="9" y1="12" x2="15" y2="12" />
               <line x1="9" y1="16" x2="15" y2="16" />
             </svg>
-            Peminjaman Saya
+            <span class="nav-label">Peminjaman Saya</span>
           </span>
         </router-link>
         <router-link to="/guru/riwayat" class="nav-item" active-class="active">
@@ -109,7 +109,7 @@ function logout() {
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
             </svg>
-            Riwayat Peminjaman
+            <span class="nav-label">Riwayat Peminjaman</span>
           </span>
         </router-link>
         <router-link to="/guru/pengembalian" class="nav-item" active-class="active">
@@ -118,7 +118,7 @@ function logout() {
               <polyline points="9 14 4 9 9 4" />
               <path d="M20 20v-7a4 4 0 0 0-4-4H4" />
             </svg>
-            Pengembalian
+            <span class="nav-label">Pengembalian</span>
           </span>
         </router-link>
 
@@ -129,7 +129,7 @@ function logout() {
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
-            Notifikasi
+            <span class="nav-label">Notifikasi</span>
           </span>
           <span class="badge">{{ notifikasi.length }}</span>
         </router-link>
@@ -140,7 +140,7 @@ function logout() {
               <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
               <line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
-            Bantuan
+            <span class="nav-label">Bantuan</span>
           </span>
         </router-link>
 
@@ -161,7 +161,7 @@ function logout() {
           <polyline points="16 17 21 12 16 7" />
           <line x1="21" y1="12" x2="9" y2="12" />
         </svg>
-        Keluar
+        <span class="nav-label">Keluar</span>
       </button>
     </aside>
 
@@ -228,7 +228,56 @@ function logout() {
 }
 
 .sidebar-closed {
-  transform: translateX(-100%);
+  width: 76px;
+  padding: 16px 10px;
+  align-items: center;
+}
+.sidebar-closed .brand .icon-lg {
+  display: none;
+}.sidebar-closed .brand {
+  flex-direction: column;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.sidebar-closed .sidebar-toggle-inside,
+.sidebar-closed .brand {
+  display: none;
+}
+
+.sidebar-closed .brand-text,
+.sidebar-closed .nav-section,
+.sidebar-closed .nav-label,
+.sidebar-closed .profile-text,
+.sidebar-closed .btn-outline-light,
+.sidebar-closed .badge {
+  display: none;
+}
+
+.sidebar-closed .brand {
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.sidebar-closed .nav-item,
+.sidebar-closed .btn-logout {
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.sidebar-closed .nav-item-left {
+  justify-content: center;
+  gap: 0;
+}
+
+.sidebar-closed .profile-card {
+  justify-content: center;
+  padding: 10px 0;
+  background: transparent;
+}
+
+.sidebar-closed .sidebar-toggle-inside svg {
+  transform: rotate(180deg);
 }
 
 .brand {

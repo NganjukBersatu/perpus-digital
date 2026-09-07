@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 
 const summary = ref({ totalDikembalikan: 0, hariIni: 0, tepatWaktu: 0, terlambat: 0 })
@@ -31,6 +31,39 @@ const persenTerlambat = () => summary.value.totalDikembalikan ? Math.round((summ
 const formatTanggal = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'
 const initial = (nama) => nama ? nama.charAt(0).toUpperCase() : '?'
 
+const formatRangeShort = (d) => {
+  const dt = new Date(d)
+  const day = String(dt.getDate()).padStart(2, '0')
+  const month = String(dt.getMonth() + 1).padStart(2, '0')
+  const year = dt.getFullYear()
+  return `${day}/${month}/${year}`
+}
+
+const tanggalHariIni = computed(() => {
+  return new Date().toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+})
+
+const rentangTanggalData = computed(() => {
+  const dates = data.value
+    .map((row) => row.tanggalDikembalikan)
+    .filter(Boolean)
+    .map((d) => new Date(d))
+    .filter((d) => !Number.isNaN(d.getTime()))
+
+  if (!dates.length) return '-'
+
+  const min = new Date(Math.min(...dates))
+  const max = new Date(Math.max(...dates))
+  const awal = formatRangeShort(min)
+  const akhir = formatRangeShort(max)
+
+  return awal === akhir ? awal : `${awal} - ${akhir}`
+})
+
 onMounted(() => { fetchSummary(); fetchData() })
 watch([search, status, limit], () => { page.value = 1; fetchData() })
 watch(page, fetchData)
@@ -43,14 +76,14 @@ watch(page, fetchData)
         <h1>Pengembalian</h1>
         <p class="subtitle">Daftar buku yang telah dikembalikan.</p>
       </div>
-      <button class="btn-outline">
+      <button class="btn-outline" type="button">
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="4" width="18" height="18" rx="2"/>
           <line x1="16" y1="2" x2="16" y2="6"/>
           <line x1="8" y1="2" x2="8" y2="6"/>
           <line x1="3" y1="10" x2="21" y2="10"/>
         </svg>
-        1 - 4 September 2026
+        {{ tanggalHariIni }}
       </button>
     </div>
 
@@ -120,9 +153,23 @@ watch(page, fetchData)
         <option value="Tepat Waktu">Tepat Waktu</option>
         <option value="Terlambat">Terlambat</option>
       </select>
-      <button class="btn-outline">01/09/2026 - 04/09/2026</button>
-      <button class="btn-outline">▽ Filter</button>
-      <button class="btn-primary">⭳ Export</button>
+      <button class="btn-outline" type="button">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2"/>
+          <line x1="16" y1="2" x2="16" y2="6"/>
+          <line x1="8" y1="2" x2="8" y2="6"/>
+          <line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        {{ rentangTanggalData }}
+      </button>
+      <button class="btn-primary" type="button">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3v12"/>
+          <path d="m8 11 4 4 4-4"/>
+          <path d="M5 19h14"/>
+        </svg>
+        Export
+      </button>
     </div>
 
     <div class="table-wrap">
@@ -160,7 +207,17 @@ watch(page, fetchData)
             </td>
             <td>{{ row.keterlambatan }}</td>
             <td>Rp{{ (row.denda || 0).toLocaleString('id-ID') }}</td>
-            <td><button class="btn-link">📄 Detail</button></td>
+            <td>
+              <button class="btn-link" type="button">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>
+                  <path d="M14 2v6h6"/>
+                  <path d="M8 13h8"/>
+                  <path d="M8 17h8"/>
+                </svg>
+                Detail
+              </button>
+            </td>
           </tr>
           <tr v-if="data.length === 0">
             <td colspan="10" class="empty">Belum ada data pengembalian</td>
@@ -171,13 +228,21 @@ watch(page, fetchData)
       <div class="footer">
         <span>Menampilkan {{ data.length }} dari {{ total }} data</span>
         <div class="pagination">
-          <button :disabled="page === 1" @click="page--">‹</button>
+          <button :disabled="page === 1" @click="page--" type="button" class="page-nav">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m15 18-6-6 6-6"/>
+            </svg>
+          </button>
           <button
             v-for="p in Math.min(totalPages, 3)" :key="p"
             :class="{ active: page === p }" @click="page = p"
           >{{ p }}</button>
           <span v-if="totalPages > 3">...</span>
-          <button :disabled="page === totalPages" @click="page++">›</button>
+          <button :disabled="page === totalPages" @click="page++" type="button" class="page-nav">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m9 18 6-6-6-6"/>
+            </svg>
+          </button>
         </div>
         <select v-model="limit" class="select">
           <option :value="5">5 / halaman</option>
@@ -456,5 +521,30 @@ td {
     background: #2563eb; 
     color: #fff; 
     border-color: #2563eb; 
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.page-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+}
+
+.pagination button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 </style>

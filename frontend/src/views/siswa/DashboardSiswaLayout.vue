@@ -20,6 +20,54 @@ const notifikasi = ref([
   { judul: 'Peminjaman disetujui' }
 ])
 
+const searchQuery = ref('')
+const searchResults = ref({ buku: [], siswa: [], guru: [] })
+const searchOpen = ref(false)
+let searchTimeout = null
+
+function onSearchInput() {
+  clearTimeout(searchTimeout)
+  const q = searchQuery.value.trim()
+
+  if (!q) {
+    searchResults.value = { buku: [], siswa: [], guru: [] }
+    searchOpen.value = false
+    return
+  }
+
+  searchTimeout = setTimeout(async () => {
+    try {
+      const res = await fetch(`http://localhost:3000/api/search?q=${encodeURIComponent(q)}`)
+      searchResults.value = await res.json()
+      searchOpen.value = true
+    } catch (err) {
+      console.error('Gagal mencari', err)
+    }
+  }, 300)
+}
+
+function pilihHasilBuku(item) {
+  searchOpen.value = false
+  searchQuery.value = ''
+  router.push(`/admin/data-buku?highlight=${item.id}`)
+}
+
+function pilihHasilSiswa(item) {
+  searchOpen.value = false
+  searchQuery.value = ''
+  router.push(`/admin/data-siswa?highlight=${item.id}`)
+}
+
+function pilihHasilGuru(item) {
+  searchOpen.value = false
+  searchQuery.value = ''
+  router.push(`/admin/data-guru?highlight=${item.id}`)
+}
+
+function tutupSearchDelay() {
+  setTimeout(() => { searchOpen.value = false }, 150)
+}
+
 const sidebarOpen = ref(true)
 function toggleSidebar() {
   sidebarOpen.value = !sidebarOpen.value
@@ -39,7 +87,7 @@ function logout() {
           <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
         </svg>
         <div class="brand-text">
-          <div class="brand-title">PERPUSTAKAAN DIGITAL</div>
+          <div class="brand-title">MANAGEMENT PERPUS</div>
           <div class="brand-sub">SMK NEGERI 1 KERTOSONO</div>
         </div>
         <button class="sidebar-toggle-inside" @click="toggleSidebar">
@@ -56,7 +104,7 @@ function logout() {
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
               <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
-            Dashboard
+            <span class="nav-label">Dashboard</span>
           </span>
         </router-link>
 
@@ -66,7 +114,7 @@ function logout() {
               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
               <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
             </svg>
-            Katalog Buku
+            <span class="nav-label">Katalog Buku</span>
           </span>
         </router-link>
 
@@ -78,7 +126,7 @@ function logout() {
               <line x1="16" y1="13" x2="8" y2="13" />
               <line x1="16" y1="17" x2="8" y2="17" />
             </svg>
-            Riwayat Pinjam
+            <span class="nav-label">Riwayat Pinjam</span>
           </span>
         </router-link>
 
@@ -88,7 +136,7 @@ function logout() {
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
               <circle cx="12" cy="7" r="4" />
             </svg>
-            Profil
+            <span class="nav-label">Profil</span>
           </span>
         </router-link>
 
@@ -176,7 +224,56 @@ function logout() {
 }
 
 .sidebar-closed {
-  transform: translateX(-100%);
+  width: 76px;
+  padding: 16px 10px;
+  align-items: center;
+}
+.sidebar-closed .brand .icon-lg {
+  display: none;
+}.sidebar-closed .brand {
+  flex-direction: column;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.sidebar-closed .sidebar-toggle-inside,
+.sidebar-closed .brand {
+  display: none;
+}
+
+.sidebar-closed .brand-text,
+.sidebar-closed .nav-section,
+.sidebar-closed .nav-label,
+.sidebar-closed .profile-text,
+.sidebar-closed .btn-outline-light,
+.sidebar-closed .badge {
+  display: none;
+}
+
+.sidebar-closed .brand {
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.sidebar-closed .nav-item,
+.sidebar-closed .btn-logout {
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.sidebar-closed .nav-item-left {
+  justify-content: center;
+  gap: 0;
+}
+
+.sidebar-closed .profile-card {
+  justify-content: center;
+  padding: 10px 0;
+  background: transparent;
+}
+
+.sidebar-closed .sidebar-toggle-inside svg {
+  transform: rotate(180deg);
 }
 
 .brand {

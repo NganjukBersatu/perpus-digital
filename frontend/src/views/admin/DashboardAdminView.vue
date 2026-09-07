@@ -39,7 +39,7 @@ const rangeOptions = [
   { value: '1tahun', label: '1 Tahun Terakhir' }
 ]
 
-const selectedRange = ref('6bulan')
+const selectedRange = ref('1minggu')
 
 const chartLabels = ref([])
 const dipinjamSeries = ref([])
@@ -94,12 +94,31 @@ const peminjamanTerbaru = ref([])
 const bukuTerpopuler = ref([])
 
 const filterStatus = ref('Semua Status')
+const searchBelumKembali = ref('')
 
 const peminjamanBelumKembali = ref([])
 
+const peminjamanBelumKembaliFiltered = computed(() => {
+  return peminjamanBelumKembali.value.filter((row) => {
+    const q = searchBelumKembali.value.trim().toLowerCase()
+    const cocokPencarian =
+      !q ||
+      row.nama?.toLowerCase().includes(q) ||
+      row.kelas?.toLowerCase().includes(q) ||
+      row.judulBuku?.toLowerCase().includes(q)
+
+    const cocokStatus =
+      filterStatus.value === 'Semua Status' ||
+      (filterStatus.value === 'Terlambat' && row.status === 'Terlambat') ||
+      (filterStatus.value === 'Tepat Waktu' && row.status !== 'Terlambat')
+
+    return cocokPencarian && cocokStatus
+  })
+})
+
 const pengingat = ref([])
 
-onMounted(async () => {
+async function fetchStats() {
   try {
     const res = await fetch('http://localhost:3000/api/dashboard/stats')
     if (!res.ok) throw new Error('response not ok')
@@ -108,24 +127,78 @@ onMounted(async () => {
     stats.value[0].value = data.totalBuku
     stats.value[1].value = data.totalAnggota
     stats.value[2].value = data.bukuDipinjam
+    stats.value[3].value = data.terlambat
   } catch (err) {
     console.error('Gagal mengambil statistik dashboard', err)
     errorMessage.value = 'Gagal memuat data dari server. Pastikan backend aktif (node index.js).'
   }
+}
 
+async function fetchPeminjamanTerbaru(hari) {
   try {
-    const res = await fetch('http://localhost:3000/api/dashboard/peminjaman-terbaru')
+    const url = hari
+      ? `http://localhost:3000/api/dashboard/peminjaman-terbaru?hari=${hari}`
+      : 'http://localhost:3000/api/dashboard/peminjaman-terbaru'
+    const res = await fetch(url)
     peminjamanTerbaru.value = await res.json()
   } catch (err) {
     console.error('Gagal mengambil peminjaman terbaru', err)
   }
+}
 
+async function fetchPeminjamanBelumKembali() {
   try {
     const res = await fetch('http://localhost:3000/api/dashboard/peminjaman-belum-kembali')
     peminjamanBelumKembali.value = await res.json()
   } catch (err) {
     console.error('Gagal mengambil peminjaman belum kembali', err)
   }
+}
+
+async function fetchBukuTerpopuler() {
+  try {
+    const res = await fetch('http://localhost:3000/api/dashboard/buku-terpopuler')
+    bukuTerpopuler.value = await res.json()
+  } catch (err) {
+    console.error('Gagal mengambil buku terpopuler', err)
+  }
+}
+
+async function fetchPengingat() {
+  try {
+    const res = await fetch('http://localhost:3000/api/dashboard/pengingat')
+    pengingat.value = await res.json()
+  } catch (err) {
+    console.error('Gagal mengambil pengingat', err)
+  }
+}
+
+async function kembalikanBuku(id) {
+  try {
+    const res = await fetch(`http://localhost:3000/api/peminjaman/${id}/kembalikan`, {
+      method: 'PATCH'
+    })
+    if (!res.ok) {
+      const err = await res.json()
+      alert(err.message || 'Gagal memproses pengembalian')
+      return
+    }
+    await fetchPeminjamanTerbaru()
+    await fetchPeminjamanBelumKembali()
+    await fetchPengingat()
+    await fetchStats()
+  } catch (err) {
+    console.error('Gagal menandai pengembalian', err)
+  }
+}
+
+onMounted(async () => {
+  await fetchStats()
+  await fetchPeminjamanTerbaru()
+  await fetchPeminjamanBelumKembali()
+  await fetchBukuTerpopuler()
+  await fetchPengingat()
+  await muatStatistikPeminjaman()
 })
 </script>
 
@@ -159,8 +232,10 @@ onMounted(async () => {
       <section class="card chart-card">
         <div class="card-title-row">
           <h2>Statistik Peminjaman</h2>
-          <select class="mini-select">
-            <option>6 Bulan Terakhir</option>
+          <select v-model="selectedRange" class="mini-select">
+            <option v-for="r in rangeOptions" :key="r.value" :value="r.value">
+              {{ r.label }}
+            </option>
           </select>
         </div>
 
@@ -191,9 +266,9 @@ onMounted(async () => {
       </section>
 
       <section class="card list-card">
-        <div class="card-title-row">
+         <div class="card-title-row">
           <h2>Peminjaman Terbaru</h2>
-          <a href="#" class="link-small">Lihat semua</a>
+          <a href="#" class="link-small" @click.prevent="fetchPeminjamanTerbaru(2)">Lihat semua</a>
         </div>
 
         <div class="peminjam-row" v-for="p in peminjamanTerbaru" :key="p.id">
@@ -201,13 +276,27 @@ onMounted(async () => {
             <strong>{{ p.nama }}</strong>
             <span>{{ p.kelas }}</span>
           </div>
-          <div class="peminjam-right">
+                    <div class="peminjam-right">
             <span class="tgl">{{ p.tanggalPinjam }}</span>
+
+            <div v-if="!p.sudahDikembalikan" class="aksi-group">
+              <span
+                class="badge"
+                :class="p.status === 'Terlambat' ? 'badge-red' : 'badge-blue'"
+              >
+                {{ p.status }}
+              </span>
+              <button class="kembali-btn" @click="kembalikanBuku(p.id)">
+                Kembali
+              </button>
+            </div>
+
             <span
+              v-else
               class="badge"
-              :class="p.tanggalKembali ? 'badge-green' : 'badge-blue'"
+              :class="p.status === 'Terlambat' ? 'badge-red' : 'badge-green'"
             >
-              {{ p.tanggalKembali ? 'Dikembalikan' : 'Dipinjam' }}
+              Dikembalikan
             </span>
           </div>
         </div>
@@ -237,7 +326,12 @@ onMounted(async () => {
         <div class="card-title-row">
           <h2>Peminjaman Belum Kembali</h2>
           <div class="table-controls">
-            <input type="text" placeholder="Cari peminjam atau buku..." class="search-input" />
+            <input
+              v-model="searchBelumKembali"
+              type="text"
+              placeholder="Cari peminjam atau buku..."
+              class="search-input"
+            />
             <select v-model="filterStatus" class="mini-select">
               <option>Semua Status</option>
               <option>Tepat Waktu</option>
@@ -261,21 +355,23 @@ onMounted(async () => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(row, i) in peminjamanBelumKembali" :key="row.id">
+            <tr v-for="(row, i) in peminjamanBelumKembaliFiltered" :key="row.id">
               <td>{{ i + 1 }}</td>
               <td>
                 <strong>{{ row.nama }}</strong><br />
                 <span class="muted">{{ row.kelas }}</span>
               </td>
-              <td>-</td>
+              <td>{{ row.judulBuku }}</td>
               <td>{{ row.tanggalPinjam }}</td>
-              <td>-</td>
-              <td>-</td>
+              <td>{{ row.tanggalKembali }}</td>
+              <td>{{ row.sisaHari }}</td>
               <td>
-                <span class="badge badge-blue">Dipinjam</span>
+                <span class="badge" :class="row.status === 'Terlambat' ? 'badge-red' : 'badge-blue'">
+                  {{ row.status }}
+                </span>
               </td>
-              <td>-</td>
-              <td><button class="detail-btn">Detail</button></td>
+              <td>{{ row.denda > 0 ? `Rp${row.denda.toLocaleString('id-ID')}` : '-' }}</td>
+              <td><button class="kembali-btn" @click="kembalikanBuku(row.id)">Kembali</button></td>
             </tr>
           </tbody>
         </table>
@@ -283,12 +379,15 @@ onMounted(async () => {
 
       <section class="card reminder-card">
         <h2>Pengingat</h2>
-        <div class="reminder-row" v-for="r in pengingat" :key="r.judul">
+        <div class="reminder-row" v-for="r in pengingat" :key="r.id">
           <div class="reminder-info">
-            <strong>{{ r.judul }}</strong>
-            <span>{{ r.sub }}</span>
+            <strong>{{ r.nama }}</strong>
+            <span>{{ r.kelas }}</span>
+            <span v-if="r.denda > 0" class="reminder-denda">
+              Denda: Rp{{ r.denda.toLocaleString('id-ID') }}
+            </span>
           </div>
-          <span class="reminder-badge" :class="`badge-${r.color}`">{{ r.badge }}</span>
+          <span class="reminder-badge-text" :class="`badge-${r.color}`">{{ r.badge }}</span>
         </div>
       </section>
 
@@ -615,6 +714,38 @@ onMounted(async () => {
     color: #b91c1c; 
 }
 
+.aksi-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kembali-btn {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  color: #fff;
+  background: #16a34a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.1s ease, box-shadow 0.1s ease, filter 0.1s ease;
+}
+
+.kembali-btn:hover {
+  filter: brightness(0.92);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+  transform: translateY(-1px);
+}
+
+.kembali-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
 .buku-rank {
   width: 20px; height: 20px;
   display: flex; align-items: center; justify-content: center;
@@ -743,6 +874,20 @@ onMounted(async () => {
   border-radius: 50%;
   font-size: 11px; 
   font-weight: 700;
+}
+
+.reminder-badge-text {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.reminder-denda {
+  color: #dc2626 !important;
+  font-weight: 600;
+  font-size: 11px !important;
 }
 
 .badge-red.reminder-badge, 

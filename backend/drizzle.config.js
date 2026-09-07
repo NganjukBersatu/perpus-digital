@@ -1,15 +1,14 @@
-require("dotenv").config({ path: __dirname + "/.env" })
-const { defineConfig } = require("drizzle-kit")
+require("dotenv").config() // baca .env di folder backend
 
-module.exports = defineConfig({
-  schema: "./db/schema.js",
+module.exports = {
+  schema: "./db/schema.js", // sesuaikan kalau path beda
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {
-    host: "127.0.0.1",
-    port: Number(process.env.DB_PORT),
-    database: process.env.DB_NAME,
+    host: process.env.DB_HOST || "127.0.0.1",
+    port: Number(process.env.DB_PORT) || 5432,
     user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
+    password: process.env.DB_PASSWORD || "",
+    database: process.env.DB_NAME,
   },
-})
+}

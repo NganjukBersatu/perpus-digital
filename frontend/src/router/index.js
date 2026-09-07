@@ -10,6 +10,9 @@ import GuruFavoritView from '../views/guru/GuruFavoritView.vue'
 import ScanBukuPage from '../views/admin/ScanBukuPage.vue'
 import DashboardAdminLayout from '../views/admin/DashboardAdminLayout.vue'
 import DashboardAdminView from '../views/admin/DashboardAdminView.vue'
+import DataBukuPage from '../views/admin/DataBukuPage.vue'
+import DataSiswaPage from '../views/admin/DataSiswaPage.vue'
+import DataGuruPage from '@/views/admin/DataGuruPage.vue'
 
 const ComingSoon = {
   props: {
@@ -139,8 +142,7 @@ const router = createRouter({
         {
           path: 'data-buku',
           name: 'admin-data-buku',
-          component: ComingSoon,
-          props: { title: 'Data Buku' }
+          component: DataBukuPage
         },
         {
           path: 'kategori-buku',
@@ -149,16 +151,14 @@ const router = createRouter({
           props: { title: 'Kategori Buku' }
         },
         {
-          path: 'data-siswa',
-          name: 'admin-data-siswa',
-          component: ComingSoon,
-          props: { title: 'Data Siswa' }
+         path: 'data-siswa',
+         name: 'admin-data-siswa',
+         component: DataSiswaPage
         },
         {
           path: 'data-guru',
           name: 'admin-data-guru',
-          component: ComingSoon,
-          props: { title: 'Data Guru' }
+          component: DataGuruPage
         },
         {
           path: 'data-peminjaman',

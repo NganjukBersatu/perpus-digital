@@ -1,0 +1,1 @@
+ALTER TABLE "anggota" ADD COLUMN "peran" varchar(20) DEFAULT 'siswa' NOT NULL;

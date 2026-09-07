@@ -1,18 +1,29 @@
 require("dotenv").config()
 const express = require("express")
 const cors = require("cors")
-const { sql, desc, isNull, gte, lte, and, eq } = require("drizzle-orm")
+const { sql, desc, isNull, gte, lte, and, eq, ilike } = require("drizzle-orm")
 
 const { db } = require("./db/client")
 const { buku, eksemplarBuku, anggota, peminjaman } = require("./db/schema")
 
 const pengembalianRoutes = require("./routes/pengembalian")
+const bukuRoutes = require("./routes/buku")
+const siswaRoutes = require("./routes/siswa")
+const kelasRoutes = require("./routes/kelas")
+const guruRoutes = require("./routes/guru")
+
+
 
 const app = express()
 app.use(cors())
 app.use(express.json())
 
 app.use("/api/pengembalian", pengembalianRoutes)
+app.use("/api/buku", bukuRoutes)  
+app.use("/api/siswa", siswaRoutes)  
+app.use("/api/guru", guruRoutes)                   
+app.use("/api", kelasRoutes)
+
 
 // GET data buku berdasarkan barcode
 app.get("/api/eksemplar-buku/:barcode", async (req, res) => {
@@ -48,12 +59,23 @@ app.post("/api/peminjaman", async (req, res) => {
   try {
     const { eksemplarId, nama, kelas, tanggalPinjam, tanggalKembali } = req.body
 
-    const anggotaBaru = await db
-      .insert(anggota)
-      .values({ nama, kelas })
-      .returning({ id: anggota.id })
+    // Cek dulu apakah siswa dengan nama & kelas ini sudah terdaftar
+    const anggotaLama = await db
+      .select({ id: anggota.id })
+      .from(anggota)
+      .where(and(ilike(anggota.nama, nama), eq(anggota.kelas, kelas)))
+      .limit(1)
 
-    const anggotaId = anggotaBaru[0].id
+    let anggotaId
+    if (anggotaLama.length > 0) {
+      anggotaId = anggotaLama[0].id
+    } else {
+      const anggotaBaru = await db
+        .insert(anggota)
+        .values({ nama, kelas, peran: "siswa" })
+        .returning({ id: anggota.id })
+      anggotaId = anggotaBaru[0].id
+    }
 
     await db.insert(peminjaman).values({
       nama,

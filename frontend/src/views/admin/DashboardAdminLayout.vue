@@ -24,6 +24,54 @@ function logout() {
   console.log('logout admin')
   router.push('/')
 }
+
+const searchQuery = ref('')
+const searchResults = ref({ buku: [], siswa: [], guru: [] })
+const searchOpen = ref(false)
+let searchTimeout = null
+
+function onSearchInput() {
+  clearTimeout(searchTimeout)
+  const q = searchQuery.value.trim()
+
+  if (!q) {
+    searchResults.value = { buku: [], siswa: [], guru: [] }
+    searchOpen.value = false
+    return
+  }
+
+  searchTimeout = setTimeout(async () => {
+    try {
+      const res = await fetch(`http://localhost:3000/api/search?q=${encodeURIComponent(q)}`)
+      searchResults.value = await res.json()
+      searchOpen.value = true
+    } catch (err) {
+      console.error('Gagal mencari', err)
+    }
+  }, 300)
+}
+
+function pilihHasilBuku(item) {
+  searchOpen.value = false
+  searchQuery.value = ''
+  router.push(`/admin/data-buku?highlight=${item.id}`)
+}
+
+function pilihHasilSiswa(item) {
+  searchOpen.value = false
+  searchQuery.value = ''
+  router.push(`/admin/data-siswa?highlight=${item.id}`)
+}
+
+function pilihHasilGuru(item) {
+  searchOpen.value = false
+  searchQuery.value = ''
+  router.push(`/admin/data-guru?highlight=${item.id}`)
+}
+
+function tutupSearchDelay() {
+  setTimeout(() => { searchOpen.value = false }, 150)
+}
 </script>
 
 <template>
@@ -35,7 +83,7 @@ function logout() {
           <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
         </svg>
         <div class="brand-text">
-          <div class="brand-title">PERPUSTAKAAN DIGITAL</div>
+          <div class="brand-title">MANAGEMENT PERPUS</div>
           <div class="brand-sub">SMK NEGERI 1 KERTOSONO</div>
         </div>
         <button class="sidebar-toggle-inside" @click="toggleSidebar">
@@ -54,7 +102,7 @@ function logout() {
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
               <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
-            Dashboard
+            <span class="nav-label">Dashboard</span>
           </span>
         </router-link>
 
@@ -64,7 +112,7 @@ function logout() {
               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
               <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
             </svg>
-            Pinjam Buku
+            <span class="nav-label">Pinjam Buku</span>
           </span>
         </router-link>
 
@@ -74,7 +122,7 @@ function logout() {
               <polyline points="9 14 4 9 9 4" />
               <path d="M20 20v-7a4 4 0 0 0-4-4H4" />
             </svg>
-            Pengembalian
+            <span class="nav-label">Pengembalian</span>
           </span>
         </router-link>
 
@@ -84,7 +132,7 @@ function logout() {
               <rect x="3" y="4" width="18" height="16" rx="2" />
               <path d="M3 9h18" />
             </svg>
-            Data Buku
+            <span class="nav-label">Data Buku</span>
           </span>
         </router-link>
 
@@ -94,7 +142,7 @@ function logout() {
               <path d="M20.59 13.41L11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .58 1.42l9.58 9.58a2 2 0 0 0 2.83 0l4.36-4.36a2 2 0 0 0 0-2.82z" />
               <line x1="7" y1="7" x2="7.01" y2="7" />
             </svg>
-            Kategori Buku
+            <span class="nav-label">Kategori Buku</span>
           </span>
         </router-link>
 
@@ -104,7 +152,7 @@ function logout() {
               <circle cx="12" cy="8" r="3" />
               <path d="M5 21a7 7 0 0 1 14 0" />
             </svg>
-            Data Siswa
+            <span class="nav-label">Data Siswa</span>
           </span>
         </router-link>
 
@@ -114,7 +162,7 @@ function logout() {
               <circle cx="12" cy="8" r="3" />
               <path d="M5 21a7 7 0 0 1 14 0" />
             </svg>
-            Data Guru
+            <span class="nav-label">Data Guru</span>
           </span>
         </router-link>
 
@@ -124,7 +172,7 @@ function logout() {
               <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
               <path d="M9 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3" />
             </svg>
-            Data Peminjaman
+            <span class="nav-label">Data Peminjaman</span>
           </span>
         </router-link>
 
@@ -135,7 +183,7 @@ function logout() {
               <line x1="12" y1="8" x2="12" y2="12" />
               <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
-            Denda
+            <span class="nav-label">Denda</span>
           </span>
         </router-link>
 
@@ -147,7 +195,7 @@ function logout() {
               <path d="M3 3v18h18" />
               <path d="M7 13l4-4 3 3 5-5" />
             </svg>
-            Laporan
+            <span class="nav-label">Laporan</span>
           </span>
         </router-link>
 
@@ -157,7 +205,7 @@ function logout() {
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
             </svg>
-            Riwayat Aktivitas
+            <span class="nav-label">Riwayat Aktivitas</span>
           </span>
         </router-link>
 
@@ -169,7 +217,7 @@ function logout() {
               <circle cx="12" cy="12" r="3" />
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
-            Pengaturan
+            <span class="nav-label">Pengaturan</span>
           </span>
         </router-link>
 
@@ -180,7 +228,7 @@ function logout() {
               <circle cx="12" cy="10" r="3" />
               <path d="M6.5 19.5a6.5 6.5 0 0 1 11 0" />
             </svg>
-            Akun Admin
+            <span class="nav-label">Akun Admin</span>
           </span>
         </router-link>
 
@@ -208,7 +256,7 @@ function logout() {
           <polyline points="16 17 21 12 16 7" />
           <line x1="21" y1="12" x2="9" y2="12" />
         </svg>
-        Keluar
+        <span class="nav-label">Keluar</span>
       </button>
     </aside>
 
@@ -220,12 +268,66 @@ function logout() {
           </svg>
         </button>
 
-        <div class="search-box">
+        <div class="search-box search-box-wrap">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
-          <input type="text" placeholder="Cari buku, siswa, guru, atau ISBN..." />
+          <input
+            type="text"
+            placeholder="Cari buku, siswa, guru, atau ISBN..."
+            v-model="searchQuery"
+            @input="onSearchInput"
+            @focus="searchQuery && (searchOpen = true)"
+            @blur="tutupSearchDelay"
+          />
+
+          <div v-if="searchOpen" class="search-dropdown">
+            <div
+              v-if="!searchResults.buku.length && !searchResults.siswa.length && !searchResults.guru.length"
+              class="search-empty"
+            >
+              Tidak ada hasil ditemukan
+            </div>
+
+            <div v-if="searchResults.buku.length" class="search-group">
+              <div class="search-group-title">Buku</div>
+              <div
+                v-for="item in searchResults.buku"
+                :key="'buku-' + item.id"
+                class="search-item"
+                @mousedown="pilihHasilBuku(item)"
+              >
+                <strong>{{ item.judul }}</strong>
+                <span>{{ item.penulis || '-' }} · ISBN {{ item.isbn || '-' }}</span>
+              </div>
+            </div>
+
+            <div v-if="searchResults.siswa.length" class="search-group">
+              <div class="search-group-title">Siswa</div>
+              <div
+                v-for="item in searchResults.siswa"
+                :key="'siswa-' + item.id"
+                class="search-item"
+                @mousedown="pilihHasilSiswa(item)"
+              >
+                <strong>{{ item.nama }}</strong>
+                <span>{{ item.kelas }}</span>
+              </div>
+            </div>
+
+            <div v-if="searchResults.guru.length" class="search-group">
+              <div class="search-group-title">Guru</div>
+              <div
+                v-for="item in searchResults.guru"
+                :key="'guru-' + item.id"
+                class="search-item"
+                @mousedown="pilihHasilGuru(item)"
+              >
+                <strong>{{ item.nama }}</strong>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="topbar-right">
@@ -280,7 +382,58 @@ function logout() {
   transition: transform 0.25s ease;
   z-index: 50;
 }
-.sidebar-closed { transform: translateX(-100%); }
+.sidebar-closed {
+  width: 76px;
+  padding: 16px 10px;
+  align-items: center;
+}
+.sidebar-closed .brand .icon-lg {
+  display: none;
+}.sidebar-closed .brand {
+  flex-direction: column;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.sidebar-closed .sidebar-toggle-inside,
+.sidebar-closed .brand {
+  display: none;
+}
+
+.sidebar-closed .brand-text,
+.sidebar-closed .nav-section,
+.sidebar-closed .nav-label,
+.sidebar-closed .profile-text,
+.sidebar-closed .btn-outline-light,
+.sidebar-closed .badge {
+  display: none;
+}
+
+.sidebar-closed .brand {
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.sidebar-closed .nav-item,
+.sidebar-closed .btn-logout {
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.sidebar-closed .nav-item-left {
+  justify-content: center;
+  gap: 0;
+}
+
+.sidebar-closed .profile-card {
+  justify-content: center;
+  padding: 10px 0;
+  background: transparent;
+}
+
+.sidebar-closed .sidebar-toggle-inside svg {
+  transform: rotate(180deg);
+}
 
 .brand { display: flex; gap: 10px; align-items: center; margin-bottom: 24px; }
 .brand-text { flex: 1; min-width: 0; }
@@ -331,7 +484,9 @@ function logout() {
 }
 
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; margin-left: 260px; transition: margin-left 0.25s ease; }
-.main-expanded { margin-left: 0; }
+.main-expanded {
+  margin-left: 76px;
+}
 
 .topbar {
   background: #fff; padding: 14px 24px; display: flex; align-items: center;
@@ -350,6 +505,55 @@ function logout() {
 .search-box input {
   border: none; background: transparent; outline: none; font-size: 13px;
   width: 100%; color: #111827;
+}
+
+.search-box-wrap { position: relative; }
+
+.search-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 100%;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 60;
+  padding: 6px;
+}
+
+.search-group { margin-bottom: 6px; }
+.search-group:last-child { margin-bottom: 0; }
+
+.search-group-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #9ca3af;
+  padding: 6px 10px 2px;
+  text-transform: uppercase;
+}
+
+.search-item {
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.search-item:hover { background: #f3f4f6; }
+
+.search-item strong { font-size: 13px; color: #111827; }
+.search-item span { font-size: 11px; color: #6b7280; }
+
+.search-empty {
+  padding: 12px 10px;
+  font-size: 12px;
+  color: #9ca3af;
+  text-align: center;
 }
 
 .topbar-right { display: flex; align-items: center; gap: 14px; margin-left: auto; }

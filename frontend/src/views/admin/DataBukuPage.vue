@@ -7,6 +7,111 @@ const selectedStatus = ref('')
 const currentPage = ref(1)
 const perPage = ref(5)
 
+const showModal = ref(false)
+const editingId = ref(null)
+const showConfirmModal = ref(false)
+const bukuToDelete = ref(null)
+
+const emptyForm = () => ({
+  judul: '',
+  penulis: '',
+  kategori: '',
+  isbn: '',
+  stok: 0,
+  tersedia: 0,
+  lokasi: '',
+  status: 'Tersedia'
+})
+
+const form = ref(emptyForm())
+
+function openTambah() {
+  editingId.value = null
+  form.value = emptyForm()
+  showModal.value = true
+}
+
+function openEdit(buku) {
+  editingId.value = buku.id
+  form.value = {
+    judul: buku.judul,
+    penulis: buku.penulis,
+    kategori: buku.kategori,
+    isbn: buku.isbn,
+    stok: buku.stok,
+    tersedia: buku.tersedia,
+    lokasi: buku.lokasi,
+    status: buku.status
+  }
+  showModal.value = true
+}
+
+function closeModal() {
+  showModal.value = false
+  editingId.value = null
+}
+
+function simpanBuku() {
+  if (!form.value.judul || !form.value.penulis) return
+
+  if (editingId.value !== null) {
+    // MODE EDIT: cari data lama, update field-nya
+    const index = bukuList.value.findIndex((b) => b.id === editingId.value)
+    if (index !== -1) {
+      bukuList.value[index] = {
+        ...bukuList.value[index],
+        judul: form.value.judul,
+        penulis: form.value.penulis,
+        kategori: form.value.kategori,
+        isbn: form.value.isbn,
+        stok: Number(form.value.stok),
+        tersedia: Number(form.value.tersedia),
+        lokasi: form.value.lokasi,
+        status: form.value.status
+      }
+    }
+  } else {
+    // MODE TAMBAH (kode lama)
+    const inisial = form.value.judul
+      .split(' ')
+      .map((w) => w[0])
+      .join('')
+      .substring(0, 3)
+      .toUpperCase()
+
+    bukuList.value.push({
+      id: Date.now(),
+      judul: form.value.judul,
+      penulis: form.value.penulis,
+      kategori: form.value.kategori,
+      isbn: form.value.isbn,
+      stok: Number(form.value.stok),
+      tersedia: Number(form.value.tersedia),
+      lokasi: form.value.lokasi,
+      status: form.value.status,
+    })
+  }
+
+  closeModal()
+}
+
+function hapusBuku(buku) {
+  bukuToDelete.value = buku
+  showConfirmModal.value = true
+}
+
+function konfirmasiHapus() {
+  if (bukuToDelete.value) {
+    bukuList.value = bukuList.value.filter((b) => b.id !== bukuToDelete.value.id)
+  }
+  batalHapus()
+}
+
+function batalHapus() {
+  showConfirmModal.value = false
+  bukuToDelete.value = null
+}
+
 const bukuList = ref([
   {
     id: 1,
@@ -18,7 +123,6 @@ const bukuList = ref([
     tersedia: 4,
     lokasi: 'Rak T-01',
     status: 'Tersedia',
-    coverUrl: 'https://placehold.co/48x64/1e3a5f/ffffff?text=Web'
   },
   {
     id: 2,
@@ -30,7 +134,6 @@ const bukuList = ref([
     tersedia: 2,
     lokasi: 'Rak N-02',
     status: 'Tersedia',
-    coverUrl: 'https://placehold.co/48x64/c2410c/ffffff?text=LP'
   },
   {
     id: 3,
@@ -42,7 +145,6 @@ const bukuList = ref([
     tersedia: 7,
     lokasi: 'Rak M-03',
     status: 'Tersedia',
-    coverUrl: 'https://placehold.co/48x64/1d4ed8/ffffff?text=MTK'
   },
   {
     id: 4,
@@ -54,7 +156,6 @@ const bukuList = ref([
     tersedia: 1,
     lokasi: 'Rak N-01',
     status: 'Stok Menipis',
-    coverUrl: 'https://placehold.co/48x64/7c3aed/ffffff?text=Bumi'
   },
   {
     id: 5,
@@ -66,7 +167,6 @@ const bukuList = ref([
     tersedia: 0,
     lokasi: 'Rak S-02',
     status: 'Habis',
-    coverUrl: 'https://placehold.co/48x64/b45309/ffffff?text=SI'
   }
 ])
 
@@ -111,7 +211,7 @@ function resetPage() {
         <h1>Data Buku</h1>
         <p class="subtitle">Kelola koleksi buku yang tersedia di perpustakaan.</p>
       </div>
-      <button class="btn-tambah" type="button">
+      <button class="btn-tambah" type="button" @click="openTambah">
         <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 5v14M5 12h14" stroke-linecap="round" />
         </svg>
@@ -147,13 +247,6 @@ function resetPage() {
         <option value="Stok Menipis">Stok Menipis</option>
         <option value="Habis">Habis</option>
       </select>
-
-      <button class="btn-filter" type="button">
-        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M4 6h16M7 12h10M10 18h4" stroke-linecap="round" />
-        </svg>
-        Filter
-      </button>
     </div>
 
     <div class="table-wrap">
@@ -161,7 +254,6 @@ function resetPage() {
         <thead>
           <tr>
             <th>No</th>
-            <th>Cover</th>
             <th>Judul Buku</th>
             <th>Penulis</th>
             <th>Kategori</th>
@@ -176,9 +268,6 @@ function resetPage() {
         <tbody>
           <tr v-for="(b, i) in pagedList" :key="b.id">
             <td>{{ (currentPage - 1) * perPage + i + 1 }}</td>
-            <td>
-              <img class="cover" :src="b.coverUrl" :alt="b.judul" />
-            </td>
             <td class="judul">{{ b.judul }}</td>
             <td>{{ b.penulis }}</td>
             <td>{{ b.kategori }}</td>
@@ -200,13 +289,13 @@ function resetPage() {
             </td>
             <td>
               <div class="aksi">
-                <button class="icon-btn icon-edit" type="button" title="Edit">
+                <button class="icon-btn icon-edit" type="button" title="Edit" @click="openEdit(b)">
                   <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 20h9" stroke-linecap="round" />
                     <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" stroke-linejoin="round" />
                   </svg>
                 </button>
-                <button class="icon-btn icon-hapus" type="button" title="Hapus">
+                <button class="icon-btn icon-hapus" type="button" title="Hapus" @click="hapusBuku(b)">
                   <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M4 7h16" stroke-linecap="round" />
                     <path d="M10 11v6M14 11v6" stroke-linecap="round" />
@@ -257,6 +346,98 @@ function resetPage() {
         <option :value="10">10 / halaman</option>
       </select>
     </div>
+
+    <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h2>{{ editingId !== null ? 'Edit Buku' : 'Tambah Buku' }}</h2>
+          <button class="icon-btn" type="button" @click="closeModal">✕</button>
+        </div>
+
+        <form class="modal-form" @submit.prevent="simpanBuku">
+          <div class="form-group">
+            <label>Judul Buku</label>
+            <input v-model="form.judul" type="text" required placeholder="Masukkan judul buku" />
+          </div>
+
+          <div class="form-group">
+            <label>Penulis</label>
+            <input v-model="form.penulis" type="text" required placeholder="Masukkan nama penulis" />
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Kategori</label>
+              <select v-model="form.kategori" required>
+                <option value="" disabled>Pilih kategori</option>
+                <option value="Buku Mata Pelajaran">Buku Mata Pelajaran</option>
+                <option value="Novel">Novel</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Status</label>
+              <select v-model="form.status" required>
+                <option value="Tersedia">Tersedia</option>
+                <option value="Stok Menipis">Stok Menipis</option>
+                <option value="Habis">Habis</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>ISBN</label>
+            <input v-model="form.isbn" type="text" required placeholder="978-xxx-xxxx-xx-x" />
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Stok</label>
+              <input v-model.number="form.stok" type="number" min="0" required />
+            </div>
+
+            <div class="form-group">
+              <label>Tersedia</label>
+              <input v-model.number="form.tersedia" type="number" min="0" required />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Lokasi</label>
+            <input v-model="form.lokasi" type="text" required placeholder="Contoh: Rak T-01" />
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn-batal" @click="closeModal">Kembali</button>
+            <button type="submit" class="btn-simpan">{{ editingId !== null ? 'Update' : 'Simpan' }}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div v-if="showConfirmModal" class="modal-overlay" @click.self="batalHapus">
+      <div class="confirm-box">
+        <div class="confirm-icon">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 7h16" stroke-linecap="round" />
+            <path d="M10 11v6M14 11v6" stroke-linecap="round" />
+            <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
+            <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+          </svg>
+        </div>
+
+        <h3>Hapus Buku?</h3>
+        <p>
+          Yakin ingin menghapus buku
+          <strong>"{{ bukuToDelete?.judul }}"</strong>? Tindakan ini tidak dapat dibatalkan.
+        </p>
+
+        <div class="confirm-actions">
+          <button type="button" class="btn-batal" @click="batalHapus">Batal</button>
+          <button type="button" class="btn-hapus-confirm" @click="konfirmasiHapus">Ya, Hapus</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -304,12 +485,33 @@ function resetPage() {
 .table-wrap { 
     background: #fff; 
     border-radius: 12px; 
-    overflow: hidden; 
+    overflow-x: auto;
+    overflow-y: hidden; 
     box-shadow: 0 1px 3px rgba(0,0,0,0.06); 
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;
+}
+
+.table-wrap::-webkit-scrollbar {
+  height: 8px;
+}
+
+.table-wrap::-webkit-scrollbar-track {
+  background: #f3f4f6;
+}
+
+.table-wrap::-webkit-scrollbar-thumb {
+  background: #c7c9d1;
+  border-radius: 999px;
+}
+
+.table-wrap::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
 }
 
 table { 
     width: 100%; 
+    min-width: 900px;
     border-collapse: collapse; 
     font-size: 13px; 
 }
@@ -382,18 +584,6 @@ table {
   background: #fff;
   color: #374151;
   min-width: 150px;
-}
-
-.btn-filter {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
-  border-radius: 8px;
-  padding: 8px 14px;
-  font-size: 13px;
-  cursor: pointer;
 }
 
 th, td {
@@ -500,5 +690,176 @@ tbody tr:hover { background: #f9fafb; }
 .badge-orange {
   background: #fef3c7;
   color: #b45309;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.modal-box {
+  background: #fff;
+  border-radius: 14px;
+  width: 480px;
+  max-width: 92%;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 20px 24px 24px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.modal-header h2 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.form-row {
+  display: flex;
+  gap: 12px;
+}
+
+.form-row .form-group {
+  flex: 1;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.form-group input,
+.form-group select {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #111827;
+  outline: none;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: #5b4dff;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.btn-batal {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #374151;
+  border-radius: 8px;
+  padding: 9px 18px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-simpan {
+  border: 0;
+  background: #5b4dff;
+  color: #fff;
+  border-radius: 8px;
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.confirm-box {
+  background: #fff;
+  border-radius: 14px;
+  width: 380px;
+  max-width: 92%;
+  padding: 28px 24px 24px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+  text-align: center;
+}
+
+.confirm-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #fee2e2;
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+
+.confirm-icon .icon-svg {
+  width: 24px;
+  height: 24px;
+}
+
+.confirm-box h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 8px;
+}
+
+.confirm-box p {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+.confirm-box p strong {
+  color: #374151;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.btn-hapus-confirm {
+  border: 0;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 8px;
+  padding: 9px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-hapus-confirm:hover {
+  background: #dc2626;
 }
 </style>

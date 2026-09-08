@@ -43,6 +43,13 @@
       "when": 1788752014716,
       "tag": "0005_lush_dexter_bennett",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788834665753,
+      "tag": "0006_outstanding_songbird",
+      "breakpoints": true
     }
   ]
 }

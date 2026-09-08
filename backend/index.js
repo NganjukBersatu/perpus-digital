@@ -1,7 +1,7 @@
 require("dotenv").config()
 const express = require("express")
 const cors = require("cors")
-const { sql, desc, isNull, gte, lte, and, eq, lt } = require("drizzle-orm")
+const { sql, desc, isNull, gte, lte, and, eq, lt, ilike } = require("drizzle-orm")
 
 const { db } = require("./db/client")
 const { buku, eksemplarBuku, anggota, peminjaman } = require("./db/schema")
@@ -11,7 +11,8 @@ const bukuRoutes = require("./routes/buku")
 const siswaRoutes = require("./routes/siswa")
 const kelasRoutes = require("./routes/kelas")
 const guruRoutes = require("./routes/guru")
-
+const dataPeminjamanRoutes = require("./routes/dataPeminjaman")
+const dendaRoutes = require("./routes/denda")
 
 
 const app = express()
@@ -23,7 +24,8 @@ app.use("/api/buku", bukuRoutes)
 app.use("/api/siswa", siswaRoutes)  
 app.use("/api/guru", guruRoutes)                   
 app.use("/api", kelasRoutes)
-
+app.use("/api/data-peminjaman", dataPeminjamanRoutes)
+app.use("/api/denda", dendaRoutes)
 
 // GET data buku berdasarkan barcode
 app.get("/api/eksemplar-buku/:barcode", async (req, res) => {
@@ -57,31 +59,54 @@ app.get("/api/eksemplar-buku/:barcode", async (req, res) => {
 // POST simpan peminjaman baru
 app.post("/api/peminjaman", async (req, res) => {
   try {
-    const { eksemplarId, nama, kelas, tanggalPinjam, tanggalKembali } = req.body
+    const {
+      eksemplarId,
+      nama,
+      kelas,
+      tanggalPinjam,
+      tanggalKembali,
+      tipePeminjam,
+      anggotaId,
+    } = req.body
 
-    // Cek dulu apakah siswa dengan nama & kelas ini sudah terdaftar
-    const anggotaLama = await db
-      .select({ id: anggota.id })
-      .from(anggota)
-      .where(and(ilike(anggota.nama, nama), eq(anggota.kelas, kelas)))
-      .limit(1)
+    let anggotaIdFinal
 
-    let anggotaId
-    if (anggotaLama.length > 0) {
-      anggotaId = anggotaLama[0].id
+    if (tipePeminjam === "guru") {
+      // Guru dipilih langsung dari dropdown daftar guru yang sudah ada,
+      // jadi anggotaId sudah pasti valid — tidak perlu cari/insert baru.
+      if (!anggotaId) {
+        return res.status(400).json({ message: "Guru wajib dipilih dari daftar" })
+      }
+      anggotaIdFinal = anggotaId
     } else {
-      const anggotaBaru = await db
-        .insert(anggota)
-        .values({ nama, kelas, peran: "siswa" })
-        .returning({ id: anggota.id })
-      anggotaId = anggotaBaru[0].id
+      // Mode siswa: cari siswa lama berdasarkan nama, kalau belum ada baru dibuat
+      const anggotaLama = await db
+        .select({ id: anggota.id })
+        .from(anggota)
+        .where(
+          and(
+            ilike(anggota.nama, nama),
+            eq(anggota.peran, "siswa")
+          )
+        )
+        .limit(1)
+
+      if (anggotaLama.length > 0) {
+        anggotaIdFinal = anggotaLama[0].id
+      } else {
+        const anggotaBaru = await db
+          .insert(anggota)
+          .values({ nama, kelas, peran: "siswa" })
+          .returning({ id: anggota.id })
+        anggotaIdFinal = anggotaBaru[0].id
+      }
     }
 
     await db.insert(peminjaman).values({
       nama,
       kelas,
       eksemplarId,
-      anggotaId,
+      anggotaId: anggotaIdFinal,
       tanggalPinjam,
       tanggalKembali,
     })
@@ -158,7 +183,7 @@ app.get("/api/dashboard/stats", async (req, res) => {
     const totalDipinjam = await db
       .select({ count: sql`count(*)` })
       .from(peminjaman)
-      .where(isNull(peminjaman.tanggalDikembalikan)) // fix: cek tanggalDikembalikan, bukan tanggalKembali
+      .where(isNull(peminjaman.tanggalDikembalikan))
 
     const totalTerlambat = await db
       .select({ count: sql`count(*)` })
@@ -226,7 +251,6 @@ app.get("/api/dashboard/peminjaman-terbaru", async (req, res) => {
   }
 })
 
-// GET semua peminjaman yang belum dikembalikan
 // GET semua peminjaman yang belum dikembalikan
 app.get("/api/dashboard/peminjaman-belum-kembali", async (req, res) => {
   try {
@@ -428,17 +452,19 @@ app.get("/api/search", async (req, res) => {
       limit 5
     `)
 
+    // fix: klasifikasi siswa/guru sekarang pakai kolom "peran",
+    // bukan menebak dari kosong-tidaknya kolom "kelas"
     const siswaRows = await db.execute(sql`
       select id, nama, kelas
       from anggota
-      where nama ilike ${'%' + q + '%'} and kelas is not null and kelas != ''
+      where nama ilike ${'%' + q + '%'} and peran = 'siswa'
       limit 5
     `)
 
     const guruRows = await db.execute(sql`
       select id, nama, kelas
       from anggota
-      where nama ilike ${'%' + q + '%'} and (kelas is null or kelas = '')
+      where nama ilike ${'%' + q + '%'} and peran = 'guru'
       limit 5
     `)
 

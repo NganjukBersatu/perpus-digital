@@ -1,15 +1,26 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 
 const siswa = ref([])
 const isLoading = ref(true)
 const errorMessage = ref('')
 const searchQuery = ref('')
+const selectedKelas = ref('')
 
 const showModal = ref(false)
 const modalMode = ref('tambah')
 const form = ref({ id: null, nama: '', kelas: '' })
 const isSaving = ref(false)
+
+const kelasOptions = computed(() => {
+  const semua = siswa.value.map((s) => s.kelas).filter(Boolean)
+  return [...new Set(semua)].sort()
+})
+
+const filteredSiswa = computed(() => {
+  if (!selectedKelas.value) return siswa.value
+  return siswa.value.filter((s) => s.kelas === selectedKelas.value)
+})
 
 async function muatSiswa() {
   isLoading.value = true
@@ -99,32 +110,45 @@ onMounted(muatSiswa)
 
 <template>
   <div class="page">
-    <div class="page-header">
+    <div class="header">
       <div>
         <h1>Data Siswa</h1>
-        <p class="page-sub">Kelola data siswa yang terdaftar sebagai anggota perpustakaan.</p>
+        <p class="subtitle">Kelola data siswa yang terdaftar sebagai anggota perpustakaan.</p>
       </div>
-      <button class="btn-primary" @click="bukaModalTambah">+ Tambah Siswa</button>
+      <button class="btn-tambah" type="button" @click="bukaModalTambah">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 5v14M5 12h14" stroke-linecap="round" />
+        </svg>
+        Tambah Siswa
+      </button>
     </div>
 
     <div v-if="errorMessage" class="error-banner">⚠️ {{ errorMessage }}</div>
 
-    <section class="card">
-      <div class="card-title-row">
-        <h2>Daftar Siswa</h2>
+    <div class="toolbar">
+      <div class="search-box">
+        <span class="search-icon">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M20 20l-3.5-3.5" stroke-linecap="round" />
+          </svg>
+        </span>
         <input
-          type="text"
-          class="search-input"
-          placeholder="Cari nama siswa..."
           v-model="searchQuery"
+          class="search"
+          placeholder="Cari nama siswa..."
           @input="onSearchInput"
         />
       </div>
 
-      <div v-if="isLoading" class="empty-state">Memuat data...</div>
-      <div v-else-if="siswa.length === 0" class="empty-state">Belum ada siswa terdaftar.</div>
+      <select v-model="selectedKelas" class="select">
+        <option value="">Semua Kelas</option>
+        <option v-for="k in kelasOptions" :key="k" :value="k">{{ k }}</option>
+      </select>
+    </div>
 
-      <table v-else class="data-table">
+    <div class="table-wrap">
+      <table>
         <thead>
           <tr>
             <th>No</th>
@@ -134,18 +158,24 @@ onMounted(muatSiswa)
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(item, i) in siswa" :key="item.id">
+          <tr v-for="(item, i) in filteredSiswa" :key="item.id">
             <td>{{ i + 1 }}</td>
-            <td><strong>{{ item.nama }}</strong></td>
+            <td class="judul">{{ item.nama }}</td>
             <td>{{ item.kelas || '-' }}</td>
             <td class="aksi-cell">
               <button class="detail-btn" @click="bukaModalEdit(item)">Edit</button>
               <button class="detail-btn detail-btn-danger" @click="hapusSiswa(item)">Hapus</button>
             </td>
           </tr>
+          <tr v-if="!isLoading && filteredSiswa.length === 0">
+            <td colspan="4" class="empty">Belum ada siswa terdaftar.</td>
+          </tr>
+          <tr v-if="isLoading">
+            <td colspan="4" class="empty">Memuat data...</td>
+          </tr>
         </tbody>
       </table>
-    </section>
+    </div>
 
     <div v-if="showModal" class="modal-overlay" @click.self="tutupModal">
       <div class="modal-card">
@@ -173,31 +203,87 @@ onMounted(muatSiswa)
 </template>
 
 <style scoped>
-/* --- style identik dengan DataBukuPage.vue, biar konsisten --- */
-.page { padding: 24px; font-family: 'Segoe UI', sans-serif; color: #172b4d; background: #f4f6fb; }
-.page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
-.page-header h1 { margin: 0; font-size: 20px; }
-.page-sub { margin: 4px 0 0; font-size: 13px; color: #6b7280; }
-.btn-primary { background: #2864e8; color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer; }
-.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
-.btn-secondary { background: #fff; color: #374151; border: 1px solid #e3e9f2; border-radius: 8px; padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer; }
-.card { background: #fff; border: 1px solid #e3e9f2; border-radius: 12px; padding: 18px; }
-.card-title-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-.card-title-row h2 { margin: 0; font-size: 15px; }
-.search-input { font-size: 12px; border: 1px solid #e3e9f2; border-radius: 8px; padding: 8px 12px; min-width: 220px; }
-.empty-state { text-align: center; padding: 40px 0; color: #9ca3af; font-size: 13px; }
-.data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.data-table th { text-align: left; color: #9ca3af; font-weight: 600; padding: 8px 6px; border-bottom: 1px solid #edf1f6; font-size: 11px; }
-.data-table td { padding: 10px 6px; border-bottom: 1px solid #edf1f6; vertical-align: middle; }
-.aksi-cell { display: flex; gap: 6px; }
-.detail-btn { font-size: 11px; padding: 5px 10px; border: 1px solid #e3e9f2; background: #fff; border-radius: 6px; cursor: pointer; color: #2864e8; }
-.detail-btn-danger { color: #b91c1c; }
+.page { padding: 24px; background: #f8f9fb; min-height: 100vh; font-family: sans-serif; }
+
+.header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+.header h1 { font-size: 20px; font-weight: 700; color: #1f2937; margin: 0; }
+.subtitle { margin: 6px 0 0; font-size: 13px; color: #6b7280; }
+
+.btn-tambah {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: #5b4dff; color: #fff; border: 0; border-radius: 10px;
+  padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+  box-shadow: 0 8px 16px rgba(91, 77, 255, 0.25);
+}
+
 .error-banner { background: #fee2e2; color: #b91c1c; padding: 12px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
-.modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: flex; align-items: center; justify-content: center; z-index: 100; }
+
+.toolbar {
+  display: flex; align-items: center; gap: 10px;
+  background: #fff; border-radius: 12px; padding: 12px; margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.search-box { flex: 1; position: relative; }
+.search-icon {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  color: #9ca3af; pointer-events: none; display: flex;
+}
+.search {
+  width: 100%; box-sizing: border-box; padding-left: 34px;
+  border: 1px solid #e5e7eb; border-radius: 8px;
+  padding-top: 8px; padding-bottom: 8px; padding-right: 12px;
+  font-size: 13px; outline: none;
+}
+.select {
+  border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 12px;
+  font-size: 13px; background: #fff; color: #374151; min-width: 150px;
+}
+
+.table-wrap { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td {
+  padding: 12px 14px; text-align: left; border-bottom: 1px solid #f3f4f6;
+  color: #374151; vertical-align: middle; white-space: nowrap;
+}
+thead th { font-size: 12px; font-weight: 600; color: #6b7280; background: #fafafa; }
+tbody tr:hover { background: #f9fafb; }
+
+.judul { font-weight: 600; color: #111827; }
+
+.aksi-cell { display: flex; gap: 6px; }
+.detail-btn {
+  font-size: 11px;
+  padding: 5px 10px;
+  border: 1px solid #e3e9f2;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #2864e8;
+}
+.detail-btn-danger { color: #b91c1c; }
+
+.icon-svg { width: 16px; height: 16px; display: block; }
+
+.empty { text-align: center; color: #9ca3af; padding: 24px; }
+
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+  display: flex; align-items: center; justify-content: center; z-index: 100;
+}
 .modal-card { background: #fff; border-radius: 12px; padding: 24px; width: 100%; max-width: 420px; }
 .modal-card h2 { margin: 0 0 16px; font-size: 16px; }
 .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .form-group label { font-size: 12px; color: #6b7280; font-weight: 600; }
 .form-group input { border: 1px solid #e3e9f2; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.btn-secondary {
+  background: #fff; color: #374151; border: 1px solid #e3e9f2; border-radius: 8px;
+  padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.btn-primary {
+  background: #2864e8; color: #fff; border: none; border-radius: 8px;
+  padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 </style>

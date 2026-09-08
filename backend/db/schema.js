@@ -41,6 +41,9 @@ const peminjaman = pgTable("peminjaman", {
   tanggalKembali: date("tanggal_kembali"),
   tanggalDikembalikan: date("tanggal_dikembalikan"),
   denda: integer("denda").default(0),
+  statusDenda: varchar("status_denda", { length: 20 }).default("belum_dibayar"), // BARU
+  tanggalBayarDenda: date("tanggal_bayar_denda"), // BARU
 })
+
 
 module.exports = { buku, eksemplarBuku, anggota, peminjaman, kelas }

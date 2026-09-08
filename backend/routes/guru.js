@@ -87,23 +87,32 @@ router.put('/:id', async (req, res) => {
   }
 })
 
-// DELETE guru
+// DELETE guru (beserta riwayat peminjamannya)
 router.delete('/:id', async (req, res) => {
   try {
     const id = Number(req.params.id)
+
+    const cek = await db
+      .select({ id: anggota.id })
+      .from(anggota)
+      .where(and(eq(anggota.id, id), eq(anggota.peran, 'guru')))
+      .limit(1)
+
+    if (cek.length === 0) {
+      return res.status(404).json({ error: 'Guru tidak ditemukan' })
+    }
+
+    await db.delete(peminjaman).where(eq(peminjaman.anggotaId, id))
 
     const [deleted] = await db
       .delete(anggota)
       .where(and(eq(anggota.id, id), eq(anggota.peran, 'guru')))
       .returning()
 
-    if (!deleted) return res.status(404).json({ error: 'Guru tidak ditemukan' })
-    res.json({ success: true })
+    res.json({ success: true, deleted })
   } catch (err) {
     console.error(err)
-    res.status(500).json({
-      error: 'Gagal menghapus guru (mungkin masih terkait peminjaman aktif)',
-    })
+    res.status(500).json({ error: 'Gagal menghapus guru' })
   }
 })
 

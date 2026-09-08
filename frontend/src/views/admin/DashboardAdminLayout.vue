@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { logoutUser } from '@/utils/auth'
 
 const router = useRouter()
 
@@ -21,8 +22,7 @@ function toggleSidebar() {
 }
 
 function logout() {
-  console.log('logout admin')
-  router.push('/')
+  logoutUser(router)
 }
 
 const searchQuery = ref('')
@@ -96,7 +96,7 @@ function tutupSearchDelay() {
       <nav class="nav">
         <div class="nav-section">MAIN MENU</div>
 
-        <router-link to="/admin" class="nav-item" exact-active-class="active">
+        <router-link to="/admin" class="nav-item" exact-active-class="active" title="Dashboard" data-label="Dashboard">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -106,7 +106,7 @@ function tutupSearchDelay() {
           </span>
         </router-link>
 
-        <router-link to="/admin/pinjam" class="nav-item" active-class="active">
+        <router-link to="/admin/pinjam" class="nav-item" exact-active-class="active" title="pinjam" data-label="pinjam">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
@@ -116,7 +116,7 @@ function tutupSearchDelay() {
           </span>
         </router-link>
 
-        <router-link to="/admin/pengembalian" class="nav-item" active-class="active">
+        <router-link to="/admin/pengembalian" class="nav-item" exact-active-class="active" title="pengembalian" data-label="pengembalian">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="9 14 4 9 9 4" />
@@ -126,7 +126,7 @@ function tutupSearchDelay() {
           </span>
         </router-link>
 
-        <router-link to="/admin/data-buku" class="nav-item" active-class="active">
+        <router-link to="/admin/data-buku" class="nav-item" exact-active-class="active" title="data-buku" data-label="data-buku">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -136,7 +136,7 @@ function tutupSearchDelay() {
           </span>
         </router-link>
 
-        <router-link to="/admin/kategori-buku" class="nav-item" active-class="active">
+        <router-link to="/admin/kategori-buku" class="nav-item" exact-active-class="active" title="kategori-buku" data-label="kategori-buku">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M20.59 13.41L11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .58 1.42l9.58 9.58a2 2 0 0 0 2.83 0l4.36-4.36a2 2 0 0 0 0-2.82z" />
@@ -146,7 +146,7 @@ function tutupSearchDelay() {
           </span>
         </router-link>
 
-        <router-link to="/admin/data-siswa" class="nav-item" active-class="active">
+        <router-link to="/admin/data-siswa" class="nav-item" exact-active-class="active" title="data-siswa" data-label="data-siswa">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="8" r="3" />
@@ -156,7 +156,7 @@ function tutupSearchDelay() {
           </span>
         </router-link>
 
-        <router-link to="/admin/data-guru" class="nav-item" active-class="active">
+        <router-link to="/admin/data-guru" class="nav-item" exact-active-class="active" title="data-guru" data-label="data-guru">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="8" r="3" />
@@ -166,7 +166,7 @@ function tutupSearchDelay() {
           </span>
         </router-link>
 
-        <router-link to="/admin/data-peminjaman" class="nav-item" active-class="active">
+        <router-link to="/admin/data-peminjaman" class="nav-item" exact-active-class="active" title="data-peminjaman" data-label="data-peminjaman">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
@@ -176,7 +176,7 @@ function tutupSearchDelay() {
           </span>
         </router-link>
 
-        <router-link to="/admin/denda" class="nav-item" active-class="active">
+        <router-link to="/admin/denda" class="nav-item" exact-active-class="active" title="denda" data-label="denda">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10" />
@@ -189,7 +189,7 @@ function tutupSearchDelay() {
 
         <div class="nav-section">LAPORAN</div>
 
-        <router-link to="/admin/laporan" class="nav-item" active-class="active">
+        <router-link to="/admin/laporan" class="nav-item" exact-active-class="active" title="laporan" data-label="laporan">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 3v18h18" />
@@ -199,7 +199,7 @@ function tutupSearchDelay() {
           </span>
         </router-link>
 
-        <router-link to="/admin/riwayat" class="nav-item" active-class="active">
+        <router-link to="/admin/riwayat" class="nav-item" exact-active-class="active" title="riwayat" data-label="riwayat">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10" />
@@ -211,7 +211,7 @@ function tutupSearchDelay() {
 
         <div class="nav-section">PENGATURAN</div>
 
-        <router-link to="/admin/pengaturan" class="nav-item" active-class="active">
+        <router-link to="/admin/pengaturan" class="nav-item" exact-active-class="active" title="pengaturan" data-label="pengaturan">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="3" />
@@ -221,7 +221,7 @@ function tutupSearchDelay() {
           </span>
         </router-link>
 
-        <router-link to="/admin/akun" class="nav-item" active-class="active">
+        <router-link to="/admin/akun" class="nav-item" exact-active-class="active" title="akun" data-label="akun">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10" />
@@ -250,7 +250,7 @@ function tutupSearchDelay() {
         </div>
       </nav>
 
-      <button class="btn-logout" @click="logout">
+      <button class="btn-logout" title="Keluar" data-label="Keluar" @click="logout">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
           <polyline points="16 17 21 12 16 7" />
@@ -382,42 +382,62 @@ function tutupSearchDelay() {
   transition: transform 0.25s ease;
   z-index: 50;
 }
+
 .sidebar-closed {
-  width: 76px;
-  padding: 16px 10px;
+  width: 84px;
+  padding: 14px 10px;
   align-items: center;
-}
-.sidebar-closed .brand .icon-lg {
-  display: none;
-}.sidebar-closed .brand {
-  flex-direction: column;
-  justify-content: center;
-  margin-bottom: 12px;
-}
-.sidebar-closed .sidebar-toggle-inside,
-.sidebar-closed .brand {
-  display: none;
 }
 
 .sidebar-closed .brand-text,
 .sidebar-closed .nav-section,
 .sidebar-closed .nav-label,
 .sidebar-closed .profile-text,
-.sidebar-closed .btn-outline-light,
-.sidebar-closed .badge {
+.sidebar-closed .sidebar-toggle-inside {
   display: none;
 }
 
 .sidebar-closed .brand {
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 14px;
+  border-radius: 12px;
+  background: #12235a;
+}
+
+.sidebar-closed .brand .icon-lg {
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+
+.sidebar-closed .nav {
+  width: 100%;
+  align-items: center;
+  gap: 6px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+
+.sidebar-closed .nav::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .sidebar-closed .nav-item,
 .sidebar-closed .btn-logout {
+  width: 44px;
+  height: 44px;
+  margin: 0 auto;
+  padding: 0;
   justify-content: center;
-  padding: 10px 0;
+  border-radius: 12px;
+  position: relative;
 }
 
 .sidebar-closed .nav-item-left {
@@ -425,14 +445,60 @@ function tutupSearchDelay() {
   gap: 0;
 }
 
-.sidebar-closed .profile-card {
-  justify-content: center;
-  padding: 10px 0;
-  background: transparent;
+.sidebar-closed .nav-item.active,
+.sidebar-closed .nav-item:hover,
+.sidebar-closed .btn-logout:hover {
+  background: #1d4ed8;
+  color: #fff;
 }
 
-.sidebar-closed .sidebar-toggle-inside svg {
-  transform: rotate(180deg);
+.sidebar-closed .profile-card {
+  width: 44px;
+  height: 44px;
+  margin: 10px auto 0;
+  padding: 0;
+  justify-content: center;
+  background: #12235a;
+  border-radius: 12px;
+}
+
+.sidebar-closed .avatar {
+  width: 28px;
+  height: 28px;
+}
+
+.sidebar-closed .btn-logout {
+  margin-top: 8px;
+}
+
+/* tooltip nama menu */
+.sidebar-closed .nav-item::after,
+.sidebar-closed .btn-logout::after {
+  content: attr(data-label);
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: #0f172a;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 6px 10px;
+  border-radius: 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  z-index: 80;
+}
+
+.sidebar-closed .nav-item:hover::after,
+.sidebar-closed .btn-logout:hover::after {
+  opacity: 1;
+}
+
+.main-expanded {
+  margin-left: 84px;
 }
 
 .brand { display: flex; gap: 10px; align-items: center; margin-bottom: 24px; }

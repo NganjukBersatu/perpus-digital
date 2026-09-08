@@ -84,21 +84,68 @@ function gantiTipePeminjam(tipe) {
   peminjam.value.kelas = ""
   peminjam.value.anggotaId = null
   kelasQuery.value = ""
+  guruQuery.value = ""
   scanError.value = ""
 }
 
-function onPilihGuru(event) {
-  const id = Number(event.target.value)
-  const guru = daftarGuru.value.find((g) => g.id === id)
-  if (guru) {
-    peminjam.value.anggotaId = guru.id
-    peminjam.value.nama = guru.nama
-    peminjam.value.kelas = ""
-  } else {
-    peminjam.value.anggotaId = null
-    peminjam.value.nama = ""
+// ===== COMBOBOX GURU =====
+const guruQuery = ref("")
+const showGuruDropdown = ref(false)
+
+const filteredGuru = computed(() => {
+  const q = guruQuery.value.trim().toLowerCase()
+  if (!q) return daftarGuru.value
+  return daftarGuru.value.filter((g) => g.nama.toLowerCase().includes(q))
+})
+
+// true kalau nama yang diketik tidak cocok dengan guru manapun di daftar
+const isGuruBaru = computed(() => {
+  const q = guruQuery.value.trim().toLowerCase()
+  if (!q) return false
+  return !daftarGuru.value.some((g) => g.nama.toLowerCase() === q)
+})
+
+function pilihGuru(guru) {
+  peminjam.value.anggotaId = guru.id
+  peminjam.value.nama = guru.nama
+  guruQuery.value = guru.nama
+  showGuruDropdown.value = false
+}
+
+function onGuruInput() {
+  // ketikan berubah -> anggap belum memilih guru manapun sampai dipilih lagi dari daftar/ditambah baru
+  peminjam.value.anggotaId = null
+  peminjam.value.nama = guruQuery.value
+  showGuruDropdown.value = true
+}
+
+function tutupGuruDropdown() {
+  setTimeout(() => {
+    showGuruDropdown.value = false
+  }, 150)
+}
+
+async function tambahGuruBaru() {
+  const namaBaru = guruQuery.value.trim()
+  if (!namaBaru) return
+
+  try {
+    const res = await fetch("http://localhost:3000/api/guru", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nama: namaBaru }),
+    })
+    if (!res.ok) throw new Error("Gagal menambah guru")
+    const guruBaru = await res.json()
+
+    daftarGuru.value.push(guruBaru)
+    pilihGuru(guruBaru)
+  } catch (err) {
+    console.error(err)
+    scanError.value = "Gagal menambahkan guru baru. Coba lagi."
   }
 }
+
 
 // ===== RESET =====
 function resetHasilPindai() {
@@ -272,6 +319,7 @@ function resetForm() {
   bookData.value = null
   barcode.value = ""
   kelasQuery.value = ""
+  guruQuery.value = ""   // ← tambahkan ini
   tipePeminjam.value = "siswa"
   peminjam.value = {
     nama: "",
@@ -568,25 +616,34 @@ onBeforeUnmount(() => {
               </label>
             </template>
 
-            <!-- MODE GURU -->
-            <template v-else>
-              <label class="field field--full">
-                <span>Pilih guru</span>
-                <div class="input-wrapper">
-                  <select
-                    class="select-guru"
-                    :value="peminjam.anggotaId || ''"
-                    required
-                    @change="onPilihGuru"
-                  >
-                    <option value="" disabled>Pilih nama guru</option>
-                    <option v-for="g in daftarGuru" :key="g.id" :value="g.id">
-                      {{ g.nama }}{{ g.mapel ? ` — ${g.mapel}` : "" }}
-                    </option>
-                  </select>
-                </div>
-              </label>
-            </template>
+<!-- MODE GURU -->
+<template v-else>
+  <label class="field field--full field--combobox">
+    <span>Nama guru</span>
+    <div class="input-wrapper">
+      <input
+        v-model="guruQuery"
+        type="text"
+        required
+        autocomplete="off"
+        placeholder="Ketik atau pilih nama guru"
+        @input="onGuruInput"
+        @focus="showGuruDropdown = true"
+        @blur="tutupGuruDropdown"
+      />
+    </div>
+    <ul v-if="showGuruDropdown && filteredGuru.length" class="kelas-dropdown">
+      <li v-for="g in filteredGuru" :key="g.id" @mousedown.prevent="pilihGuru(g)">
+        {{ g.nama }}{{ g.mapel ? ` — ${g.mapel}` : "" }}
+      </li>
+    </ul>
+    <ul v-else-if="showGuruDropdown && isGuruBaru" class="kelas-dropdown">
+      <li @mousedown.prevent="tambahGuruBaru">
+        + Tambahkan "{{ guruQuery.trim() }}" sebagai guru baru
+      </li>
+    </ul>
+  </label>
+</template>
 
             <label class="field">
               <span>Tanggal pinjam</span>

@@ -13,6 +13,10 @@ import DashboardAdminView from '../views/admin/DashboardAdminView.vue'
 import DataBukuPage from '../views/admin/DataBukuPage.vue'
 import DataSiswaPage from '../views/admin/DataSiswaPage.vue'
 import DataGuruPage from '@/views/admin/DataGuruPage.vue'
+import DataPeminjaman from '@/views/admin/DataPeminjaman.vue'
+import Denda from '@/views/admin/Denda.vue'
+import KategoriBukuPage from '@/views/admin/KategoriBukuPage.vue'
+
 
 const ComingSoon = {
   props: {
@@ -147,8 +151,7 @@ const router = createRouter({
         {
           path: 'kategori-buku',
           name: 'admin-kategori-buku',
-          component: ComingSoon,
-          props: { title: 'Kategori Buku' }
+            component: KategoriBukuPage
         },
         {
          path: 'data-siswa',
@@ -163,14 +166,12 @@ const router = createRouter({
         {
           path: 'data-peminjaman',
           name: 'admin-data-peminjaman',
-          component: ComingSoon,
-          props: { title: 'Data Peminjaman' }
+          component: DataPeminjaman,
         },
         {
           path: 'denda',
           name: 'admin-denda',
-          component: ComingSoon,
-          props: { title: 'Denda' }
+          component: Denda,
         },
         {
           path: 'laporan',

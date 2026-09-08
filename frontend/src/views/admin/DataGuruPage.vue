@@ -1,15 +1,26 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 
 const daftar = ref([])
 const isLoading = ref(true)
 const errorMessage = ref('')
 const searchQuery = ref('')
+const selectedMapel = ref('')
 
 const showModal = ref(false)
-const modalMode = ref('tambah') // 'tambah' | 'edit'
+const modalMode = ref('tambah')
 const form = ref({ id: null, nama: '', nip: '', mapel: '' })
 const isSaving = ref(false)
+
+const mapelOptions = computed(() => {
+  const semua = daftar.value.map((g) => g.mapel).filter(Boolean)
+  return [...new Set(semua)].sort()
+})
+
+const filteredDaftar = computed(() => {
+  if (!selectedMapel.value) return daftar.value
+  return daftar.value.filter((g) => g.mapel === selectedMapel.value)
+})
 
 async function muatData() {
   isLoading.value = true
@@ -109,34 +120,45 @@ onMounted(muatData)
 
 <template>
   <div class="page">
-    <div class="page-header">
+    <div class="header">
       <div>
         <h1>Data Guru</h1>
-        <p class="page-sub">Kelola data guru yang dapat meminjam buku.</p>
+        <p class="subtitle">Kelola data guru yang dapat meminjam buku.</p>
       </div>
-      <button class="btn-primary" @click="bukaModalTambah">+ Tambah Guru</button>
+      <button class="btn-tambah" type="button" @click="bukaModalTambah">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 5v14M5 12h14" stroke-linecap="round" />
+        </svg>
+        Tambah Guru
+      </button>
     </div>
 
     <div v-if="errorMessage" class="error-banner">⚠️ {{ errorMessage }}</div>
 
-    <section class="card">
-      <div class="card-title-row">
-        <h2>Daftar Guru</h2>
+    <div class="toolbar">
+      <div class="search-box">
+        <span class="search-icon">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M20 20l-3.5-3.5" stroke-linecap="round" />
+          </svg>
+        </span>
         <input
-          type="text"
-          class="search-input"
-          placeholder="Cari nama guru..."
           v-model="searchQuery"
+          class="search"
+          placeholder="Cari nama guru..."
           @input="onSearchInput"
         />
       </div>
 
-      <div v-if="isLoading" class="empty-state">Memuat data...</div>
-      <div v-else-if="daftar.length === 0" class="empty-state">
-        Belum ada data guru. Tambahkan guru pertama.
-      </div>
+      <select v-model="selectedMapel" class="select">
+        <option value="">Semua Mata Pelajaran</option>
+        <option v-for="m in mapelOptions" :key="m" :value="m">{{ m }}</option>
+      </select>
+    </div>
 
-      <table v-else class="data-table">
+    <div class="table-wrap">
+      <table>
         <thead>
           <tr>
             <th>No</th>
@@ -147,9 +169,9 @@ onMounted(muatData)
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(item, i) in daftar" :key="item.id">
+          <tr v-for="(item, i) in filteredDaftar" :key="item.id">
             <td>{{ i + 1 }}</td>
-            <td><strong>{{ item.nama }}</strong></td>
+            <td class="judul">{{ item.nama }}</td>
             <td>{{ item.nip || '-' }}</td>
             <td>{{ item.mapel || '-' }}</td>
             <td class="aksi-cell">
@@ -157,11 +179,16 @@ onMounted(muatData)
               <button class="detail-btn detail-btn-danger" @click="hapus(item)">Hapus</button>
             </td>
           </tr>
+          <tr v-if="!isLoading && filteredDaftar.length === 0">
+            <td colspan="5" class="empty">Belum ada data guru. Tambahkan guru pertama.</td>
+          </tr>
+          <tr v-if="isLoading">
+            <td colspan="5" class="empty">Memuat data...</td>
+          </tr>
         </tbody>
       </table>
-    </section>
+    </div>
 
-    <!-- Modal Tambah / Edit -->
     <div v-if="showModal" class="modal-overlay" @click.self="tutupModal">
       <div class="modal-card">
         <h2>{{ modalMode === 'edit' ? 'Edit Guru' : 'Tambah Guru' }}</h2>
@@ -193,90 +220,53 @@ onMounted(muatData)
 </template>
 
 <style scoped>
-.page {
-  padding: 24px;
-  font-family: 'Segoe UI', sans-serif;
-  color: #172b4d;
-  background: #f4f6fb;
+.page { padding: 24px; background: #f8f9fb; min-height: 100vh; font-family: sans-serif; }
+
+.header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+.header h1 { font-size: 20px; font-weight: 700; color: #1f2937; margin: 0; }
+.subtitle { margin: 6px 0 0; font-size: 13px; color: #6b7280; }
+
+.btn-tambah {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: #5b4dff; color: #fff; border: 0; border-radius: 10px;
+  padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+  box-shadow: 0 8px 16px rgba(91, 77, 255, 0.25);
 }
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 20px;
+.error-banner { background: #fee2e2; color: #b91c1c; padding: 12px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; }
+
+.toolbar {
+  display: flex; align-items: center; gap: 10px;
+  background: #fff; border-radius: 12px; padding: 12px; margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.search-box { flex: 1; position: relative; }
+.search-icon {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  color: #9ca3af; pointer-events: none; display: flex;
+}
+.search {
+  width: 100%; box-sizing: border-box; padding-left: 34px;
+  border: 1px solid #e5e7eb; border-radius: 8px;
+  padding-top: 8px; padding-bottom: 8px; padding-right: 12px;
+  font-size: 13px; outline: none;
+}
+.select {
+  border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 12px;
+  font-size: 13px; background: #fff; color: #374151; min-width: 150px;
 }
 
-.page-header h1 { margin: 0; font-size: 20px; }
-.page-sub { margin: 4px 0 0; font-size: 13px; color: #6b7280; }
+.table-wrap { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
 
-.btn-primary {
-  background: #2864e8;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 18px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td {
+  padding: 12px 14px; text-align: left; border-bottom: 1px solid #f3f4f6;
+  color: #374151; vertical-align: middle; white-space: nowrap;
 }
-.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+thead th { font-size: 12px; font-weight: 600; color: #6b7280; background: #fafafa; }
+tbody tr:hover { background: #f9fafb; }
 
-.btn-secondary {
-  background: #fff;
-  color: #374151;
-  border: 1px solid #e3e9f2;
-  border-radius: 8px;
-  padding: 10px 18px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.card {
-  background: #fff;
-  border: 1px solid #e3e9f2;
-  border-radius: 12px;
-  padding: 18px;
-}
-
-.card-title-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 14px;
-}
-.card-title-row h2 { margin: 0; font-size: 15px; }
-
-.search-input {
-  font-size: 12px;
-  border: 1px solid #e3e9f2;
-  border-radius: 8px;
-  padding: 8px 12px;
-  min-width: 220px;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 40px 0;
-  color: #9ca3af;
-  font-size: 13px;
-}
-
-.data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.data-table th {
-  text-align: left;
-  color: #9ca3af;
-  font-weight: 600;
-  padding: 8px 6px;
-  border-bottom: 1px solid #edf1f6;
-  font-size: 11px;
-}
-.data-table td {
-  padding: 10px 6px;
-  border-bottom: 1px solid #edf1f6;
-  vertical-align: middle;
-}
+.judul { font-weight: 600; color: #111827; }
 
 .aksi-cell { display: flex; gap: 6px; }
 .detail-btn {
@@ -290,60 +280,28 @@ onMounted(muatData)
 }
 .detail-btn-danger { color: #b91c1c; }
 
-.error-banner {
-  background: #fee2e2;
-  color: #b91c1c;
-  padding: 12px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  margin-bottom: 16px;
-}
+.icon-svg { width: 16px; height: 16px; display: block; }
+
+.empty { text-align: center; color: #9ca3af; padding: 24px; }
 
 .modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
+  position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+  display: flex; align-items: center; justify-content: center; z-index: 100;
 }
-
-.modal-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 24px;
-  width: 100%;
-  max-width: 420px;
-}
+.modal-card { background: #fff; border-radius: 12px; padding: 24px; width: 100%; max-width: 420px; }
 .modal-card h2 { margin: 0 0 16px; font-size: 16px; }
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 14px;
+.form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.form-group label { font-size: 12px; color: #6b7280; font-weight: 600; }
+.form-group .optional { font-weight: 400; color: #9ca3af; }
+.form-group input { border: 1px solid #e3e9f2; border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.btn-secondary {
+  background: #fff; color: #374151; border: 1px solid #e3e9f2; border-radius: 8px;
+  padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
 }
-.form-group label {
-  font-size: 12px;
-  color: #6b7280;
-  font-weight: 600;
+.btn-primary {
+  background: #2864e8; color: #fff; border: none; border-radius: 8px;
+  padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
 }
-.form-group .optional {
-  font-weight: 400;
-  color: #9ca3af;
-}
-.form-group input {
-  border: 1px solid #e3e9f2;
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 13px;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 8px;
-}
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 </style>

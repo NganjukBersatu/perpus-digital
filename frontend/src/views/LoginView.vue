@@ -132,33 +132,41 @@ watch(selectedRole, () => {
   }
 })
 
+function simpanSesi(role, data) {
+  localStorage.setItem('token', `${role}-session`)
+  localStorage.setItem('accessToken', `${role}-session`)
+  localStorage.setItem('role', role)
+  localStorage.setItem('user', JSON.stringify({
+    role,
+    ...data
+  }))
+}
+
 function handleLogin() {
   if (selectedRole.value === 'siswa') {
-    console.log('Login Siswa:', {
+    simpanSesi('siswa', {
       nis: form.value.nis,
-      tanggalLahir: form.value.tanggalLahir
+      tanggalLahir: form.value.tanggalLahir,
+      nama: 'Siswa'
     })
-    // Nanti diganti dengan API call
-   router.push('/siswa')
-  } 
-  
-  else if (selectedRole.value === 'admin') {
-    console.log('Login Admin:', {
-      username: form.value.username,
-      password: form.value.password
-    })
-    // Nanti diganti dengan API call
-    router.push('/admin') // contoh route
-  } 
-  
-  else if (selectedRole.value === 'guru') {
-    console.log('Login Guru:', {
-      username: form.value.nip,
-      password: form.value.password
-    })
-    // Nanti diganti dengan API call
-    router.push('/guru')
+    router.push('/siswa')
+    return
   }
+
+  if (selectedRole.value === 'guru') {
+    simpanSesi('guru', {
+      nip: form.value.nip,
+      nama: 'Guru'
+    })
+    router.push('/guru')
+    return
+  }
+
+  simpanSesi('admin', {
+    username: form.value.username,
+    nama: 'Admin Perpustakaan'
+  })
+  router.push('/admin')
 }
 </script>
 

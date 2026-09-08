@@ -16,7 +16,8 @@ import DataGuruPage from '@/views/admin/DataGuruPage.vue'
 import DataPeminjaman from '@/views/admin/DataPeminjaman.vue'
 import Denda from '@/views/admin/Denda.vue'
 import KategoriBukuPage from '@/views/admin/KategoriBukuPage.vue'
-
+import PengaturanPage from '../views/admin/PengaturanPage.vue'
+import AkunAdminPage from '../views/admin/AkunAdminPage.vue'
 
 const ComingSoon = {
   props: {
@@ -127,6 +128,7 @@ const router = createRouter({
     {
       path: '/admin',
       component: DashboardAdminLayout,
+      meta: { requiresAuth: true, role: 'admin' },
       children: [
         {
           path: '',
@@ -188,18 +190,33 @@ const router = createRouter({
         {
           path: 'pengaturan',
           name: 'admin-pengaturan',
-          component: ComingSoon,
-          props: { title: 'Pengaturan' }
+          component: PengaturanPage
         },
         {
           path: 'akun',
           name: 'admin-akun',
-          component: ComingSoon,
-          props: { title: 'Akun Admin' }
+          component: AkunAdminPage
         }
       ]
     }
   ]
+})
+
+router.beforeEach((to, from, next) => {
+  const token = localStorage.getItem('token') || localStorage.getItem('accessToken')
+  const user = JSON.parse(localStorage.getItem('user') || 'null')
+
+  if (to.meta.requiresAuth && !token) {
+    next('/')
+    return
+  }
+
+  if (to.path.startsWith('/admin') && user?.role && user.role !== 'admin') {
+    next('/')
+    return
+  }
+
+  next()
 })
 
 export default router

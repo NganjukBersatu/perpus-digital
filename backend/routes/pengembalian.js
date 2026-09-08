@@ -4,7 +4,7 @@ const db = require('../db')
 const { peminjaman, eksemplarBuku, anggota, buku } = require('../db/schema')
 const { eq, and, isNotNull, isNull, gte, lte, or, ilike, sql } = require('drizzle-orm')
 
-const DENDA_PER_HARI = 1000 // Rp1.000/hari, sesuaikan kalau beda
+const DENDA_PER_HARI = 2000 // Rp1.000/hari, sesuaikan kalau beda
 
 // GET /api/pengembalian?search=&status=&start=&end=&page=&limit=
 router.get('/', async (req, res) => {

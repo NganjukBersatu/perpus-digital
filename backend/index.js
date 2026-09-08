@@ -150,7 +150,7 @@ app.patch("/api/peminjaman/:id/kembalikan", async (req, res) => {
 
     const selisihHari = Math.round((hariIni - batas) / (1000 * 60 * 60 * 24))
     const hariTerlambat = Math.max(0, selisihHari)
-    const denda = hariTerlambat * 5000
+    const denda = hariTerlambat * 2000
 
     const updated = await db
       .update(peminjaman)
@@ -284,7 +284,7 @@ app.get("/api/dashboard/peminjaman-belum-kembali", async (req, res) => {
 
       if (selisihHari < 0) {
         status = "Terlambat"
-        denda = Math.abs(selisihHari) * 5000
+        denda = Math.abs(selisihHari) * 2000
         sisaHari = `Telat ${Math.abs(selisihHari)} hari`
       } else if (selisihHari === 0) {
         status = "Dipinjam"
@@ -358,7 +358,7 @@ app.get("/api/dashboard/pengingat", async (req, res) => {
 
       if (selisihHari < 0) {
         const hariTelat = Math.abs(selisihHari)
-        denda = hariTelat * 5000
+        denda = hariTelat * 2000
         badge = `Telat ${hariTelat} hari`
         color = "red"
       } else if (selisihHari === 0) {

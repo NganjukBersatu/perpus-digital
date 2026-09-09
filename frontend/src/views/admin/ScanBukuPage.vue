@@ -1195,4 +1195,90 @@ button, input, select { font: inherit; }
   .result-actions, .form-actions { flex-direction: column-reverse; }
   .result-actions > *, .form-actions > * { width: 100%; }
 }
+
+@media (max-width: 480px) {
+  .scan-page {
+    padding: 10px 12px 28px;
+  }
+
+  .page-header h1 {
+    font-size: 16px;
+  }
+
+  .process-card {
+    border-radius: 12px;
+  }
+
+  /* Progress stepper: sembunyikan teks label, sisakan angka/centang saja */
+  .progress {
+    padding: 10px 12px;
+  }
+  .progress-item span {
+    width: 20px;
+    height: 20px;
+    font-size: 9px;
+  }
+  .progress-item {
+    font-size: 0;
+    gap: 0;
+  }
+  .progress-item span {
+    font-size: 10px;
+  }
+  .progress-line {
+    margin: 0 6px;
+    min-width: 12px;
+  }
+
+  .scan-box {
+    padding: 14px 14px 18px;
+  }
+  .scan-box__intro h2, .form-intro h2 {
+    font-size: 16px;
+  }
+
+  .scan-tabs {
+    max-width: 100%;
+  }
+
+  .scanner-idle {
+    padding: 8px 4px;
+  }
+
+  :deep(#reader video) {
+    height: 220px !important;
+  }
+  .viewfinder {
+    min-height: 220px;
+  }
+
+  .upload-zone {
+    padding: 26px 14px;
+  }
+
+  .book-result {
+    padding: 16px;
+  }
+  .book-card__top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .book-info-grid {
+    grid-template-columns: 1fr;
+    padding: 4px 14px 6px;
+  }
+
+  .borrow-form {
+    padding: 16px;
+  }
+
+  .tipe-peminjam {
+    max-width: 100%;
+  }
+
+  .result-actions, .form-actions {
+    gap: 8px;
+  }
+}
 </style>

@@ -329,22 +329,26 @@ onMounted(muatData)
 
       </select>
 
-      <!-- TANGGAL -->
-      <input
-        type="date"
-        v-model="tanggalDari"
-        class="date-input"
-      />
+      <!-- TANGGAL (dibungkus supaya bisa turun ke bawah saat mobile) -->
+      <div class="date-group">
 
-      <span class="date-sep">
-        s/d
-      </span>
+        <input
+          type="date"
+          v-model="tanggalDari"
+          class="date-input"
+        />
 
-      <input
-        type="date"
-        v-model="tanggalSampai"
-        class="date-input"
-      />
+        <span class="date-sep">
+          s/d
+        </span>
+
+        <input
+          type="date"
+          v-model="tanggalSampai"
+          class="date-input"
+        />
+
+      </div>
 
     </div>
 
@@ -502,6 +506,7 @@ onMounted(muatData)
   background: #f8f9fb;
   min-height: 100vh;
   font-family: sans-serif;
+  min-width: 0;
 }
 
 /* HEADER */
@@ -600,6 +605,12 @@ onMounted(muatData)
   color: #374151;
   min-width: 150px;
   outline: none;
+}
+
+.date-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .date-input {
@@ -707,5 +718,163 @@ tbody tr:hover {
   margin-top: 14px;
   font-size: 11px;
   color: #9ca3af;
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 14px;
+  }
+
+  /* HEADER */
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .header h1 {
+    font-size: 18px;
+  }
+
+  .subtitle {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .btn-export {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* ERROR */
+  .error-banner {
+    font-size: 12px;
+    padding: 10px 12px;
+  }
+
+  /* TOOLBAR — search & status sebaris, tanggal turun ke baris baru & full width */
+  .toolbar {
+    flex-wrap: wrap;
+  }
+
+  .search-box {
+    flex: 1 1 100%;
+    order: 1;
+  }
+
+  .select {
+    flex: 1 1 100%;
+    order: 2;
+    min-width: 0;
+  }
+
+  .date-group {
+    flex: 1 1 100%;
+    order: 3;
+    width: 100%;
+  }
+
+  .date-input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* TABLE */
+  .table-wrap {
+    border-radius: 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-wrap::-webkit-scrollbar {
+    height: 7px;
+  }
+
+  .table-wrap::-webkit-scrollbar-track {
+    background: #f3f4f6;
+  }
+
+  .table-wrap::-webkit-scrollbar-thumb {
+    background: #c7c9d1;
+    border-radius: 999px;
+  }
+
+  table {
+    min-width: 1100px;
+    font-size: 12px;
+  }
+
+  th,
+  td {
+    padding: 10px 12px;
+  }
+
+  /* Peminjam */
+  th:nth-child(2),
+  td:nth-child(2) {
+    min-width: 170px;
+  }
+
+  /* Buku */
+  th:nth-child(3),
+  td:nth-child(3) {
+    min-width: 200px;
+  }
+
+  /* Tanggal */
+  th:nth-child(4),
+  td:nth-child(4),
+  th:nth-child(5),
+  td:nth-child(5),
+  th:nth-child(6),
+  td:nth-child(6) {
+    min-width: 120px;
+  }
+
+  /* Status */
+  th:nth-child(7),
+  td:nth-child(7) {
+    min-width: 110px;
+  }
+
+  /* Keterlambatan */
+  th:nth-child(8),
+  td:nth-child(8) {
+    min-width: 110px;
+  }
+
+  /* Denda */
+  th:nth-child(9),
+  td:nth-child(9) {
+    min-width: 100px;
+  }
+
+  /* Aksi */
+  th:nth-child(10),
+  td:nth-child(10) {
+    min-width: 130px;
+  }
+
+  .detail-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  .badge {
+    padding: 4px 9px;
+    font-size: 11px;
+  }
+
+  .sub-text {
+    font-size: 10px;
+  }
+
+  /* FOOTER */
+  .table-footer {
+    margin-top: 12px;
+    font-size: 11px;
+  }
 }
 </style>

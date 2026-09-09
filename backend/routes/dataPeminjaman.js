@@ -1,6 +1,6 @@
 const express = require('express')
 const router = express.Router()
-const { db } = require('../db/client')
+const db = require('../db')   
 const { peminjaman, eksemplarBuku, anggota, buku } = require('../db/schema')
 const { eq, and, gte, lte, or, ilike, sql } = require('drizzle-orm')
 

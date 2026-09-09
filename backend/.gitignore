@@ -40,7 +40,3 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
-
-# Lokal, jangan di-push
-db/schema.js
-db/client.js

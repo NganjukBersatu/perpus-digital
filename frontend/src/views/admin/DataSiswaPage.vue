@@ -286,4 +286,80 @@ tbody tr:hover { background: #f9fafb; }
   padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
 }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+@media (max-width: 640px) {
+  .page {
+    padding: 14px;
+  }
+
+  /* Header saja yang dibuat responsive */
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .header h1 {
+    font-size: 18px;
+  }
+
+  .subtitle {
+    font-size: 12px;
+  }
+
+  .btn-tambah {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Tabel */
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    min-width: 620px;
+  }
+
+  th,
+  td {
+    padding: 10px 12px;
+  }
+
+  /* Tombol aksi */
+  .aksi-cell {
+    gap: 6px;
+  }
+
+  .detail-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    padding: 12px;
+  }
+
+  .modal-card {
+    width: 100%;
+    max-width: 100%;
+    padding: 20px;
+  }
+
+  .modal-card h2 {
+    font-size: 16px;
+  }
+
+  .modal-actions {
+    margin-top: 14px;
+  }
+
+  .btn-secondary,
+  .btn-primary {
+    padding: 10px 16px;
+  }
+}
+
 </style>

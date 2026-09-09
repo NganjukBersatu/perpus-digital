@@ -304,4 +304,138 @@ tbody tr:hover { background: #f9fafb; }
   padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
 }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+@media (max-width: 640px) {
+  .page {
+    padding: 14px;
+  }
+
+  /* Header */
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .header h1 {
+    font-size: 18px;
+  }
+
+  .subtitle {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .btn-tambah {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Error */
+  .error-banner {
+    font-size: 12px;
+    padding: 10px 12px;
+  }
+
+  /* Search bar & filter TIDAK DIUBAH */
+
+  /* Tabel */
+  .table-wrap {
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-radius: 10px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-wrap::-webkit-scrollbar {
+    height: 7px;
+  }
+
+  .table-wrap::-webkit-scrollbar-track {
+    background: #f3f4f6;
+  }
+
+  .table-wrap::-webkit-scrollbar-thumb {
+    background: #c7c9d1;
+    border-radius: 999px;
+  }
+
+  table {
+    min-width: 700px;
+    font-size: 12px;
+  }
+
+  th,
+  td {
+    padding: 10px 12px;
+  }
+
+  /* Lebar kolom agar isi tabel tetap nyaman dibaca */
+  th:nth-child(1),
+  td:nth-child(1) {
+    width: 50px;
+  }
+
+  th:nth-child(2),
+  td:nth-child(2) {
+    min-width: 180px;
+  }
+
+  th:nth-child(3),
+  td:nth-child(3) {
+    min-width: 140px;
+  }
+
+  th:nth-child(4),
+  td:nth-child(4) {
+    min-width: 180px;
+  }
+
+  th:nth-child(5),
+  td:nth-child(5) {
+    min-width: 130px;
+  }
+
+  .aksi-cell {
+    gap: 6px;
+  }
+
+  .detail-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    padding: 12px;
+  }
+
+  .modal-card {
+    width: 100%;
+    max-width: 100%;
+    padding: 20px;
+    border-radius: 12px;
+  }
+
+  .modal-card h2 {
+    font-size: 16px;
+  }
+
+  .form-group input {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 40px;
+  }
+
+  .modal-actions {
+    margin-top: 14px;
+  }
+
+  .btn-secondary,
+  .btn-primary {
+    padding: 10px 16px;
+  }
+}
+
 </style>

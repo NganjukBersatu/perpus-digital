@@ -1131,6 +1131,187 @@ span.reminder-badge.badge-red {
   }
 }
 
+@media (max-width: 640px) {
+  .dash {
+    padding: 14px;
+  }
+
+  /* Kartu statistik jadi 1 kolom, kalender di bawahnya */
+  .stat-cards {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .top-row {
+    grid-template-columns: 1fr;
+  }
+  .calendar-card {
+    min-width: 0;
+    flex-direction: row;
+    align-items: center;
+  }
+  .calendar-top {
+    writing-mode: horizontal-tb;
+    padding: 10px;
+    flex: 0 0 auto;
+  }
+  .calendar-body {
+    flex-direction: row;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .card {
+    padding: 14px;
+  }
+  .card-title-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .card-title-row h2 {
+    font-size: 14px;
+  }
+
+    .stat-card {
+    padding: 12px 10px;
+  }
+
+  .stat-icon {
+    width: 26px;
+    height: 26px;
+    margin-bottom: 6px;
+  }
+
+  .stat-icon :deep(svg) {
+    width: 12px;
+    height: 12px;
+  }
+
+  .stat-value {
+    font-size: 18px;
+  }
+
+  .stat-label {
+    font-size: 11px;
+  }
+
+  .stat-sub {
+    font-size: 10px;
+  }
+
+  .stat-link {
+    font-size: 10px;
+    margin-top: 6px;
+  }
+
+  /* Statistik peminjaman: select dropdown full width di bawah judul */
+  .card-title-row .mini-select {
+    width: 100%;
+  }
+
+  .chart-svg {
+    height: 100px;
+  }
+
+  /* Peminjaman terbaru & buku terpopuler: rapikan spacing */
+  .peminjam-row {
+    flex-wrap: wrap;
+  }
+
+    /* ===== Perbaikan Peminjaman Belum Kembali ===== */
+  .table-card {
+    padding: 14px;
+    overflow: hidden;          /* penting: cegah card melebar */
+  }
+
+  .table-card .card-title-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .table-card .card-title-row h2 {
+    font-size: 14px;
+  }
+
+  /* Buat wrapper scroll hanya untuk tabel */
+  .table-card .data-table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-collapse: collapse;
+  }
+
+  .table-card .data-table thead,
+  .table-card .data-table tbody {
+    display: table;
+    width: 100%;
+    table-layout: auto;
+  }
+
+  .table-card .data-table tr {
+    display: table-row;
+  }
+
+  .table-card .data-table th,
+  .table-card .data-table td {
+    white-space: nowrap;
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+
+  .table-card .data-table th {
+    font-size: 10px;
+  }
+
+  /* Search & filter */
+  .table-controls {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .search-input,
+  .table-controls .mini-select {
+    width: 100% !important;
+    min-width: 0 !important;
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+
+  .kembali-btn {
+    font-size: 10px;
+    padding: 4px 10px;
+  }
+
+    /* Rapikan list Peminjaman Terbaru & Buku Terpopuler */
+  .peminjam-row {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .peminjam-info {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .peminjam-info strong,
+  .buku-info strong {
+    word-break: break-word;
+  }
+
+  .buku-row {
+    grid-template-columns: 20px 28px 1fr;
+  }
+  
+  /* Pengingat: rapikan */
+  .reminder-row {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}
+
 .error-banner {
   background: #fee2e2;
   color: #b91c1c;

@@ -1,0 +1,1 @@
+ALTER TABLE "buku" ADD COLUMN "kategori" varchar(100);

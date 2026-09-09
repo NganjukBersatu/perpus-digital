@@ -93,6 +93,64 @@ const peminjamanTerbaru = ref([])
 
 const bukuTerpopuler = ref([])
 
+// --- Modal Buku Terpopuler (lengkap) ---
+const modalBukuTerpopulerOpen = ref(false)
+const bukuTerpopulerLengkap = ref([])
+const kategoriBukuList = ref([])
+
+const rangeBukuTerpopulerOptions = [
+  { value: '1minggu', label: '1 Minggu' },
+  { value: '1bulan', label: '1 Bulan' },
+  { value: '3bulan', label: '3 Bulan' },
+  { value: 'tahunini', label: 'Tahun Ini' },
+  { value: 'semua', label: 'Semua' },
+]
+const rangeBukuTerpopuler = ref('1minggu')
+const kategoriFilterBuku = ref('Semua Kategori')
+const searchBukuTerpopuler = ref('')
+let searchBukuTerpopulerTimeout = null
+
+async function fetchKategoriBuku() {
+  try {
+    const res = await fetch('http://localhost:3000/api/buku/kategori')
+    kategoriBukuList.value = await res.json()
+  } catch (err) {
+    console.error('Gagal mengambil kategori buku', err)
+  }
+}
+
+async function fetchBukuTerpopulerLengkap() {
+  try {
+    const params = new URLSearchParams({
+      range: rangeBukuTerpopuler.value,
+      kategori: kategoriFilterBuku.value,
+      search: searchBukuTerpopuler.value,
+    })
+    const res = await fetch(`http://localhost:3000/api/dashboard/buku-terpopuler-lengkap?${params}`)
+    bukuTerpopulerLengkap.value = await res.json()
+  } catch (err) {
+    console.error('Gagal mengambil buku terpopuler lengkap', err)
+  }
+}
+
+function bukaModalBukuTerpopuler() {
+  modalBukuTerpopulerOpen.value = true
+  fetchKategoriBuku()
+  fetchBukuTerpopulerLengkap()
+}
+
+function tutupModalBukuTerpopuler() {
+  modalBukuTerpopulerOpen.value = false
+}
+
+function onSearchBukuTerpopulerInput() {
+  clearTimeout(searchBukuTerpopulerTimeout)
+  searchBukuTerpopulerTimeout = setTimeout(fetchBukuTerpopulerLengkap, 300)
+}
+
+watch(rangeBukuTerpopuler, fetchBukuTerpopulerLengkap)
+watch(kategoriFilterBuku, fetchBukuTerpopulerLengkap)
+
 const filterStatus = ref('Semua Status')
 const searchBelumKembali = ref('')
 
@@ -305,7 +363,7 @@ onMounted(async () => {
       <section class="card list-card">
         <div class="card-title-row">
           <h2>Buku Terpopuler</h2>
-          <a href="#" class="link-small">Lihat semua</a>
+          <a href="#" class="link-small" @click.prevent="bukaModalBukuTerpopuler">Lihat semua</a>
         </div>
 
         <div class="buku-row" v-for="(b, i) in bukuTerpopuler" :key="b.judul">
@@ -391,6 +449,73 @@ onMounted(async () => {
         </div>
       </section>
 
+    </div>
+    
+    <!-- Modal Buku Terpopuler -->
+    <div v-if="modalBukuTerpopulerOpen" class="modal-overlay" @click.self="tutupModalBukuTerpopuler">
+      <div class="modal-panel">
+        <div class="modal-header">
+          <div>
+            <h2>BUKU TERPOPULER</h2>
+            <p class="modal-subtitle">Buku yang paling sering dipinjam oleh anggota perpustakaan</p>
+          </div>
+          <button class="modal-close-btn" @click="tutupModalBukuTerpopuler">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+            Kembali
+          </button>
+        </div>
+
+        <div class="modal-controls">
+          <select v-model="rangeBukuTerpopuler" class="mini-select">
+            <option v-for="r in rangeBukuTerpopulerOptions" :key="r.value" :value="r.value">
+              {{ r.label }}
+            </option>
+          </select>
+
+          <input
+            type="text"
+            v-model="searchBukuTerpopuler"
+            @input="onSearchBukuTerpopulerInput"
+            placeholder="Cari judul buku..."
+            class="search-input"
+          />
+
+          <select v-model="kategoriFilterBuku" class="mini-select">
+            <option>Semua Kategori</option>
+            <option v-for="k in kategoriBukuList" :key="k" :value="k">{{ k }}</option>
+          </select>
+        </div>
+
+        <div class="modal-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>No</th>
+                <th>Peringkat</th>
+                <th>Judul Buku</th>
+                <th>Kategori</th>
+                <th>Dipinjam</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(b, i) in bukuTerpopulerLengkap" :key="b.judul">
+                <td>{{ i + 1 }}</td>
+                <td><span class="buku-rank">{{ i + 1 }}</span></td>
+                <td>{{ b.judul }}</td>
+                <td>{{ b.kategori }}</td>
+                <td>{{ b.dipinjam }} kali</td>
+              </tr>
+              <tr v-if="bukuTerpopulerLengkap.length === 0">
+                <td colspan="5" class="muted" style="text-align:center; padding: 20px;">
+                  Tidak ada data untuk filter ini
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
   </div>
@@ -909,6 +1034,83 @@ span.reminder-badge.badge-red {
 .reminder-badge.badge-orange { 
     background: #fef3c7; 
     color: #b45309; 
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 24px;
+}
+
+.modal-panel {
+  background: #fff;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 900px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.modal-header h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  letter-spacing: 0.5px;
+}
+
+.modal-subtitle {
+  margin: 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.modal-close-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f3f4f6;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.modal-close-btn:hover {
+  background: #e5e7eb;
+}
+
+.modal-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.modal-controls .search-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.modal-table-wrap {
+  overflow-y: auto;
 }
 
 @media (max-width: 1100px) {

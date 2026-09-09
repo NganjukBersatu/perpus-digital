@@ -5,11 +5,7 @@ const { Pool } = require("pg")
 
 async function main() {
   const pool = new Pool({
-    host: "127.0.0.1",
-    port: Number(process.env.DB_PORT),
-    database: process.env.DB_NAME,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
+    connectionString: process.env.DATABASE_URL,
   })
 
   const db = drizzle(pool)

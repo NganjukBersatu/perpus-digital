@@ -334,6 +334,75 @@ app.get("/api/dashboard/buku-terpopuler", async (req, res) => {
   }
 })
 
+// GET daftar kategori buku yang ada (untuk dropdown filter)
+app.get("/api/buku/kategori", async (req, res) => {
+  try {
+    const rows = await db.execute(sql`
+      select distinct kategori
+      from buku
+      where kategori is not null and kategori <> ''
+      order by kategori
+    `)
+    res.json(rows.rows.map((r) => r.kategori))
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ message: "Gagal mengambil kategori buku" })
+  }
+})
+
+// GET buku terpopuler lengkap (dengan filter rentang waktu, kategori, dan pencarian judul)
+app.get("/api/dashboard/buku-terpopuler-lengkap", async (req, res) => {
+  try {
+    const { range = "semua", kategori, search } = req.query
+
+    let startDate = null
+    const now = new Date()
+    if (range === "1minggu") {
+      startDate = new Date(now); startDate.setDate(now.getDate() - 7)
+    } else if (range === "1bulan") {
+      startDate = new Date(now); startDate.setMonth(now.getMonth() - 1)
+    } else if (range === "3bulan") {
+      startDate = new Date(now); startDate.setMonth(now.getMonth() - 3)
+    } else if (range === "tahunini") {
+      startDate = new Date(now.getFullYear(), 0, 1)
+    }
+    // range === "semua" -> startDate tetap null, artinya tanpa batas waktu
+
+    let query = sql`
+      select b.judul as judul, b.kategori as kategori, count(p.id) as dipinjam
+      from peminjaman p
+      join eksemplar_buku e on e.id = p.eksemplar_id
+      join buku b on b.id = e.buku_id
+      where 1=1
+    `
+
+    if (startDate) {
+      query = sql`${query} and p.tanggal_pinjam >= ${startDate.toISOString().split("T")[0]}`
+    }
+    if (kategori && kategori !== "Semua Kategori") {
+      query = sql`${query} and b.kategori = ${kategori}`
+    }
+    if (search) {
+      query = sql`${query} and b.judul ilike ${'%' + search + '%'}`
+    }
+
+    query = sql`${query} group by b.id, b.judul, b.kategori order by dipinjam desc`
+
+    const rows = await db.execute(query)
+
+    const data = rows.rows.map((r) => ({
+      judul: r.judul,
+      kategori: r.kategori || '-',
+      dipinjam: Number(r.dipinjam),
+    }))
+
+    res.json(data)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ message: "Gagal mengambil buku terpopuler lengkap" })
+  }
+})
+
 // GET pengingat - buku yang belum dikembalikan
 app.get("/api/dashboard/pengingat", async (req, res) => {
   try {
@@ -383,6 +452,44 @@ app.get("/api/dashboard/pengingat", async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ message: "Gagal mengambil pengingat" })
+  }
+})
+
+// GET notifikasi lonceng - ringkasan buku terlambat & jatuh tempo hari ini
+app.get("/api/dashboard/notifikasi", async (req, res) => {
+  try {
+    const today = new Date().toISOString().split("T")[0]
+    const waktuSekarang = new Date().toISOString()
+
+    const terlambatRows = await db
+      .select({ count: sql`count(*)` })
+      .from(peminjaman)
+      .where(and(
+        isNull(peminjaman.tanggalDikembalikan),
+        lt(peminjaman.tanggalKembali, today)
+      ))
+
+    const jatuhTempoRows = await db
+      .select({ count: sql`count(*)` })
+      .from(peminjaman)
+      .where(and(
+        isNull(peminjaman.tanggalDikembalikan),
+        eq(peminjaman.tanggalKembali, today)
+      ))
+
+    res.json({
+      terlambat: {
+        jumlah: Number(terlambatRows[0].count),
+        waktu: waktuSekarang,
+      },
+      jatuhTempoHariIni: {
+        jumlah: Number(jatuhTempoRows[0].count),
+        waktu: waktuSekarang,
+      },
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ message: "Gagal mengambil notifikasi" })
   }
 })
 

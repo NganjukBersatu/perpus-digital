@@ -1,4 +1,4 @@
-const { pgTable, serial, varchar, integer, timestamp, date } = require("drizzle-orm/pg-core")
+const { pgTable, serial, varchar, integer, timestamp, date, text } = require("drizzle-orm/pg-core")
 
 const buku = pgTable("buku", {
   id: serial("id").primaryKey(),
@@ -45,5 +45,11 @@ const peminjaman = pgTable("peminjaman", {
   tanggalBayarDenda: date("tanggal_bayar_denda"), // BARU
 })
 
+const kategori = pgTable("kategori", {
+  id: serial("id").primaryKey(),
+  nama: varchar("nama", { length: 100 }).unique().notNull(),
+  deskripsi: text("deskripsi"),
+  createdAt: timestamp("created_at").defaultNow(),
+})
 
-module.exports = { buku, eksemplarBuku, anggota, peminjaman, kelas }
+module.exports = { buku, eksemplarBuku, anggota, peminjaman, kelas, kategori }

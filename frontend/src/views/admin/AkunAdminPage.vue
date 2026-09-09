@@ -122,6 +122,21 @@ function logout() {
   logoutUser(router)
 }
 
+const showLogoutModal = ref(false)
+
+function mintaLogout() {
+  showLogoutModal.value = true
+}
+
+function batalLogout() {
+  showLogoutModal.value = false
+}
+
+function konfirmasiLogout() {
+  showLogoutModal.value = false
+  logoutUser(router)
+}
+
 onMounted(loadAccount)
 </script>
 
@@ -134,7 +149,7 @@ onMounted(loadAccount)
       </div>
       <div class="head-actions">
         <span v-if="savedAt" class="saved-info">Terakhir diubah: {{ savedAt }}</span>
-        <button class="btn ghost" type="button" @click="logout">Keluar</button>
+        <button class="btn ghost" type="button" @click="mintaLogout">Keluar</button>
         <button class="btn primary" type="button" @click="saveProfile">Simpan Profil</button>
       </div>
     </header>
@@ -274,9 +289,29 @@ onMounted(loadAccount)
 
       <div class="actions">
         <button class="btn ghost" type="button" @click="saveSessionPref">Simpan preferensi</button>
-        <button class="btn danger" type="button" @click="logout">Keluar dari akun</button>
+        <button class="btn danger" type="button" @click="mintaLogout">Keluar dari akun</button>
       </div>
     </section>
+
+        <div
+      v-if="showLogoutModal"
+      class="modal-overlay"
+      @click.self="batalLogout"
+    >
+      <div class="modal-box" role="dialog">
+        <div class="modal-header">
+          <h2>Keluar dari akun?</h2>
+          <button class="modal-close" type="button" @click="batalLogout">×</button>
+        </div>
+        <div class="modal-body">
+          <p>Anda akan keluar dari dashboard admin. Simpan perubahan yang belum disimpan sebelum keluar.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn ghost" type="button" @click="batalLogout">Batal</button>
+          <button class="btn danger" type="button" @click="konfirmasiLogout">Ya, Keluar</button>
+        </div>
+      </div>
+    </div>
 
     <div v-if="toast" class="toast">{{ toast }}</div>
   </div>
@@ -492,6 +527,15 @@ textarea,
 .btn.primary { background: #2563eb; color: #fff; }
 .btn.ghost { background: #e2e8f0; color: #0f172a; }
 .btn.danger { background: #fee2e2; color: #b91c1c; }
+.btn { transition: background-color 0.15s ease, color 0.15s ease; }
+
+.head-actions .btn.ghost:hover {
+  background: #cbd5e1;
+}
+
+.btn.danger:hover {
+  background: #fecaca;
+}
 
 .toast {
   position: fixed;
@@ -501,6 +545,73 @@ textarea,
   color: #fff;
   padding: 12px 16px;
   border-radius: 12px;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 90;
+  padding: 16px;
+}
+
+.modal-box {
+  width: 100%;
+  max-width: 400px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.modal-close {
+  border: none;
+  background: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 22px;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.modal-close:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.modal-body {
+  padding: 16px 20px;
+}
+
+.modal-body p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.6;
+  font-weight: 500;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid #e2e8f0;
 }
 
 @media (max-width: 900px) {

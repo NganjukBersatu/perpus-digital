@@ -24,8 +24,10 @@ router.get('/', async (req, res) => {
       )
     }
 
-    if (start && end) {
+    if (start) {
       conditions.push(gte(peminjaman.tanggalDikembalikan, start))
+    }
+    if (end) {
       conditions.push(lte(peminjaman.tanggalDikembalikan, end))
     }
 

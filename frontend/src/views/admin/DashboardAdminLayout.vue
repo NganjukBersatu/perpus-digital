@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { logoutUser } from '@/utils/auth'
 
@@ -10,27 +10,78 @@ const admin = ref({
   role: 'Pustakawan'
 })
 
-const notifikasi = ref([
-  { judul: 'Peminjaman baru' },
-  { judul: 'Buku terlambat dikembalikan' },
-  { judul: 'Stok buku menipis' }
-])
+const notifikasi = ref({
+  terlambat: { jumlah: 0, waktu: null },
+  jatuhTempoHariIni: { jumlah: 0, waktu: null },
+})
+const notifOpen = ref(false)
+
+const jumlahJenisNotifikasi = computed(() => {
+  let jenis = 0
+  if (notifikasi.value.terlambat.jumlah > 0) jenis++
+  if (notifikasi.value.jatuhTempoHariIni.jumlah > 0) jenis++
+  return jenis
+})
+
+async function fetchNotifikasi() {
+  try {
+    const res = await fetch('http://localhost:3000/api/dashboard/notifikasi')
+    notifikasi.value = await res.json()
+  } catch (err) {
+    console.error('Gagal mengambil notifikasi', err)
+  }
+}
+
+function toggleNotif() {
+  notifOpen.value = !notifOpen.value
+}
+
+function closeNotifOutside(e) {
+  if (!e.target.closest('.notif-wrap')) notifOpen.value = false
+}
+
+function formatWaktu(iso) {
+  if (!iso) return '-'
+  return new Date(iso).toLocaleString('id-ID', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  })
+}
+
+function closeNotifOnScroll() {
+  if (notifOpen.value) notifOpen.value = false
+}
+
+onMounted(() => {
+  fetchNotifikasi()
+  window.addEventListener('click', closeNotifOutside)
+  window.addEventListener('scroll', closeNotifOnScroll, { capture: true })
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('click', closeNotifOutside)
+  window.removeEventListener('scroll', closeNotifOnScroll, { capture: true })
+})
 
 const sidebarOpen = ref(true)
+
+const showLogoutModal = ref(false)
+
+function mintaLogout() {
+  showLogoutModal.value = true
+}
+
+function batalLogout() {
+  showLogoutModal.value = false
+}
+
+function konfirmasiLogout() {
+  showLogoutModal.value = false
+  logoutUser(router)
+}
+
 function toggleSidebar() {
   sidebarOpen.value = !sidebarOpen.value
-}
-
-const mobileMenuOpen = ref(false)
-function toggleMobileMenu() {
-  mobileMenuOpen.value = !mobileMenuOpen.value
-}
-function closeMobileMenu() {
-  mobileMenuOpen.value = false
-}
-
-function logout() {
-  logoutUser(router)
 }
 
 const searchQuery = ref('')
@@ -258,7 +309,7 @@ function tutupSearchDelay() {
         </div>
       </nav>
 
-      <button class="btn-logout" title="Keluar" data-label="Keluar" @click="logout">
+      <button class="btn-logout" title="Keluar" data-label="Keluar" @click="mintaLogout">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
           <polyline points="16 17 21 12 16 7" />
@@ -347,12 +398,44 @@ function tutupSearchDelay() {
         </div>
 
         <div class="topbar-right">
-          <div class="notif-icon">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-            </svg>
-            <span class="notif-dot">{{ notifikasi.length }}</span>
+          <div class="notif-wrap">
+            <button class="notif-icon" @click="toggleNotif">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              <span v-if="jumlahJenisNotifikasi > 0" class="notif-dot">{{ jumlahJenisNotifikasi }}</span>
+            </button>
+
+            <div v-if="notifOpen" class="notif-dropdown">
+              <div class="notif-item">
+                <div class="notif-item-title">
+                  <svg class="icon notif-icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                  </svg>
+                  Buku Terlambat
+                </div>
+                <div class="notif-item-body">
+                  {{ notifikasi.terlambat.jumlah }} buku belum dikembalikan melebihi jatuh tempo
+                </div>
+                <div class="notif-item-time">{{ formatWaktu(notifikasi.terlambat.waktu) }}</div>
+              </div>
+
+              <div class="notif-item">
+                <div class="notif-item-title">
+                  <svg class="icon notif-icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  Jatuh Tempo Hari Ini
+                </div>
+              <div class="notif-item-body">
+                {{ notifikasi.jatuhTempoHariIni.jumlah }} buku harus dikembalikan hari ini
+              </div>
+              <div class="notif-item-time">{{ formatWaktu(notifikasi.jatuhTempoHariIni.waktu) }}</div>
+              </div>
+            </div>
           </div>
           <div class="avatar-sm avatar-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -370,6 +453,26 @@ function tutupSearchDelay() {
 
       <router-view :admin="admin" />
     </main>
+
+    <div
+      v-if="showLogoutModal"
+      class="modal-overlay"
+      @click.self="batalLogout"
+    >
+      <div class="modal-box" role="dialog">
+        <div class="modal-header">
+          <h2>Keluar dari akun?</h2>
+          <button class="modal-close" type="button" @click="batalLogout">×</button>
+        </div>
+        <div class="modal-body">
+          <p>Anda akan keluar dari dashboard admin. Simpan perubahan yang belum disimpan sebelum keluar.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-modal ghost" type="button" @click="batalLogout">Batal</button>
+          <button class="btn-modal danger" type="button" @click="konfirmasiLogout">Ya, Keluar</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -562,7 +665,13 @@ function tutupSearchDelay() {
 .btn-logout {
   margin-top: 12px; background: transparent; border: none; color: #cbd5e1;
   text-align: left; padding: 8px 10px; cursor: pointer; font-size: 14px;
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 10px;width: 100%;
+  border-radius: 8px; transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-logout:hover {
+  background: #1d4ed8;
+  color: #fff;
 }
 
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; margin-left: 260px; transition: margin-left 0.25s ease; }
@@ -639,15 +748,127 @@ function tutupSearchDelay() {
 }
 
 .topbar-right { display: flex; align-items: center; gap: 14px; margin-left: auto; }
-.notif-icon { position: relative; display: flex; color: #374151; }
+.notif-wrap { position: relative; }
+.notif-icon {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  color: #374151; background: none; border: none; cursor: pointer;
+  padding: 6px; border-radius: 8px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.notif-icon:hover {
+  background-color: #f3f4f6;
+  color: #2563eb;
+}
 .notif-dot {
   position: absolute; top: -6px; right: -8px; background: #ef4444; color: #fff;
   font-size: 10px; border-radius: 999px; padding: 0 5px;
 }
+.notif-dropdown {
+  position: absolute; top: calc(100% + 12px); right: 0; width: 280px;
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); z-index: 70; padding: 8px;
+}
+.notif-item { padding: 10px; border-radius: 8px; }
+.notif-item + .notif-item { border-top: 1px solid #f1f5f9; margin-top: 4px; padding-top: 12px; }
+.notif-item-title { font-size: 13px; font-weight: 700; color: #111827; margin-bottom: 2px; display: flex; align-items: center; gap: 6px; }
+.notif-icon-inline { width: 15px; height: 15px; flex-shrink: 0; color: #2563eb;}
+.notif-item-body { font-size: 12px; color: #374151; }
+.notif-item-time { font-size: 11px; color: #9ca3af; margin-top: 4px; }
+
 .avatar-sm { width: 32px; height: 32px; border-radius: 50%; }
 .user-name { font-size: 13px; font-weight: 600; }
 .user-role { font-size: 11px; color: #6b7280; }
 
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 90;
+  padding: 16px;
+}
+
+.modal-box {
+  width: 100%;
+  max-width: 400px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16);
+  color: #0f172a;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.modal-close {
+  border: none;
+  background: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 22px;
+  color: #9ca3af;
+  cursor: pointer;
+}
+
+.modal-close:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.modal-body {
+  padding: 16px 20px;
+  font-size: 14px;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.btn-modal {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-modal.ghost {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.btn-modal.ghost:hover {
+  background: #cbd5e1;
+}
+
+.btn-modal.danger {
+  background: #dc2626;
+  color: #fff;
+}
+
+.btn-modal.danger:hover {
+  background: #b91c1c;
+}
 .hamburger-mobile {
   display: none;
 }

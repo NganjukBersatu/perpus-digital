@@ -50,6 +50,13 @@
       "when": 1788834665753,
       "tag": "0006_outstanding_songbird",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788916746094,
+      "tag": "0007_spooky_bloodstorm",
+      "breakpoints": true
     }
   ]
 }

@@ -1,31 +1,24 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 
-// ===== DATA DUMMY =====
-const kategoriList = ref([
-  { id: 1, nama: 'Buku Mata Pelajaran', deskripsi: 'Buku pelajaran sekolah sesuai kurikulum' },
-  { id: 2, nama: 'Novel', deskripsi: 'Karya fiksi seperti novel dan cerpen' },
-  { id: 3, nama: 'Referensi', deskripsi: 'Ensiklopedia, kamus, dan buku rujukan' },
-])
+const API_URL = 'http://localhost:3000/api/kategori'
 
+const kategoriList = ref([])
 const isLoading = ref(false)
 const searchQuery = ref('')
 const errorMessage = ref('')
 const successMessage = ref('')
 
-// Modal form
 const showModal = ref(false)
-const modalMode = ref('tambah') // 'tambah' | 'edit'
+const modalMode = ref('tambah')
 const form = ref({ id: null, nama: '', deskripsi: '' })
 const isSaving = ref(false)
 const formError = ref('')
 
-// Modal hapus
 const showDeleteModal = ref(false)
 const itemToDelete = ref(null)
 const isDeleting = ref(false)
 
-// ===== COMPUTED =====
 const filteredKategori = computed(() => {
   const q = searchQuery.value.toLowerCase().trim()
   if (!q) return kategoriList.value
@@ -35,7 +28,6 @@ const filteredKategori = computed(() => {
   )
 })
 
-// ===== FUNGSI =====
 function tampilkanPesan(tipe, pesan) {
   if (tipe === 'error') {
     errorMessage.value = pesan
@@ -44,11 +36,24 @@ function tampilkanPesan(tipe, pesan) {
     successMessage.value = pesan
     errorMessage.value = ''
   }
-  // Hilangkan pesan setelah 3 detik
   setTimeout(() => {
     errorMessage.value = ''
     successMessage.value = ''
   }, 3000)
+}
+
+async function ambilData() {
+  isLoading.value = true
+  errorMessage.value = ''
+  try {
+    const res = await fetch(API_URL)
+    if (!res.ok) throw new Error()
+    kategoriList.value = await res.json()
+  } catch (err) {
+    tampilkanPesan('error', 'Gagal memuat data kategori. Pastikan backend aktif (node index.js).')
+  } finally {
+    isLoading.value = false
+  }
 }
 
 function bukaModalTambah() {
@@ -60,11 +65,7 @@ function bukaModalTambah() {
 
 function bukaModalEdit(item) {
   modalMode.value = 'edit'
-  form.value = {
-    id: item.id,
-    nama: item.nama,
-    deskripsi: item.deskripsi || '',
-  }
+  form.value = { id: item.id, nama: item.nama, deskripsi: item.deskripsi || '' }
   formError.value = ''
   showModal.value = true
 }
@@ -75,63 +76,41 @@ function tutupModal() {
   formError.value = ''
 }
 
-function validasiForm() {
+async function simpanKategori() {
   const nama = form.value.nama.trim()
-
   if (!nama) {
     formError.value = 'Nama kategori wajib diisi'
-    return false
+    return
   }
-
-  // Cek duplikat (kecuali dirinya sendiri saat edit)
-  const sudahAda = kategoriList.value.some(
-    (k) =>
-      k.nama.toLowerCase() === nama.toLowerCase() &&
-      k.id !== form.value.id
-  )
-
-  if (sudahAda) {
-    formError.value = 'Nama kategori sudah digunakan'
-    return false
-  }
-
-  formError.value = ''
-  return true
-}
-
-function simpanKategori() {
-  if (!validasiForm()) return
 
   isSaving.value = true
+  formError.value = ''
 
-  // Simulasi delay (nanti diganti API)
-  setTimeout(() => {
-    if (modalMode.value === 'edit') {
-      const idx = kategoriList.value.findIndex((k) => k.id === form.value.id)
-      if (idx !== -1) {
-        kategoriList.value[idx] = {
-          id: form.value.id,
-          nama: form.value.nama.trim(),
-          deskripsi: form.value.deskripsi.trim(),
-        }
-      }
-      tampilkanPesan('success', 'Kategori berhasil diperbarui')
-    } else {
-      const idBaru = kategoriList.value.length
-        ? Math.max(...kategoriList.value.map((k) => k.id)) + 1
-        : 1
+  try {
+    const isEdit = modalMode.value === 'edit'
+    const url = isEdit ? `${API_URL}/${form.value.id}` : API_URL
+    const method = isEdit ? 'PUT' : 'POST'
 
-      kategoriList.value.push({
-        id: idBaru,
-        nama: form.value.nama.trim(),
-        deskripsi: form.value.deskripsi.trim(),
-      })
-      tampilkanPesan('success', 'Kategori berhasil ditambahkan')
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nama, deskripsi: form.value.deskripsi.trim() }),
+    })
+
+    const data = await res.json()
+    if (!res.ok) {
+      formError.value = data.error || 'Gagal menyimpan kategori'
+      return
     }
 
-    isSaving.value = false
+    await ambilData()
+    tampilkanPesan('success', isEdit ? 'Kategori berhasil diperbarui' : 'Kategori berhasil ditambahkan')
     showModal.value = false
-  }, 400)
+  } catch (err) {
+    formError.value = 'Terjadi kesalahan, coba lagi'
+  } finally {
+    isSaving.value = false
+  }
 }
 
 function bukaModalHapus(item) {
@@ -145,21 +124,26 @@ function tutupModalHapus() {
   itemToDelete.value = null
 }
 
-function konfirmasiHapus() {
+async function konfirmasiHapus() {
   if (!itemToDelete.value) return
-
   isDeleting.value = true
 
-  setTimeout(() => {
-    kategoriList.value = kategoriList.value.filter(
-      (k) => k.id !== itemToDelete.value.id
-    )
+  try {
+    const res = await fetch(`${API_URL}/${itemToDelete.value.id}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error()
+
+    await ambilData()
     tampilkanPesan('success', `Kategori "${itemToDelete.value.nama}" berhasil dihapus`)
+  } catch (err) {
+    tampilkanPesan('error', 'Gagal menghapus kategori')
+  } finally {
     isDeleting.value = false
     showDeleteModal.value = false
     itemToDelete.value = null
-  }, 350)
+  }
 }
+
+onMounted(ambilData)
 </script>
 
 <template>
@@ -595,4 +579,128 @@ tbody tr:hover {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* ===== Responsive Mobile - Kategori Buku ===== */
+@media (max-width: 640px) {
+  .page {
+    padding: 14px;
+  }
+
+  /* Header */
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .header h1 {
+    font-size: 18px;
+  }
+
+  .subtitle {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .btn-tambah {
+    width: 100%;
+    justify-content: center;
+    padding: 11px 16px;
+  }
+
+  /* Notifikasi */
+  .banner {
+    font-size: 12px;
+    padding: 10px 12px;
+  }
+
+  /* Search */
+  .toolbar {
+    padding: 10px;
+    margin-bottom: 14px;
+  }
+
+  .search {
+    height: 40px;
+    padding: 8px 12px 8px 36px;
+    font-size: 13px;
+  }
+
+  /* Tabel tetap bisa scroll horizontal */
+  .table-wrap {
+    border-radius: 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-wrap::-webkit-scrollbar {
+    height: 7px;
+  }
+
+  .table-wrap::-webkit-scrollbar-track {
+    background: #f3f4f6;
+  }
+
+  .table-wrap::-webkit-scrollbar-thumb {
+    background: #c7c9d1;
+    border-radius: 999px;
+  }
+
+  table {
+    min-width: 650px;
+    font-size: 12px;
+  }
+
+  th,
+  td {
+    padding: 10px 12px;
+    white-space: nowrap;
+  }
+
+  /* Kolom deskripsi boleh lebih lebar */
+  th:nth-child(3),
+  td:nth-child(3) {
+    min-width: 240px;
+    white-space: normal;
+  }
+
+  /* Tombol aksi */
+  .aksi-cell {
+    gap: 6px;
+  }
+
+  .btn-aksi {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    padding: 12px;
+  }
+
+  .modal-card {
+    width: 100%;
+    max-width: 100%;
+    padding: 20px;
+    border-radius: 12px;
+  }
+
+  .modal-card h2 {
+    font-size: 16px;
+  }
+
+  .modal-actions {
+    margin-top: 14px;
+  }
+
+  .btn-secondary,
+  .btn-primary,
+  .btn-danger {
+    padding: 10px 16px;
+  }
+}
+
 </style>

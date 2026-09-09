@@ -862,4 +862,109 @@ tbody tr:hover { background: #f9fafb; }
 .btn-hapus-confirm:hover {
   background: #dc2626;
 }
+
+/* ===== Responsive Mobile - Data Buku ===== */
+@media (max-width: 640px) {
+  .page {
+    padding: 14px;
+  }
+
+  /* Header: judul + tombol jadi vertikal */
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .header h1 {
+    font-size: 18px;
+  }
+
+  .btn-tambah {
+    width: 100%;
+    justify-content: center;
+    padding: 11px 16px;
+  }
+
+  /* Toolbar: search + filter ditumpuk vertikal */
+  .toolbar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 12px;
+}
+
+.search-box {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.select {
+  width: 100%;
+  min-width: 0;
+}
+
+  .search-box {
+    width: 100%;
+  }
+
+  .select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* Tabel tetap bisa di-scroll horizontal */
+  .table-wrap {
+    border-radius: 10px;
+  }
+
+  table {
+    min-width: 820px; /* biar kolom tidak terlalu gepeng */
+    font-size: 12px;
+  }
+
+  th, td {
+    padding: 10px 12px;
+  }
+
+  /* Pagination: ditumpuk agar tidak sempit */
+  .pagination {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding-top: 16px;
+  }
+
+  .pages {
+    justify-content: center;
+  }
+
+  .range {
+    text-align: center;
+    font-size: 12px;
+  }
+
+  .select-sm {
+    width: 100%;
+  }
+
+  /* Modal sudah cukup baik, hanya rapikan sedikit */
+  .modal-box {
+    width: 100%;
+    max-width: 94%;
+    margin: 12px;
+    padding: 16px 18px 20px;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .confirm-box {
+    width: 100%;
+    max-width: 92%;
+    margin: 12px;
+  }
+}
 </style>

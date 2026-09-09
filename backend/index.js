@@ -13,7 +13,9 @@ const kelasRoutes = require("./routes/kelas")
 const guruRoutes = require("./routes/guru")
 const dataPeminjamanRoutes = require("./routes/dataPeminjaman")
 const dendaRoutes = require("./routes/denda")
-
+const kategoriRoutes = require("./routes/kategori")
+const riwayatRoutes = require("./routes/riwayat")
+const laporanRoutes = require("./routes/laporan")
 
 const app = express()
 app.use(cors())
@@ -26,6 +28,9 @@ app.use("/api/guru", guruRoutes)
 app.use("/api", kelasRoutes)
 app.use("/api/data-peminjaman", dataPeminjamanRoutes)
 app.use("/api/denda", dendaRoutes)
+app.use('/api/kategori', require('./routes/kategori'))
+app.use('/api/riwayat', require('./routes/riwayat'))
+app.use('/api/laporan', require('./routes/laporan'))
 
 // GET data buku berdasarkan barcode
 app.get("/api/eksemplar-buku/:barcode", async (req, res) => {

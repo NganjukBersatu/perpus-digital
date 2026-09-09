@@ -14,10 +14,13 @@ import DataBukuPage from '../views/admin/DataBukuPage.vue'
 import DataSiswaPage from '../views/admin/DataSiswaPage.vue'
 import DataGuruPage from '@/views/admin/DataGuruPage.vue'
 import DataPeminjaman from '@/views/admin/DataPeminjaman.vue'
+import PengembalianPage from '@/views/admin/PengembalianPage.vue'
 import Denda from '@/views/admin/Denda.vue'
 import KategoriBukuPage from '@/views/admin/KategoriBukuPage.vue'
 import PengaturanPage from '../views/admin/PengaturanPage.vue'
 import AkunAdminPage from '../views/admin/AkunAdminPage.vue'
+import RiwayatAktivitas from '@/views/admin/RiwayatAktivitas.vue'
+import LaporanPage from '@/views/admin/LaporanPage.vue'
 
 const ComingSoon = {
   props: {
@@ -143,7 +146,7 @@ const router = createRouter({
         {
           path: 'pengembalian',
           name: 'admin-pengembalian',
-          component: () => import('@/views/admin/PengembalianPage.vue'),
+          component: PengembalianPage
         },
         {
           path: 'data-buku',
@@ -178,14 +181,12 @@ const router = createRouter({
         {
           path: 'laporan',
           name: 'admin-laporan',
-          component: ComingSoon,
-          props: { title: 'Laporan' }
+          component: LaporanPage,
         },
         {
           path: 'riwayat',
           name: 'admin-riwayat',
-          component: ComingSoon,
-          props: { title: 'Riwayat Aktivitas' }
+          component: RiwayatAktivitas,
         },
         {
           path: 'pengaturan',

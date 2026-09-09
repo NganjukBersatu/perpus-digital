@@ -21,6 +21,14 @@ function toggleSidebar() {
   sidebarOpen.value = !sidebarOpen.value
 }
 
+const mobileMenuOpen = ref(false)
+function toggleMobileMenu() {
+  mobileMenuOpen.value = !mobileMenuOpen.value
+}
+function closeMobileMenu() {
+  mobileMenuOpen.value = false
+}
+
 function logout() {
   logoutUser(router)
 }
@@ -76,7 +84,7 @@ function tutupSearchDelay() {
 
 <template>
   <div class="layout">
-    <aside class="sidebar" :class="{ 'sidebar-closed': !sidebarOpen }">
+    <aside class="sidebar" :class="{ 'sidebar-closed': !sidebarOpen, 'mobile-open': mobileMenuOpen }">
       <div class="brand">
         <svg class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
@@ -93,7 +101,7 @@ function tutupSearchDelay() {
         </button>
       </div>
 
-      <nav class="nav">
+      <nav class="nav" @click="closeMobileMenu">
         <div class="nav-section">MAIN MENU</div>
 
         <router-link to="/admin" class="nav-item" exact-active-class="active" title="Dashboard" data-label="Dashboard">
@@ -259,14 +267,22 @@ function tutupSearchDelay() {
         <span class="nav-label">Keluar</span>
       </button>
     </aside>
-
+        <div v-if="mobileMenuOpen" class="sidebar-overlay" @click="closeMobileMenu"></div>
     <main class="main" :class="{ 'main-expanded': !sidebarOpen }">
-      <header class="topbar">
-        <button class="hamburger" @click="toggleSidebar" v-if="!sidebarOpen">
-          <svg class="icon icon-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
-        </button>
+<header class="topbar">
+  <button class="hamburger hamburger-mobile" @click="toggleMobileMenu">
+    <svg class="icon icon-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  </button>
+
+  <button class="hamburger" @click="toggleSidebar" v-if="!sidebarOpen">
+    <svg class="icon icon-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  </button>
 
         <div class="search-box search-box-wrap">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -631,4 +647,104 @@ function tutupSearchDelay() {
 .avatar-sm { width: 32px; height: 32px; border-radius: 50%; }
 .user-name { font-size: 13px; font-weight: 600; }
 .user-role { font-size: 11px; color: #6b7280; }
+
+.hamburger-mobile {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* sembunyikan tombol collapse desktop, ganti sepenuhnya dengan hamburger mobile */
+  .sidebar-toggle-inside {
+    display: none !important;
+  }
+  .hamburger:not(.hamburger-mobile) {
+    display: none !important;
+  }
+  .hamburger-mobile {
+    display: flex;
+  }
+
+  /* sidebar jadi overlay, default tersembunyi di luar layar */
+  .sidebar,
+  .sidebar.sidebar-closed {
+    width: 260px;
+    padding: 20px 16px;
+    align-items: stretch;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.25);
+  }
+
+  /* saat dibuka lewat hamburger, sidebar full muncul menutupi konten */
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  /* pastikan isi sidebar selalu tampil penuh (bukan versi icon-only) di mobile */
+  .sidebar.sidebar-closed .brand-text,
+  .sidebar.sidebar-closed .nav-section,
+  .sidebar.sidebar-closed .nav-label,
+  .sidebar.sidebar-closed .profile-text {
+    display: revert;
+  }
+  .sidebar.sidebar-closed .nav-item,
+  .sidebar.sidebar-closed .btn-logout {
+    width: auto;
+    height: auto;
+    margin: 0;
+    padding: 8px 10px;
+    justify-content: space-between;
+    border-radius: 8px;
+  }
+  .sidebar.sidebar-closed .nav-item-left {
+    justify-content: flex-start;
+    gap: 10px;
+  }
+  .sidebar.sidebar-closed .profile-card {
+    width: auto;
+    height: auto;
+    margin-top: 16px;
+    padding: 12px;
+    justify-content: flex-start;
+  }
+  .sidebar.sidebar-closed .avatar {
+    width: 36px;
+    height: 36px;
+  }
+  .sidebar.sidebar-closed .nav-item::after,
+  .sidebar.sidebar-closed .btn-logout::after {
+    display: none;
+  }
+
+  /* konten utama tidak lagi didorong oleh sidebar, karena sidebar jadi overlay */
+  .main,
+  .main-expanded {
+    margin-left: 0;
+  }
+
+  /* backdrop gelap saat sidebar mobile terbuka */
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 45;
+  }
+
+  /* rapikan topbar di layar sempit */
+  .topbar {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  .search-box {
+    max-width: none;
+    padding: 6px 10px;
+  }
+  .topbar-right {
+    gap: 8px;
+  }
+  .user-name,
+  .user-role {
+    display: none;
+  }
+}
 </style>

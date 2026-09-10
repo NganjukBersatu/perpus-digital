@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 
+
 const API_URL = 'http://localhost:3000/api/kategori'
 
 const kategoriList = ref([])

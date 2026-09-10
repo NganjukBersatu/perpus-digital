@@ -1,24 +1,17 @@
 const express = require('express')
 const router = express.Router()
-const { db } = require('../db/client')
-const { buku, eksemplarBuku } = require('../db/schema')
-const { eq, ilike, sql } = require('drizzle-orm')
+const db = require('../db')
+const { buku, kategori } = require('../db/schema')
+const { eq, ilike, and } = require('drizzle-orm')
 
-// Helper: buat barcode dari ISBN + nomor urut
-// Contoh: 9786020633478-01, 9786020633478-02
-// Kalau ISBN kosong → BK-{idBuku}-01
-function buatBarcode(isbn, bukuId, nomorUrut) {
-  const urut = String(nomorUrut).padStart(2, '0')
-  if (isbn && String(isbn).trim()) {
-    return `${String(isbn).trim()}-${urut}`
-  }
-  return `BK-${bukuId}-${urut}`
-}
-
-// GET semua buku + jumlah eksemplar & yang tersedia
+// GET semua buku (join ke kategori untuk dapat nama kategorinya)
 router.get('/', async (req, res) => {
   try {
-    const { q } = req.query
+    const { q, kategoriNama, status } = req.query
+    const conditions = []
+    if (q) conditions.push(ilike(buku.judul, `%${q}%`))
+    if (status) conditions.push(eq(buku.status, status))
+
     const rows = await db
       .select({
         id: buku.id,
@@ -31,85 +24,65 @@ router.get('/', async (req, res) => {
         tersedia: sql`count(${eksemplarBuku.id}) filter (where ${eksemplarBuku.status} = 'tersedia')`.mapWith(Number),
       })
       .from(buku)
-      .leftJoin(eksemplarBuku, eq(eksemplarBuku.bukuId, buku.id))
-      .where(q ? ilike(buku.judul, `%${q}%`) : undefined)
-      .groupBy(buku.id)
+      .leftJoin(kategori, eq(kategori.id, buku.kategoriId))
+      .where(conditions.length ? and(...conditions) : undefined)
       .orderBy(buku.id)
 
-    res.json(rows)
+    const hasil = kategoriNama ? rows.filter((r) => r.kategori === kategoriNama) : rows
+    res.json(hasil)
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Gagal mengambil data buku' })
   }
 })
 
-// GET detail satu buku (termasuk daftar eksemplarnya)
-router.get('/:id', async (req, res) => {
-  try {
-    const id = Number(req.params.id)
-    const [item] = await db.select().from(buku).where(eq(buku.id, id))
-    if (!item) return res.status(404).json({ error: 'Buku tidak ditemukan' })
-
-    const eksemplar = await db
-      .select()
-      .from(eksemplarBuku)
-      .where(eq(eksemplarBuku.bukuId, id))
-      .orderBy(eksemplarBuku.id)
-
-    res.json({ ...item, eksemplar })
-  } catch (err) {
-    console.error(err)
-    res.status(500).json({ error: 'Gagal mengambil detail buku' })
-  }
-})
-
-// POST tambah buku baru + generate eksemplar + barcode
+// POST tambah buku baru
 router.post('/', async (req, res) => {
   try {
-    const { judul, penulis, penerbit, isbn, jumlahEksemplar, stok } = req.body
-    if (!judul) return res.status(400).json({ error: 'Judul wajib diisi' })
-
-    const [newBuku] = await db
-      .insert(buku)
-      .values({ judul, penulis, penerbit, isbn, stok: Math.max(0, Number(stok) || 0) })
-      .returning()
-
-    const jumlah = Math.max(0, Number(jumlahEksemplar) || 0)
-    const daftarEksemplar = []
-
-    for (let i = 1; i <= jumlah; i++) {
-      const barcode = buatBarcode(isbn, newBuku.id, i)
-      const [eks] = await db
-        .insert(eksemplarBuku)
-        .values({
-          bukuId: newBuku.id,
-          barcode,
-          status: 'tersedia',
-        })
-        .returning()
-      daftarEksemplar.push(eks)
+    const { judul, penulis, kategoriId, isbn, stok, tersedia, lokasi, status } = req.body
+    if (!judul || !penulis) {
+      return res.status(400).json({ error: 'Judul dan penulis wajib diisi' })
     }
 
-    // Kembalikan buku + daftar barcode yang baru dibuat
-    res.status(201).json({
-      ...newBuku,
-      eksemplar: daftarEksemplar,
-    })
+    const [baru] = await db
+      .insert(buku)
+      .values({
+        judul,
+        penulis,
+        kategoriId: kategoriId || null,
+        isbn,
+        stok: Number(stok) || 0,
+        tersedia: Number(tersedia) || 0,
+        lokasi,
+        status: status || 'Tersedia',
+      })
+      .returning()
+
+    res.status(201).json(baru)
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Gagal menambah buku' })
   }
 })
 
-// PUT edit data buku (judul, penulis, dll — tidak ubah jumlah eksemplar)
+// PUT edit buku
 router.put('/:id', async (req, res) => {
   try {
     const id = Number(req.params.id)
-    const { judul, penulis, penerbit, isbn, stok } = req.body
+    const { judul, penulis, kategoriId, isbn, stok, tersedia, lokasi, status } = req.body
 
     const [updated] = await db
       .update(buku)
-      .set({ judul, penulis, penerbit, isbn, stok: Math.max(0, Number(stok) || 0) })
+      .set({
+        judul,
+        penulis,
+        kategoriId: kategoriId || null,
+        isbn,
+        stok: Number(stok) || 0,
+        tersedia: Number(tersedia) || 0,
+        lokasi,
+        status,
+      })
       .where(eq(buku.id, id))
       .returning()
 
@@ -117,46 +90,7 @@ router.put('/:id', async (req, res) => {
     res.json(updated)
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Gagal mengubah buku' })
-  }
-})
-
-// POST tambah eksemplar ke buku yang sudah ada
-router.post('/:id/eksemplar', async (req, res) => {
-  try {
-    const id = Number(req.params.id)
-    const jumlah = Math.max(1, Number(req.body.jumlah) || 1)
-
-    const [item] = await db.select().from(buku).where(eq(buku.id, id))
-    if (!item) return res.status(404).json({ error: 'Buku tidak ditemukan' })
-
-    // Hitung nomor urut berikutnya
-    const existing = await db
-      .select({ count: sql`count(*)`.mapWith(Number) })
-      .from(eksemplarBuku)
-      .where(eq(eksemplarBuku.bukuId, id))
-
-    let nextNomor = (existing[0]?.count || 0) + 1
-    const daftarBaru = []
-
-    for (let i = 0; i < jumlah; i++) {
-      const barcode = buatBarcode(item.isbn, id, nextNomor)
-      const [eks] = await db
-        .insert(eksemplarBuku)
-        .values({
-          bukuId: id,
-          barcode,
-          status: 'tersedia',
-        })
-        .returning()
-      daftarBaru.push(eks)
-      nextNomor++
-    }
-
-    res.status(201).json({ eksemplar: daftarBaru })
-  } catch (err) {
-    console.error(err)
-    res.status(500).json({ error: 'Gagal menambah eksemplar' })
+    res.status(500).json({ error: 'Gagal mengubah data buku' })
   }
 })
 
@@ -164,15 +98,13 @@ router.post('/:id/eksemplar', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const id = Number(req.params.id)
-    await db.delete(eksemplarBuku).where(eq(eksemplarBuku.bukuId, id))
     const [deleted] = await db.delete(buku).where(eq(buku.id, id)).returning()
+
     if (!deleted) return res.status(404).json({ error: 'Buku tidak ditemukan' })
-    res.json({ success: true })
+    res.json({ success: true, deleted })
   } catch (err) {
     console.error(err)
-    res.status(500).json({
-      error: 'Gagal menghapus buku (mungkin masih ada peminjaman aktif yang terkait)',
-    })
+    res.status(500).json({ error: 'Gagal menghapus buku' })
   }
 })
 

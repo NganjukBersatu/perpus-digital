@@ -1,20 +1,22 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import api from '@/utils/axios'
 
-const siswa = ref([])
+const daftarSiswa = ref([])
 const isLoading = ref(true)
+const isSaving = ref(false)
 const errorMessage = ref('')
+
 const searchQuery = ref('')
 const selectedKelas = ref('')
 
 const showModal = ref(false)
 const modalMode = ref('tambah')
 const form = ref({ id: null, nama: '', kelas: '' })
-const isSaving = ref(false)
 
 const kelasOptions = computed(() => {
-  const semua = siswa.value.map((s) => s.kelas).filter(Boolean)
-  return [...new Set(semua)].sort()
+  const semuaKelas = daftarSiswa.value.map(s => s.kelas).filter(Boolean)
+  return [...new Set(semuaKelas)]
 })
 
 const filteredSiswa = computed(() => {
@@ -35,28 +37,18 @@ const filteredSiswa = computed(() => {
   return hasilUnik
 })
 
-async function muatSiswa() {
-  isLoading.value = true
-  errorMessage.value = ''
+onMounted(async () => {
   try {
-    const url = new URL('http://localhost:3000/api/siswa')
-    if (searchQuery.value) url.searchParams.set('q', searchQuery.value)
-    const res = await fetch(url)
-    if (!res.ok) throw new Error('response not ok')
-    siswa.value = await res.json()
+    const { data } = await api.get('/admin/siswa')
+    daftarSiswa.value = data
   } catch (err) {
-    console.error('Gagal mengambil data siswa', err)
-    errorMessage.value = 'Gagal memuat data siswa. Pastikan backend aktif (node index.js).'
+    errorMessage.value = 'Gagal memuat data siswa'
   } finally {
     isLoading.value = false
   }
-}
+})
 
-let searchTimeout = null
-function onSearchInput() {
-  clearTimeout(searchTimeout)
-  searchTimeout = setTimeout(muatSiswa, 350)
-}
+function onSearchInput() {}
 
 function bukaModalTambah() {
   modalMode.value = 'tambah'
@@ -66,7 +58,7 @@ function bukaModalTambah() {
 
 function bukaModalEdit(item) {
   modalMode.value = 'edit'
-  form.value = { id: item.id, nama: item.nama, kelas: item.kelas || '' }
+  form.value = { id: item.id, nama: item.nama, kelas: item.kelas }
   showModal.value = true
 }
 
@@ -75,50 +67,36 @@ function tutupModal() {
 }
 
 async function simpanSiswa() {
-  if (!form.value.nama.trim()) {
-    alert('Nama siswa wajib diisi')
-    return
-  }
-
   isSaving.value = true
+  errorMessage.value = ''
+
   try {
-    const isEdit = modalMode.value === 'edit'
-    const url = isEdit
-      ? `http://localhost:3000/api/siswa/${form.value.id}`
-      : 'http://localhost:3000/api/siswa'
-
-    const res = await fetch(url, {
-      method: isEdit ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form.value)
-    })
-
-    if (!res.ok) throw new Error('Gagal menyimpan')
-
+    if (modalMode.value === 'tambah') {
+      const { data } = await api.post('/admin/siswa', form.value)
+      daftarSiswa.value.push(data)
+    } else {
+      const { data } = await api.put(`/admin/siswa/${form.value.id}`, form.value)
+      const index = daftarSiswa.value.findIndex(s => s.id === form.value.id)
+      if (index !== -1) daftarSiswa.value[index] = data
+    }
     showModal.value = false
-    await muatSiswa()
   } catch (err) {
-    console.error(err)
-    alert('Gagal menyimpan data siswa. Coba lagi.')
+    errorMessage.value = 'Gagal menyimpan data siswa'
   } finally {
     isSaving.value = false
   }
 }
 
 async function hapusSiswa(item) {
-  if (!confirm(`Hapus data "${item.nama}"?`)) return
+  if (!confirm(`Hapus siswa ${item.nama}?`)) return
 
   try {
-    const res = await fetch(`http://localhost:3000/api/siswa/${item.id}`, { method: 'DELETE' })
-    if (!res.ok) throw new Error('Gagal menghapus')
-    await muatSiswa()
+    await api.delete(`/admin/siswa/${item.id}`)
+    daftarSiswa.value = daftarSiswa.value.filter(s => s.id !== item.id)
   } catch (err) {
-    console.error(err)
-    alert('Gagal menghapus siswa. Mungkin masih ada riwayat peminjaman yang terkait.')
+    errorMessage.value = 'Gagal menghapus siswa'
   }
 }
-
-onMounted(muatSiswa)
 </script>
 
 <template>
@@ -301,78 +279,20 @@ tbody tr:hover { background: #f9fafb; }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 
 @media (max-width: 640px) {
-  .page {
-    padding: 14px;
-  }
-
-  /* Header saja yang dibuat responsive */
-  .header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-
-  .header h1 {
-    font-size: 18px;
-  }
-
-  .subtitle {
-    font-size: 12px;
-  }
-
-  .btn-tambah {
-    width: 100%;
-    justify-content: center;
-  }
-
-  /* Tabel */
-  .table-wrap {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  table {
-    min-width: 620px;
-  }
-
-  th,
-  td {
-    padding: 10px 12px;
-  }
-
-  /* Tombol aksi */
-  .aksi-cell {
-    gap: 6px;
-  }
-
-  .detail-btn {
-    padding: 6px 10px;
-    font-size: 11px;
-  }
-
-  /* Modal */
-  .modal-overlay {
-    padding: 12px;
-  }
-
-  .modal-card {
-    width: 100%;
-    max-width: 100%;
-    padding: 20px;
-  }
-
-  .modal-card h2 {
-    font-size: 16px;
-  }
-
-  .modal-actions {
-    margin-top: 14px;
-  }
-
-  .btn-secondary,
-  .btn-primary {
-    padding: 10px 16px;
-  }
+  .page { padding: 14px; }
+  .header { flex-direction: column; align-items: stretch; gap: 12px; }
+  .header h1 { font-size: 18px; }
+  .subtitle { font-size: 12px; }
+  .btn-tambah { width: 100%; justify-content: center; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { min-width: 620px; }
+  th, td { padding: 10px 12px; }
+  .aksi-cell { gap: 6px; }
+  .detail-btn { padding: 6px 10px; font-size: 11px; }
+  .modal-overlay { padding: 12px; }
+  .modal-card { width: 100%; max-width: 100%; padding: 20px; }
+  .modal-card h2 { font-size: 16px; }
+  .modal-actions { margin-top: 14px; }
+  .btn-secondary, .btn-primary { padding: 10px 16px; }
 }
-
 </style>

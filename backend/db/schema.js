@@ -1,5 +1,25 @@
 const { pgTable, serial, varchar, integer, timestamp, date, text } = require("drizzle-orm/pg-core")
 
+const adminAkun = pgTable('admin_akun', {
+  id: serial('id').primaryKey(),
+  username: varchar('username', { length: 50 }).notNull().unique(),
+  passwordHash: varchar('password_hash', { length: 255 }).notNull(),
+  namaLengkap: varchar('nama_lengkap', { length: 255 }).notNull(),
+  email: varchar('email', { length: 255 }),
+  telepon: varchar('telepon', { length: 20 }),
+  jabatan: varchar('jabatan', { length: 100 }),
+  nipNik: varchar('nip_nik', { length: 50 }),
+  createdAt: timestamp('created_at').defaultNow(),
+})
+
+const pengaturanPerpustakaan = pgTable('pengaturan_perpustakaan', {
+  id: serial('id').primaryKey(),
+  namaSekolah: varchar('nama_sekolah', { length: 255 }).notNull().default(''),
+  namaPerpustakaan: varchar('nama_perpustakaan', { length: 255 }).notNull().default(''),
+  alamat: text('alamat'),
+  updatedAt: timestamp('updated_at').defaultNow(),
+})
+
 const buku = pgTable("buku", {
   id: serial("id").primaryKey(),
   judul: varchar("judul", { length: 255 }).notNull(),
@@ -12,6 +32,7 @@ const buku = pgTable("buku", {
   lokasi: varchar("lokasi", { length: 50 }),
   status: varchar("status", { length: 20 }).default("Tersedia"),
   createdAt: timestamp("created_at").defaultNow(),
+  stok: integer('stok').notNull().default(0),
 })
 
 const eksemplarBuku = pgTable("eksemplar_buku", {
@@ -66,4 +87,4 @@ const kategori = pgTable("kategori", {
   createdAt: timestamp("created_at").defaultNow(),
 })
 
-module.exports = { buku, eksemplarBuku, anggota, peminjaman, kelas, kategori }
+module.exports = { adminAkun, pengaturanPerpustakaan, buku, eksemplarBuku, anggota, peminjaman, kelas, kategori }

@@ -20,11 +20,8 @@ router.get('/', async (req, res) => {
         penerbit: buku.penerbit,
         isbn: buku.isbn,
         stok: buku.stok,
-        tersedia: buku.tersedia,
-        lokasi: buku.lokasi,
-        status: buku.status,
-        kategoriId: buku.kategoriId,
-        kategori: kategori.nama,
+        totalEksemplar: sql`count(${eksemplarBuku.id})`.mapWith(Number),
+        tersedia: sql`count(${eksemplarBuku.id}) filter (where ${eksemplarBuku.status} = 'tersedia')`.mapWith(Number),
       })
       .from(buku)
       .leftJoin(kategori, eq(kategori.id, buku.kategoriId))

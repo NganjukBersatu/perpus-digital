@@ -26,13 +26,8 @@ const roleLabel = computed(() => {
 })
 
 watch(selectedRole, () => {
-  form.value = {
-    nis: '',
-    tanggalLahir: '',
-    username: '',
-    password: '',
-    nip: ''
-  }
+  form.value = { nis: '', tanggalLahir: '', username: '', password: '', nip: '' }
+  errorMsg.value = ''
 })
 
 // --- BARU: state untuk error dan loading ---
@@ -45,6 +40,12 @@ async function handleLogin() {
   isLoading.value = true
 
   let payload = { role: selectedRole.value }
+
+const isLoggingIn = ref(false)
+const errorMsg = ref('')
+
+async function handleLogin() {
+  errorMsg.value = ''
 
   if (selectedRole.value === 'siswa') {
     payload = { ...payload, nis: form.value.nis, tanggalLahir: form.value.tanggalLahir }
@@ -522,5 +523,12 @@ async function handleLogin() {
   .art-caption {
     display: none;
   }
+}
+
+.error-text {
+  color: #dc2626;
+  font-size: 0.85rem;
+  margin: -10px 0 14px;
+  text-align: center;
 }
 </style>

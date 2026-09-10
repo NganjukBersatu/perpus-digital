@@ -535,7 +535,7 @@ table {
   padding: 8px 12px;
   font-size: 13px;
   background: #fff;
-  color: #374151;
+  color: #000000;
   min-width: 150px;
 }
 

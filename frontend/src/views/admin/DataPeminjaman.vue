@@ -625,7 +625,7 @@ onMounted(muatData)
 
 .date-sep {
   font-size: 12px;
-  color: #9ca3af;
+  color: #000000;
 }
 
 .icon-svg {

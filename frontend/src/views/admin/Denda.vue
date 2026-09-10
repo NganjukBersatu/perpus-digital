@@ -482,7 +482,7 @@ td {
 thead th {
   font-size: 12px;
   font-weight: 600;
-  color: #6b7280;
+  color: #414040;
   background: #fafafa;
 }
 

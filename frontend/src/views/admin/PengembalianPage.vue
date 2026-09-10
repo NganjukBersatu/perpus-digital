@@ -830,7 +830,7 @@ watch(page, fetchData)
     border-radius: 8px; 
     padding: 8px 12px; 
     font-size: 13px; 
-    color: #4b5563; 
+    color: #000000; 
     cursor: pointer; 
     display: inline-flex; 
     align-items: center; 
@@ -1020,7 +1020,7 @@ thead {
 th { 
     text-align: left; 
     padding: 12px 16px; 
-    color: #9ca3af; 
+    color: #000000; 
     font-weight: 500; 
     font-size: 12px; 
 }

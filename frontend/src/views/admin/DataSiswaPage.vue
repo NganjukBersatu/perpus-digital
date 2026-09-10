@@ -20,11 +20,21 @@ const kelasOptions = computed(() => {
 })
 
 const filteredSiswa = computed(() => {
-  return daftarSiswa.value.filter(s => {
-    const cocokNama = s.nama.toLowerCase().includes(searchQuery.value.toLowerCase())
-    const cocokKelas = !selectedKelas.value || s.kelas === selectedKelas.value
-    return cocokNama && cocokKelas
-  })
+  const base = !selectedKelas.value
+    ? siswa.value
+    : siswa.value.filter((s) => s.kelas === selectedKelas.value)
+
+  // Tampilkan hanya 1 baris per nama (tidak peduli besar-kecil huruf/spasi)
+  const namaTerlihat = new Set()
+  const hasilUnik = []
+  for (const s of base) {
+    const kunci = (s.nama || '').trim().toLowerCase()
+    if (!namaTerlihat.has(kunci)) {
+      namaTerlihat.add(kunci)
+      hasilUnik.push(s)
+    }
+  }
+  return hasilUnik
 })
 
 onMounted(async () => {

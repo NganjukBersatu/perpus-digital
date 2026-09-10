@@ -1,54 +1,64 @@
 const express = require('express')
+const router = express.Router()
 const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken')
-const { db } = require('../db/client')          
-const { anggota } = require('../db/schema')
+const { db } = require('../db/client')
+const { adminAkun } = require('../db/schema')
 const { eq } = require('drizzle-orm')
 
-const router = express.Router()
-const JWT_SECRET = process.env.JWT_SECRET
+const JWT_SECRET = process.env.JWT_SECRET || 'ganti_dengan_secret_yang_acak_dan_rahasia'
 
+// POST login
 router.post('/login', async (req, res) => {
-  const { role } = req.body
-
   try {
-    if (role === 'siswa') {
-      const { nis, tanggalLahir } = req.body
-      const user = await db.select().from(anggota).where(eq(anggota.nis, nis))
-
-      if (!user[0] || user[0].tanggalLahir !== tanggalLahir) {
-        return res.status(401).json({ message: 'NIS atau tanggal lahir salah' })
-      }
-
-      const token = jwt.sign({ id: user[0].id, role: 'siswa' }, JWT_SECRET, { expiresIn: '1d' })
-      return res.json({ token, role: 'siswa', nama: user[0].nama })
+    const { username, password } = req.body
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username dan password wajib diisi' })
     }
 
-    if (role === 'guru' || role === 'admin') {
-      const { nip, username, password } = req.body
-      const identifier = role === 'guru' ? nip : username
-      const field = role === 'guru' ? anggota.nip : anggota.username
-
-      const user = await db.select().from(anggota).where(eq(field, identifier))
-
-      if (!user[0]) {
-        return res.status(401).json({ message: 'Akun tidak ditemukan' })
-      }
-
-      const valid = await bcrypt.compare(password, user[0].passwordHash)
-      if (!valid) {
-        return res.status(401).json({ message: 'Password salah' })
-      }
-
-      const token = jwt.sign({ id: user[0].id, role }, JWT_SECRET, { expiresIn: '1d' })
-      return res.json({ token, role, nama: user[0].nama })
+    const [akun] = await db.select().from(adminAkun).where(eq(adminAkun.username, username))
+    if (!akun) {
+      return res.status(401).json({ error: 'Username atau password salah' })
     }
 
-    return res.status(400).json({ message: 'Role tidak valid' })
+    const cocok = await bcrypt.compare(password, akun.passwordHash)
+    if (!cocok) {
+      return res.status(401).json({ error: 'Username atau password salah' })
+    }
+
+    const token = jwt.sign({ id: akun.id, username: akun.username }, JWT_SECRET, { expiresIn: '8h' })
+
+    res.json({
+      token,
+      admin: {
+        id: akun.id,
+        username: akun.username,
+        namaLengkap: akun.namaLengkap,
+        email: akun.email,
+        telepon: akun.telepon,
+        jabatan: akun.jabatan,
+        nipNik: akun.nipNik,
+      },
+    })
   } catch (err) {
     console.error(err)
-    res.status(500).json({ message: 'Terjadi kesalahan server' })
+    res.status(500).json({ error: 'Gagal login' })
   }
 })
 
-module.exports = router
+// Middleware untuk lindungi endpoint yang butuh login
+function wajibLogin(req, res, next) {
+  const authHeader = req.headers.authorization
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Belum login' })
+  }
+  const token = authHeader.split(' ')[1]
+  try {
+    req.admin = jwt.verify(token, JWT_SECRET)
+    next()
+  } catch {
+    res.status(401).json({ error: 'Sesi tidak valid, silakan login ulang' })
+  }
+}
+
+module.exports = { router, wajibLogin }

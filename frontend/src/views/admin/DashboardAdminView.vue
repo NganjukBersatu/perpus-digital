@@ -693,10 +693,10 @@ onMounted(async () => {
 
 .mini-select {
   font-size: 12px;
-  border: 1px solid #e3e9f2;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
   padding: 6px 8px;
-  color: #6b7280;
+  color: #000000;
   background: #fff;
 }
 

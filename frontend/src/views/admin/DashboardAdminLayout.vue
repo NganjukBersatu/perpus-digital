@@ -2,12 +2,14 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { logoutUser } from '@/utils/auth'
+import { getAdmin } from '@/utils/auth'
 
 const router = useRouter()
 
+const dataLogin = getAdmin()
 const admin = ref({
-  nama: 'Admin Perpustakaan',
-  role: 'Pustakawan'
+  nama: dataLogin?.namaLengkap || 'Admin Perpustakaan',
+  role: dataLogin?.jabatan || 'Pustakawan'
 })
 
 const notifikasi = ref({
@@ -16,17 +18,92 @@ const notifikasi = ref({
 })
 const notifOpen = ref(false)
 
-const jumlahJenisNotifikasi = computed(() => {
-  let jenis = 0
-  if (notifikasi.value.terlambat.jumlah > 0) jenis++
-  if (notifikasi.value.jatuhTempoHariIni.jumlah > 0) jenis++
-  return jenis
+const totalNotifikasi = computed(() => {
+  return notifikasi.value.terlambat.jumlah + notifikasi.value.jatuhTempoHariIni.jumlah
 })
+
+const NOTIF_STORAGE_KEY = 'notifikasi_waktu_terakhir'
+
+function muatWaktuTersimpan() {
+  try {
+    const raw = localStorage.getItem(NOTIF_STORAGE_KEY)
+    return raw ? JSON.parse(raw) : { terlambat: null, jatuhTempoHariIni: null }
+  } catch {
+    return { terlambat: null, jatuhTempoHariIni: null }
+  }
+}
+
+function simpanWaktu(waktu) {
+  try {
+    localStorage.setItem(NOTIF_STORAGE_KEY, JSON.stringify(waktu))
+  } catch (err) {
+    console.error('Gagal menyimpan waktu notifikasi', err)
+  }
+}
+
+// jumlah terakhir yang PERNAH diketahui (dipakai untuk bandingkan, beda dari notifikasi.value
+// yang bisa saja masih default 0 tepat setelah refresh)
+let jumlahTerakhirDiketahui = null
 
 async function fetchNotifikasi() {
   try {
     const res = await fetch('http://localhost:3000/api/dashboard/notifikasi')
-    notifikasi.value = await res.json()
+    const data = await res.json()
+    const sekarang = new Date().toISOString()
+
+    const waktuTersimpan = muatWaktuTersimpan()
+
+    // fetch pertama kali di sesi browser ini: ambil dari localStorage kalau ada,
+    // supaya tidak ke-reset ke waktu sekarang setiap refresh
+    if (jumlahTerakhirDiketahui === null) {
+      jumlahTerakhirDiketahui = {
+        terlambat: data.terlambat.jumlah,
+        jatuhTempoHariIni: data.jatuhTempoHariIni.jumlah,
+      }
+
+      notifikasi.value = {
+        terlambat: {
+          jumlah: data.terlambat.jumlah,
+          waktu: waktuTersimpan.terlambat || sekarang,
+        },
+        jatuhTempoHariIni: {
+          jumlah: data.jatuhTempoHariIni.jumlah,
+          waktu: waktuTersimpan.jatuhTempoHariIni || sekarang,
+        },
+      }
+
+      // kalau localStorage belum ada isinya sama sekali, simpan waktu sekarang sebagai baseline
+      if (!waktuTersimpan.terlambat || !waktuTersimpan.jatuhTempoHariIni) {
+        simpanWaktu({
+          terlambat: notifikasi.value.terlambat.waktu,
+          jatuhTempoHariIni: notifikasi.value.jatuhTempoHariIni.waktu,
+        })
+      }
+      return
+    }
+
+    // fetch selanjutnya (polling): waktu hanya berubah kalau jumlahnya BERUBAH
+    const waktuTerlambat =
+      data.terlambat.jumlah !== jumlahTerakhirDiketahui.terlambat
+        ? sekarang
+        : notifikasi.value.terlambat.waktu
+
+    const waktuJatuhTempo =
+      data.jatuhTempoHariIni.jumlah !== jumlahTerakhirDiketahui.jatuhTempoHariIni
+        ? sekarang
+        : notifikasi.value.jatuhTempoHariIni.waktu
+
+    jumlahTerakhirDiketahui = {
+      terlambat: data.terlambat.jumlah,
+      jatuhTempoHariIni: data.jatuhTempoHariIni.jumlah,
+    }
+
+    notifikasi.value = {
+      terlambat: { jumlah: data.terlambat.jumlah, waktu: waktuTerlambat },
+      jatuhTempoHariIni: { jumlah: data.jatuhTempoHariIni.jumlah, waktu: waktuJatuhTempo },
+    }
+
+    simpanWaktu({ terlambat: waktuTerlambat, jatuhTempoHariIni: waktuJatuhTempo })
   } catch (err) {
     console.error('Gagal mengambil notifikasi', err)
   }
@@ -52,15 +129,31 @@ function closeNotifOnScroll() {
   if (notifOpen.value) notifOpen.value = false
 }
 
+let notifInterval = null
+
 onMounted(() => {
   fetchNotifikasi()
   window.addEventListener('click', closeNotifOutside)
   window.addEventListener('scroll', closeNotifOnScroll, { capture: true })
+
+  // Polling: cek notifikasi setiap 30 detik tanpa perlu refresh halaman
+  notifInterval = setInterval(fetchNotifikasi, 30000)
+
+  // Bonus: langsung refresh saat tab/browser kembali aktif (misal admin balik dari tab lain)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    fetchNotifikasi()
+  }
+}
 
 onBeforeUnmount(() => {
   window.removeEventListener('click', closeNotifOutside)
   window.removeEventListener('scroll', closeNotifOnScroll, { capture: true })
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  if (notifInterval) clearInterval(notifInterval)
 })
 
 const sidebarOpen = ref(true)
@@ -404,7 +497,7 @@ function tutupSearchDelay() {
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
                 <path d="M13.73 21a2 2 0 0 1-3.46 0" />
               </svg>
-              <span v-if="jumlahJenisNotifikasi > 0" class="notif-dot">{{ jumlahJenisNotifikasi }}</span>
+              <span v-if="totalNotifikasi > 0" class="notif-dot">{{ totalNotifikasi }}</span>
             </button>
 
             <div v-if="notifOpen" class="notif-dropdown">
@@ -761,8 +854,23 @@ function tutupSearchDelay() {
   color: #2563eb;
 }
 .notif-dot {
-  position: absolute; top: -6px; right: -8px; background: #ef4444; color: #fff;
-  font-size: 10px; border-radius: 999px; padding: 0 5px;
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  border-radius: 999px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  box-shadow: 0 0 0 2px #fff; /* opsional: kasih outline putih biar terpisah dari ikon lonceng */
 }
 .notif-dropdown {
   position: absolute; top: calc(100% + 12px); right: 0; width: 280px;

@@ -86,8 +86,10 @@
         </div>
       </template>
 
-      <button type="submit" class="btn-login">
-        Masuk sebagai {{ roleLabel }}
+      <p v-if="errorMsg" class="error-text">{{ errorMsg }}</p>
+
+      <button type="submit" class="btn-login" :disabled="isLoggingIn">
+        {{ isLoggingIn ? 'Memproses...' : `Masuk sebagai ${roleLabel}` }}
       </button>
     </form>
   </div>
@@ -123,13 +125,8 @@ const roleLabel = computed(() => {
 
 // Reset form setiap ganti role
 watch(selectedRole, () => {
-  form.value = {
-    nis: '',
-    tanggalLahir: '',
-    username: '',
-    password: '',
-    nip: ''
-  }
+  form.value = { nis: '', tanggalLahir: '', username: '', password: '', nip: '' }
+  errorMsg.value = ''
 })
 
 function simpanSesi(role, data) {
@@ -142,7 +139,12 @@ function simpanSesi(role, data) {
   }))
 }
 
-function handleLogin() {
+const isLoggingIn = ref(false)
+const errorMsg = ref('')
+
+async function handleLogin() {
+  errorMsg.value = ''
+
   if (selectedRole.value === 'siswa') {
     simpanSesi('siswa', {
       nis: form.value.nis,
@@ -162,11 +164,35 @@ function handleLogin() {
     return
   }
 
-  simpanSesi('admin', {
-    username: form.value.username,
-    nama: 'Admin Perpustakaan'
-  })
-  router.push('/admin')
+  // ADMIN: divalidasi sungguhan ke backend (tidak lagi asal diterima)
+  isLoggingIn.value = true
+  try {
+    const res = await fetch('http://localhost:3000/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: form.value.username,
+        password: form.value.password,
+      }),
+    })
+    const data = await res.json()
+
+    if (!res.ok) {
+      errorMsg.value = data.error || 'Username atau password salah'
+      return
+    }
+
+    localStorage.setItem('token', data.token)
+    localStorage.setItem('role', 'admin')
+    localStorage.setItem('user', JSON.stringify({ role: 'admin', ...data.admin }))
+
+    router.push('/admin')
+  } catch (err) {
+    console.error(err)
+    errorMsg.value = 'Gagal terhubung ke server. Pastikan backend aktif (node index.js).'
+  } finally {
+    isLoggingIn.value = false
+  }
 }
 </script>
 
@@ -263,5 +289,12 @@ input:focus {
 
 .btn-login:hover {
   background: #1d4ed8;
+}
+
+.error-text {
+  color: #dc2626;
+  font-size: 0.85rem;
+  margin: -10px 0 14px;
+  text-align: center;
 }
 </style>

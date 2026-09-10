@@ -1,10 +1,9 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { logoutUser } from '@/utils/auth'
+import { logoutUser, authHeaders } from '@/utils/auth'
 
 const router = useRouter()
-const STORAGE_KEY = 'perpus_akun_admin'
 
 const tabs = [
   { id: 'profil', label: 'Profil' },
@@ -15,15 +14,16 @@ const tabs = [
 const activeTab = ref('profil')
 const toast = ref('')
 const savedAt = ref('')
+const isLoading = ref(true)
+const isSaving = ref(false)
 
 const profile = reactive({
-  nama: 'Admin Perpustakaan',
-  username: 'admin.perpus',
-  email: 'perpustakaan@smkn1kertosono.sch.id',
+  nama: '',
+  username: '',
+  email: '',
   telepon: '',
-  jabatan: 'Pustakawan',
+  jabatan: '',
   nip: '',
-  bio: ''
 })
 
 const security = reactive({
@@ -51,48 +51,68 @@ const initials = computed(() => {
 
 function showToast(text) {
   toast.value = text
-  setTimeout(() => {
-    toast.value = ''
-  }, 2200)
+  setTimeout(() => { toast.value = '' }, 2200)
 }
 
-function loadAccount() {
+async function loadProfile() {
+  isLoading.value = true
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) {
-      session.lastLogin = new Date().toLocaleString('id-ID')
-      return
-    }
-    const data = JSON.parse(raw)
-    if (data.profile) Object.assign(profile, data.profile)
-    if (data.session) Object.assign(session, data.session)
-    savedAt.value = data.savedAt || ''
-  } catch (e) {
-    console.warn('Gagal memuat akun admin', e)
+    const res = await fetch('http://localhost:3000/api/admin/profil', {
+      headers: { ...authHeaders() },
+    })
+    if (!res.ok) throw new Error('Gagal memuat profil')
+    const data = await res.json()
+
+    profile.nama = data.namaLengkap
+    profile.username = data.username
+    profile.email = data.email || ''
+    profile.telepon = data.telepon || ''
+    profile.jabatan = data.jabatan || ''
+    profile.nip = data.nipNik || ''
+    session.lastLogin = new Date().toLocaleString('id-ID')
+  } catch (err) {
+    console.error(err)
+    showToast('Gagal memuat profil dari server')
+  } finally {
+    isLoading.value = false
   }
 }
 
-function persist(extra = {}) {
-  const payload = {
-    profile: { ...profile },
-    session: { ...session },
-    savedAt: new Date().toLocaleString('id-ID'),
-    ...extra
-  }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
-  savedAt.value = payload.savedAt
-}
-
-function saveProfile() {
-  if (!profile.nama.trim() || !profile.username.trim()) {
-    showToast('Nama dan username wajib diisi')
+async function saveProfile() {
+  if (!profile.nama.trim()) {
+    showToast('Nama wajib diisi')
     return
   }
-  persist()
-  showToast('Profil admin berhasil disimpan')
+  isSaving.value = true
+  try {
+    const res = await fetch('http://localhost:3000/api/admin/profil', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({
+        namaLengkap: profile.nama,
+        email: profile.email,
+        telepon: profile.telepon,
+        jabatan: profile.jabatan,
+        nipNik: profile.nip,
+      }),
+    })
+    if (!res.ok) throw new Error('Gagal menyimpan')
+
+    // sinkronkan nama di sidebar/topbar supaya langsung berubah tanpa perlu refresh
+    const userLama = JSON.parse(localStorage.getItem('user') || '{}')
+    localStorage.setItem('user', JSON.stringify({ ...userLama, namaLengkap: profile.nama }))
+
+    savedAt.value = new Date().toLocaleString('id-ID')
+    showToast('Profil admin berhasil disimpan')
+  } catch (err) {
+    console.error(err)
+    showToast('Gagal menyimpan profil')
+  } finally {
+    isSaving.value = false
+  }
 }
 
-function changePassword() {
+async function changePassword() {
   if (!security.passwordLama || !security.passwordBaru) {
     showToast('Lengkapi password lama dan password baru')
     return
@@ -106,16 +126,34 @@ function changePassword() {
     return
   }
 
-  persist({ passwordUpdatedAt: new Date().toLocaleString('id-ID') })
-  security.passwordLama = ''
-  security.passwordBaru = ''
-  security.konfirmasiPassword = ''
-  showToast('Password berhasil diperbarui')
+  try {
+    const res = await fetch('http://localhost:3000/api/admin/password', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({
+        passwordLama: security.passwordLama,
+        passwordBaru: security.passwordBaru,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      showToast(data.error || 'Gagal mengubah password')
+      return
+    }
+
+    security.passwordLama = ''
+    security.passwordBaru = ''
+    security.konfirmasiPassword = ''
+    showToast('Password berhasil diperbarui')
+  } catch (err) {
+    console.error(err)
+    showToast('Gagal terhubung ke server')
+  }
 }
 
 function saveSessionPref() {
-  persist()
-  showToast('Preferensi sesi disimpan')
+  // belum ada tabel penyimpanan preferensi sesi di backend — untuk saat ini cuma notifikasi visual
+  showToast('Preferensi sesi disimpan (lokal, belum tersambung ke server)')
 }
 
 function logout() {
@@ -123,21 +161,14 @@ function logout() {
 }
 
 const showLogoutModal = ref(false)
-
-function mintaLogout() {
-  showLogoutModal.value = true
-}
-
-function batalLogout() {
-  showLogoutModal.value = false
-}
-
+function mintaLogout() { showLogoutModal.value = true }
+function batalLogout() { showLogoutModal.value = false }
 function konfirmasiLogout() {
   showLogoutModal.value = false
   logoutUser(router)
 }
 
-onMounted(loadAccount)
+onMounted(loadProfile)
 </script>
 
 <template>
@@ -150,7 +181,9 @@ onMounted(loadAccount)
       <div class="head-actions">
         <span v-if="savedAt" class="saved-info">Terakhir diubah: {{ savedAt }}</span>
         <button class="btn ghost" type="button" @click="mintaLogout">Keluar</button>
-        <button class="btn primary" type="button" @click="saveProfile">Simpan Profil</button>
+        <button class="btn primary" type="button" :disabled="isSaving" @click="saveProfile">
+          {{ isSaving ? 'Menyimpan...' : 'Simpan Profil' }}
+        </button>
       </div>
     </header>
 
@@ -188,7 +221,7 @@ onMounted(loadAccount)
         </label>
         <label>
           Username
-          <input v-model="profile.username" type="text" />
+          <input v-model="profile.username" type="text" readonly />
         </label>
         <label>
           Email

@@ -18,8 +18,21 @@ const kelasOptions = computed(() => {
 })
 
 const filteredSiswa = computed(() => {
-  if (!selectedKelas.value) return siswa.value
-  return siswa.value.filter((s) => s.kelas === selectedKelas.value)
+  const base = !selectedKelas.value
+    ? siswa.value
+    : siswa.value.filter((s) => s.kelas === selectedKelas.value)
+
+  // Tampilkan hanya 1 baris per nama (tidak peduli besar-kecil huruf/spasi)
+  const namaTerlihat = new Set()
+  const hasilUnik = []
+  for (const s of base) {
+    const kunci = (s.nama || '').trim().toLowerCase()
+    if (!namaTerlihat.has(kunci)) {
+      namaTerlihat.add(kunci)
+      hasilUnik.push(s)
+    }
+  }
+  return hasilUnik
 })
 
 async function muatSiswa() {

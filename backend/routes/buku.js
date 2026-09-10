@@ -26,6 +26,7 @@ router.get('/', async (req, res) => {
         penulis: buku.penulis,
         penerbit: buku.penerbit,
         isbn: buku.isbn,
+        stok: buku.stok,
         totalEksemplar: sql`count(${eksemplarBuku.id})`.mapWith(Number),
         tersedia: sql`count(${eksemplarBuku.id}) filter (where ${eksemplarBuku.status} = 'tersedia')`.mapWith(Number),
       })
@@ -65,12 +66,12 @@ router.get('/:id', async (req, res) => {
 // POST tambah buku baru + generate eksemplar + barcode
 router.post('/', async (req, res) => {
   try {
-    const { judul, penulis, penerbit, isbn, jumlahEksemplar } = req.body
+    const { judul, penulis, penerbit, isbn, jumlahEksemplar, stok } = req.body
     if (!judul) return res.status(400).json({ error: 'Judul wajib diisi' })
 
     const [newBuku] = await db
       .insert(buku)
-      .values({ judul, penulis, penerbit, isbn })
+      .values({ judul, penulis, penerbit, isbn, stok: Math.max(0, Number(stok) || 0) })
       .returning()
 
     const jumlah = Math.max(0, Number(jumlahEksemplar) || 0)
@@ -104,11 +105,11 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const id = Number(req.params.id)
-    const { judul, penulis, penerbit, isbn } = req.body
+    const { judul, penulis, penerbit, isbn, stok } = req.body
 
     const [updated] = await db
       .update(buku)
-      .set({ judul, penulis, penerbit, isbn })
+      .set({ judul, penulis, penerbit, isbn, stok: Math.max(0, Number(stok) || 0) })
       .where(eq(buku.id, id))
       .returning()
 

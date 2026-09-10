@@ -6,6 +6,9 @@ const { sql, desc, isNull, gte, lte, and, eq, lt, ilike } = require("drizzle-orm
 const { db } = require("./db/client")
 const { buku, eksemplarBuku, anggota, peminjaman } = require("./db/schema")
 
+const { router: authRoutes } = require('./routes/auth')
+const adminRoutes = require('./routes/admin')
+const pengaturanRoutes = require('./routes/pengaturan')
 const pengembalianRoutes = require("./routes/pengembalian")
 const bukuRoutes = require("./routes/buku")
 const siswaRoutes = require("./routes/siswa")
@@ -21,6 +24,9 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
+app.use('/api/auth', authRoutes)
+app.use('/api/admin', adminRoutes)
+app.use('/api/pengaturan', pengaturanRoutes)
 app.use("/api/pengembalian", pengembalianRoutes)
 app.use("/api/buku", bukuRoutes)  
 app.use("/api/siswa", siswaRoutes)  
@@ -471,7 +477,7 @@ app.get("/api/dashboard/notifikasi", async (req, res) => {
       .from(peminjaman)
       .where(and(
         isNull(peminjaman.tanggalDikembalikan),
-        lt(peminjaman.tanggalKembali, today)
+        sql`${peminjaman.tanggalKembali}::date < ${today}::date`   // <-- cast ::date
       ))
 
     const jatuhTempoRows = await db
@@ -479,7 +485,7 @@ app.get("/api/dashboard/notifikasi", async (req, res) => {
       .from(peminjaman)
       .where(and(
         isNull(peminjaman.tanggalDikembalikan),
-        eq(peminjaman.tanggalKembali, today)
+        sql`${peminjaman.tanggalKembali}::date = ${today}::date`   // <-- cast ::date
       ))
 
     res.json({

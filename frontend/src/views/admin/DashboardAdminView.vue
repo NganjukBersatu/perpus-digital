@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, watch, computed } from 'vue'
 
+
 const now = new Date()
 
 const hariNama = now.toLocaleDateString('id-ID', { weekday: 'long' })

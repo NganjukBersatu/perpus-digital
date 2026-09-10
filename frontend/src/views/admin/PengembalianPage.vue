@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
+
 const summary = ref({ totalDikembalikan: 0, hariIni: 0, tepatWaktu: 0, terlambat: 0 })
 const data = ref([])
 const total = ref(0)

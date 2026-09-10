@@ -1,5 +1,8 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+
+const API_URL = 'http://localhost:3000/api/buku'
+const KATEGORI_URL = 'http://localhost:3000/api/kategori'
 
 const searchQuery = ref('')
 const selectedKategori = ref('')
@@ -12,10 +15,15 @@ const editingId = ref(null)
 const showConfirmModal = ref(false)
 const bukuToDelete = ref(null)
 
+const isLoading = ref(false)
+const errorMessage = ref('')
+const bukuList = ref([])
+const daftarKategori = ref([])
+
 const emptyForm = () => ({
   judul: '',
   penulis: '',
-  kategori: '',
+  kategoriId: '',
   isbn: '',
   stok: 0,
   tersedia: 0,
@@ -24,6 +32,29 @@ const emptyForm = () => ({
 })
 
 const form = ref(emptyForm())
+
+async function ambilDaftarKategori() {
+  try {
+    const res = await fetch(KATEGORI_URL)
+    if (res.ok) daftarKategori.value = await res.json()
+  } catch (err) {
+    console.error('Gagal mengambil kategori', err)
+  }
+}
+
+async function ambilDataBuku() {
+  isLoading.value = true
+  errorMessage.value = ''
+  try {
+    const res = await fetch(API_URL)
+    if (!res.ok) throw new Error()
+    bukuList.value = await res.json()
+  } catch (err) {
+    errorMessage.value = 'Gagal memuat data buku. Pastikan backend aktif (node index.js).'
+  } finally {
+    isLoading.value = false
+  }
+}
 
 function openTambah() {
   editingId.value = null
@@ -36,7 +67,7 @@ function openEdit(buku) {
   form.value = {
     judul: buku.judul,
     penulis: buku.penulis,
-    kategori: buku.kategori,
+    kategoriId: buku.kategoriId || '',
     isbn: buku.isbn,
     stok: buku.stok,
     tersedia: buku.tersedia,
@@ -51,48 +82,28 @@ function closeModal() {
   editingId.value = null
 }
 
-function simpanBuku() {
+async function simpanBuku() {
   if (!form.value.judul || !form.value.penulis) return
 
-  if (editingId.value !== null) {
-    // MODE EDIT: cari data lama, update field-nya
-    const index = bukuList.value.findIndex((b) => b.id === editingId.value)
-    if (index !== -1) {
-      bukuList.value[index] = {
-        ...bukuList.value[index],
-        judul: form.value.judul,
-        penulis: form.value.penulis,
-        kategori: form.value.kategori,
-        isbn: form.value.isbn,
-        stok: Number(form.value.stok),
-        tersedia: Number(form.value.tersedia),
-        lokasi: form.value.lokasi,
-        status: form.value.status
-      }
-    }
-  } else {
-    // MODE TAMBAH (kode lama)
-    const inisial = form.value.judul
-      .split(' ')
-      .map((w) => w[0])
-      .join('')
-      .substring(0, 3)
-      .toUpperCase()
+  try {
+    const isEdit = editingId.value !== null
+    const url = isEdit ? `${API_URL}/${editingId.value}` : API_URL
+    const method = isEdit ? 'PUT' : 'POST'
 
-    bukuList.value.push({
-      id: Date.now(),
-      judul: form.value.judul,
-      penulis: form.value.penulis,
-      kategori: form.value.kategori,
-      isbn: form.value.isbn,
-      stok: Number(form.value.stok),
-      tersedia: Number(form.value.tersedia),
-      lokasi: form.value.lokasi,
-      status: form.value.status,
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form.value),
     })
-  }
 
-  closeModal()
+    if (!res.ok) throw new Error()
+
+    await ambilDataBuku()
+    closeModal()
+  } catch (err) {
+    console.error(err)
+    errorMessage.value = 'Gagal menyimpan data buku'
+  }
 }
 
 function hapusBuku(buku) {
@@ -100,11 +111,18 @@ function hapusBuku(buku) {
   showConfirmModal.value = true
 }
 
-function konfirmasiHapus() {
-  if (bukuToDelete.value) {
-    bukuList.value = bukuList.value.filter((b) => b.id !== bukuToDelete.value.id)
+async function konfirmasiHapus() {
+  if (!bukuToDelete.value) return
+  try {
+    const res = await fetch(`${API_URL}/${bukuToDelete.value.id}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error()
+    await ambilDataBuku()
+  } catch (err) {
+    console.error(err)
+    errorMessage.value = 'Gagal menghapus buku'
+  } finally {
+    batalHapus()
   }
-  batalHapus()
 }
 
 function batalHapus() {
@@ -112,72 +130,14 @@ function batalHapus() {
   bukuToDelete.value = null
 }
 
-const bukuList = ref([
-  {
-    id: 1,
-    judul: 'Dasar Pemrograman Web',
-    penulis: 'Abdul Kadir',
-    kategori: 'Buku Mata Pelajaran',
-    isbn: '978-602-6232-44-1',
-    stok: 5,
-    tersedia: 4,
-    lokasi: 'Rak T-01',
-    status: 'Tersedia',
-  },
-  {
-    id: 2,
-    judul: 'Laskar Pelangi',
-    penulis: 'Andrea Hirata',
-    kategori: 'Novel',
-    isbn: '978-979-1227-41-5',
-    stok: 3,
-    tersedia: 2,
-    lokasi: 'Rak N-02',
-    status: 'Tersedia',
-  },
-  {
-    id: 3,
-    judul: 'Matematika Kelas XII',
-    penulis: 'Budi Santoso',
-    kategori: 'Buku Mata Pelajaran',
-    isbn: '978-602-298-567-8',
-    stok: 10,
-    tersedia: 7,
-    lokasi: 'Rak M-03',
-    status: 'Tersedia',
-  },
-  {
-    id: 4,
-    judul: 'Bumi',
-    penulis: 'Tere Liye',
-    kategori: 'Novel',
-    isbn: '978-602-9474-17-6',
-    stok: 4,
-    tersedia: 1,
-    lokasi: 'Rak N-01',
-    status: 'Stok Menipis',
-  },
-  {
-    id: 5,
-    judul: 'Sejarah Indonesia',
-    penulis: 'Dra. Wulandari',
-    kategori: 'Buku Mata Pelajaran',
-    isbn: '978-602-437-123-4',
-    stok: 2,
-    tersedia: 0,
-    lokasi: 'Rak S-02',
-    status: 'Habis',
-  }
-])
-
 const filteredList = computed(() => {
   const q = searchQuery.value.toLowerCase().trim()
   return bukuList.value.filter((b) => {
     const matchSearch =
       !q ||
       b.judul.toLowerCase().includes(q) ||
-      b.penulis.toLowerCase().includes(q) ||
-      b.isbn.toLowerCase().includes(q)
+      (b.penulis || '').toLowerCase().includes(q) ||
+      (b.isbn || '').toLowerCase().includes(q)
     const matchKategori = !selectedKategori.value || b.kategori === selectedKategori.value
     const matchStatus = !selectedStatus.value || b.status === selectedStatus.value
     return matchSearch && matchKategori && matchStatus
@@ -202,6 +162,11 @@ const rangeText = computed(() => {
 function resetPage() {
   currentPage.value = 1
 }
+
+onMounted(() => {
+  ambilDataBuku()
+  ambilDaftarKategori()
+})
 </script>
 
 <template>
@@ -219,6 +184,8 @@ function resetPage() {
       </button>
     </div>
 
+    <div v-if="errorMessage" class="banner error">⚠️ {{ errorMessage }}</div>
+
     <div class="toolbar">
       <div class="search-box">
         <span class="search-icon">
@@ -235,11 +202,10 @@ function resetPage() {
         />
       </div>
 
-      <select v-model="selectedKategori" class="select" @change="resetPage">
-        <option value="">Semua Kategori</option>
-        <option value="Buku Mata Pelajaran">Buku Mata Pelajaran</option>
-        <option value="Novel">Novel</option>
-      </select>
+<select v-model="selectedKategori" class="select" @change="resetPage">
+  <option value="">Semua Kategori</option>
+  <option v-for="k in daftarKategori" :key="k.id" :value="k.nama">{{ k.nama }}</option>
+</select>
 
       <select v-model="selectedStatus" class="select" @change="resetPage">
         <option value="">Semua Status</option>
@@ -288,23 +254,11 @@ function resetPage() {
               </span>
             </td>
             <td>
-              <div class="aksi">
-                <button class="icon-btn icon-edit" type="button" title="Edit" @click="openEdit(b)">
-                  <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 20h9" stroke-linecap="round" />
-                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" stroke-linejoin="round" />
-                  </svg>
-                </button>
-                <button class="icon-btn icon-hapus" type="button" title="Hapus" @click="hapusBuku(b)">
-                  <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M4 7h16" stroke-linecap="round" />
-                    <path d="M10 11v6M14 11v6" stroke-linecap="round" />
-                    <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
-                    <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
-                  </svg>
-                </button>
-              </div>
-            </td>
+  <div class="aksi-cell">
+    <button class="btn-aksi" type="button" @click="openEdit(b)">Edit</button>
+    <button class="btn-aksi danger" type="button" @click="hapusBuku(b)">Hapus</button>
+  </div>
+</td>
           </tr>
           <tr v-if="pagedList.length === 0">
             <td colspan="11" class="empty">Belum ada data buku</td>
@@ -368,11 +322,10 @@ function resetPage() {
           <div class="form-row">
             <div class="form-group">
               <label>Kategori</label>
-              <select v-model="form.kategori" required>
-                <option value="" disabled>Pilih kategori</option>
-                <option value="Buku Mata Pelajaran">Buku Mata Pelajaran</option>
-                <option value="Novel">Novel</option>
-              </select>
+<select v-model="form.kategoriId" required>
+  <option value="" disabled>Pilih kategori</option>
+  <option v-for="k in daftarKategori" :key="k.id" :value="k.id">{{ k.nama }}</option>
+</select>
             </div>
 
             <div class="form-group">
@@ -617,22 +570,29 @@ tbody tr:hover { background: #f9fafb; }
   box-shadow: 0 1px 4px rgba(0,0,0,0.12);
 }
 
-.aksi { display: flex; gap: 8px; }
-
-.icon-btn {
-  width: 32px;
-  height: 32px;
-  border: 0;
-  border-radius: 8px;
-  cursor: pointer;
-  background: #f3f4f6;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.aksi-cell {
+  display: flex;
+  gap: 6px;
 }
 
-.icon-edit { color: #5b4dff; }
-.icon-hapus { color: #ef4444; }
+.btn-aksi {
+  font-size: 11px;
+  padding: 5px 10px;
+  border: 1px solid #e3e9f2;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #2864e8;
+}
+.btn-aksi:hover {
+  background: #f0f5ff;
+}
+.btn-aksi.danger {
+  color: #b91c1c;
+}
+.btn-aksi.danger:hover {
+  background: #fef2f2;
+}
 
 .icon-svg {
   width: 16px;

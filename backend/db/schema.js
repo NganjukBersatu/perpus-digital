@@ -6,6 +6,11 @@ const buku = pgTable("buku", {
   penulis: varchar("penulis", { length: 255 }),
   penerbit: varchar("penerbit", { length: 255 }),
   isbn: varchar("isbn", { length: 20 }),
+  kategoriId: integer("kategori_id").references(() => kategori.id),
+  stok: integer("stok").default(0),
+  tersedia: integer("tersedia").default(0),
+  lokasi: varchar("lokasi", { length: 50 }),
+  status: varchar("status", { length: 20 }).default("Tersedia"),
   createdAt: timestamp("created_at").defaultNow(),
 })
 
@@ -26,9 +31,18 @@ const anggota = pgTable("anggota", {
   id: serial("id").primaryKey(),
   nama: varchar("nama", { length: 255 }).notNull(),
   kelas: varchar("kelas", { length: 50 }),
-  nip: varchar("nip", { length: 50 }),
+  
+  // Untuk Siswa
+  nis: varchar("nis", { length: 30 }).unique(),
+  tanggalLahir: date("tanggal_lahir"),
+
+  // Untuk Guru & Admin
+  nip: varchar("nip", { length: 50 }).unique(),
+  username: varchar("username", { length: 100 }).unique(),
+  passwordHash: text("password_hash"),   // penting!
+  
   mapel: varchar("mapel", { length: 100 }),
-  peran: varchar("peran", { length: 20 }).notNull().default("siswa"),
+  peran: varchar("peran", { length: 20 }).notNull().default("siswa"), // siswa | guru | admin
 })
 
 const peminjaman = pgTable("peminjaman", {

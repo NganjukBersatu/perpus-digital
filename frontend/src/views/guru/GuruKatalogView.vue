@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 
+
 const keyword = ref('')
 const kategoriAktif = ref('Semua')
 

@@ -20,6 +20,9 @@ const form = ref({
   nip: ''
 })
 
+const errorMessage = ref('')
+const isLoading = ref(false)
+
 const roleLabel = computed(() => {
   const found = roles.find(r => r.value === selectedRole.value)
   return found ? found.label : ''
@@ -27,25 +30,14 @@ const roleLabel = computed(() => {
 
 watch(selectedRole, () => {
   form.value = { nis: '', tanggalLahir: '', username: '', password: '', nip: '' }
-  errorMsg.value = ''
+  errorMessage.value = ''
 })
 
-// --- BARU: state untuk error dan loading ---
-const errorMessage = ref('')
-const isLoading = ref(false)
-
-// --- DIGANTI: handleLogin lama diganti yang ini ---
 async function handleLogin() {
   errorMessage.value = ''
   isLoading.value = true
 
   let payload = { role: selectedRole.value }
-
-const isLoggingIn = ref(false)
-const errorMsg = ref('')
-
-async function handleLogin() {
-  errorMsg.value = ''
 
   if (selectedRole.value === 'siswa') {
     payload = { ...payload, nis: form.value.nis, tanggalLahir: form.value.tanggalLahir }
@@ -70,10 +62,19 @@ async function handleLogin() {
     }
 
     localStorage.setItem('token', data.token)
-    localStorage.setItem('role', data.role)
-    localStorage.setItem('user', JSON.stringify({ role: data.role, nama: data.nama }))
+    localStorage.setItem('role', data.role || selectedRole.value)
+    localStorage.setItem('user', JSON.stringify({
+      role: data.role || selectedRole.value,
+      nama: data.nama
+    }))
 
-    router.push(`/${data.role}`)
+    const tujuan = {
+      admin: '/admin',
+      siswa: '/siswa',
+      guru: '/guru'
+    }
+
+    router.push(tujuan[selectedRole.value] || '/admin')
   } catch (err) {
     errorMessage.value = 'Tidak bisa terhubung ke server'
   } finally {

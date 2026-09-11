@@ -1,8 +1,8 @@
 const express = require('express')
 const router = express.Router()
 const db = require('../db')
-const { buku, kategori } = require('../db/schema')
-const { eq, ilike, and } = require('drizzle-orm')
+const { buku, kategori, eksemplarBuku } = require('../db/schema')
+const { eq, ilike, and, sql } = require('drizzle-orm')
 
 // GET semua buku (join ke kategori untuk dapat nama kategorinya)
 router.get('/', async (req, res) => {
@@ -20,12 +20,17 @@ router.get('/', async (req, res) => {
         penerbit: buku.penerbit,
         isbn: buku.isbn,
         stok: buku.stok,
+        lokasi: buku.lokasi,
+        status: buku.status,
+        kategori: kategori.nama,
         totalEksemplar: sql`count(${eksemplarBuku.id})`.mapWith(Number),
         tersedia: sql`count(${eksemplarBuku.id}) filter (where ${eksemplarBuku.status} = 'tersedia')`.mapWith(Number),
       })
       .from(buku)
       .leftJoin(kategori, eq(kategori.id, buku.kategoriId))
+      .leftJoin(eksemplarBuku, eq(eksemplarBuku.bukuId, buku.id))
       .where(conditions.length ? and(...conditions) : undefined)
+      .groupBy(buku.id, kategori.nama)
       .orderBy(buku.id)
 
     const hasil = kategoriNama ? rows.filter((r) => r.kategori === kategoriNama) : rows

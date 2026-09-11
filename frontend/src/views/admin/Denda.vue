@@ -66,21 +66,29 @@ function onSearchInput() {
   searchTimeout = setTimeout(muatData, 350)
 }
 
-async function tandaiDibayar(item) {
-  if (
-    !confirm(
-      `Tandai denda ${formatRupiah(item.denda)} dari "${item.namaPeminjam}" sebagai sudah dibayar?`
-    )
-  ) {
-    return
-  }
+const showConfirmModal = ref(false)
+const itemAkanDibayar = ref(null)
+const isProcessing = ref(false)
+
+function bukaKonfirmasiDibayar(item) {
+  itemAkanDibayar.value = item
+  showConfirmModal.value = true
+}
+
+function tutupKonfirmasi() {
+  if (isProcessing.value) return
+  showConfirmModal.value = false
+  itemAkanDibayar.value = null
+}
+
+async function konfirmasiTandaiDibayar() {
+  if (!itemAkanDibayar.value) return
+  isProcessing.value = true
 
   try {
     const res = await fetch(
-      `http://localhost:3000/api/denda/${item.id}/bayar`,
-      {
-        method: 'PATCH',
-      }
+      `http://localhost:3000/api/denda/${itemAkanDibayar.value.id}/bayar`,
+      { method: 'PATCH' }
     )
 
     if (!res.ok) {
@@ -88,9 +96,13 @@ async function tandaiDibayar(item) {
     }
 
     await muatData()
+    showConfirmModal.value = false
+    itemAkanDibayar.value = null
   } catch (err) {
     console.error(err)
     alert('Gagal menandai denda sebagai dibayar. Coba lagi.')
+  } finally {
+    isProcessing.value = false
   }
 }
 
@@ -299,7 +311,7 @@ onMounted(muatData)
               <button
                 v-if="item.statusDenda !== 'sudah_dibayar'"
                 class="detail-btn"
-                @click="tandaiDibayar(item)"
+                @click="bukaKonfirmasiDibayar(item)"
               >
                 Tandai Dibayar
               </button>
@@ -318,6 +330,34 @@ onMounted(muatData)
         </tbody>
       </table>
 
+    </div>
+
+    <!-- MODAL KONFIRMASI -->
+    <div v-if="showConfirmModal" class="modal-overlay" @click.self="tutupKonfirmasi">
+      <div class="modal-card">
+        <div class="modal-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 9v4M12 17h.01" stroke-linecap="round" stroke-linejoin="round" />
+            <circle cx="12" cy="12" r="9" />
+          </svg>
+        </div>
+
+        <h2>Tandai sebagai dibayar?</h2>
+
+        <p v-if="itemAkanDibayar" class="modal-text">
+          Denda <strong>{{ formatRupiah(itemAkanDibayar.denda) }}</strong> dari
+          <strong>{{ itemAkanDibayar.namaPeminjam }}</strong> akan ditandai sudah dibayar.
+        </p>
+
+        <div class="modal-actions">
+          <button class="btn-secondary" :disabled="isProcessing" @click="tutupKonfirmasi">
+            Batal
+          </button>
+          <button class="btn-primary" :disabled="isProcessing" @click="konfirmasiTandaiDibayar">
+            {{ isProcessing ? 'Memproses...' : 'Ya, Tandai Dibayar' }}
+          </button>
+        </div>
+      </div>
     </div>
 
   </div>
@@ -534,5 +574,86 @@ tbody tr:hover {
   text-align: center;
   color: #9ca3af;
   padding: 24px;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+
+.modal-card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 28px;
+  width: 100%;
+  max-width: 380px;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+.modal-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #fff7e6;
+  color: #d97706;
+}
+.modal-icon svg {
+  width: 26px;
+  height: 26px;
+}
+
+.modal-card h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: #1f2937;
+}
+
+.modal-text {
+  margin: 0 0 20px;
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+.modal-text strong {
+  color: #1f2937;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+}
+.modal-actions button {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+}
+.modal-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.btn-primary {
+  background: #2864e8;
+  color: #fff;
 }
 </style>

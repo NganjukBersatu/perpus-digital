@@ -1,7 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const db = require('../db')   
-const { anggota } = require('../db/schema')
+const { anggota, peminjaman } = require('../db/schema')
 const { eq, ilike, and } = require('drizzle-orm')
 
 // GET semua guru (opsional search nama)

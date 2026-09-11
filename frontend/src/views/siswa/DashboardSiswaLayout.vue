@@ -2,18 +2,18 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-
 const router = useRouter()
 
 const icons = {
   userCircle: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M6.5 19.5a6.5 6.5 0 0 1 11 0"/></svg>`
 }
 
+const userTersimpan = JSON.parse(localStorage.getItem('user') || '{}')
 const siswa = ref({
-  nama: 'Ahmad Fauzi',
+  nama: userTersimpan.nama || '',
   role: 'Siswa',
-  kelas: 'X TPM 2',
-  nis: '2024001'
+  kelas: userTersimpan.kelas || '',
+  nis: userTersimpan.nis || ''
 })
 
 const notifikasi = ref([

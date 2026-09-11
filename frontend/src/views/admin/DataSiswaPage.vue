@@ -12,7 +12,7 @@ const selectedKelas = ref('')
 
 const showModal = ref(false)
 const modalMode = ref('tambah')
-const form = ref({ id: null, nama: '', kelas: '' })
+const form = ref({ id: null, nama: '', kelas: '', nis: '', tanggalLahir: '' })
 
 const kelasOptions = computed(() => {
   const semuaKelas = daftarSiswa.value.map(s => s.kelas).filter(Boolean)
@@ -52,13 +52,19 @@ function onSearchInput() {}
 
 function bukaModalTambah() {
   modalMode.value = 'tambah'
-  form.value = { id: null, nama: '', kelas: '' }
+  form.value = { id: null, nama: '', kelas: '', nis: '', tanggalLahir: '' }
   showModal.value = true
 }
 
 function bukaModalEdit(item) {
   modalMode.value = 'edit'
-  form.value = { id: item.id, nama: item.nama, kelas: item.kelas }
+  form.value = {
+    id: item.id,
+    nama: item.nama,
+    kelas: item.kelas,
+    nis: item.nis || '',
+    tanggalLahir: item.tanggalLahir || '',
+  }
   showModal.value = true
 }
 
@@ -72,10 +78,10 @@ async function simpanSiswa() {
 
   try {
     if (modalMode.value === 'tambah') {
-      const { data } = await api.post('/admin/siswa', form.value)
+      const { data } = await api.post('/siswa', form.value)
       daftarSiswa.value.push(data)
     } else {
-      const { data } = await api.put(`/admin/siswa/${form.value.id}`, form.value)
+      const { data } = await api.put(`/siswa/${form.value.id}`, form.value)
       const index = daftarSiswa.value.findIndex(s => s.id === form.value.id)
       if (index !== -1) daftarSiswa.value[index] = data
     }
@@ -91,7 +97,7 @@ async function hapusSiswa(item) {
   if (!confirm(`Hapus siswa ${item.nama}?`)) return
 
   try {
-    await api.delete(`/admin/siswa/${item.id}`)
+    await api.delete(`/siswa/${item.id}`)
     daftarSiswa.value = daftarSiswa.value.filter(s => s.id !== item.id)
   } catch (err) {
     errorMessage.value = 'Gagal menghapus siswa'
@@ -142,18 +148,20 @@ async function hapusSiswa(item) {
       <table>
         <thead>
           <tr>
-            <th>No</th>
-            <th>Nama</th>
-            <th>Kelas</th>
-            <th>Aksi</th>
-          </tr>
+  <th>No</th>
+  <th>Nama</th>
+  <th>Kelas</th>
+  <th>NIS</th>
+  <th>Aksi</th>
+</tr>
         </thead>
         <tbody>
           <tr v-for="(item, i) in filteredSiswa" :key="item.id">
-            <td>{{ i + 1 }}</td>
-            <td class="judul">{{ item.nama }}</td>
-            <td>{{ item.kelas || '-' }}</td>
-            <td class="aksi-cell">
+  <td>{{ i + 1 }}</td>
+  <td class="judul">{{ item.nama }}</td>
+  <td>{{ item.kelas || '-' }}</td>
+  <td>{{ item.nis || '-' }}</td>
+  <td class="aksi-cell">
               <button class="detail-btn" @click="bukaModalEdit(item)">Edit</button>
               <button class="detail-btn detail-btn-danger" @click="hapusSiswa(item)">Hapus</button>
             </td>
@@ -178,9 +186,19 @@ async function hapusSiswa(item) {
         </div>
 
         <div class="form-group">
-          <label>Kelas</label>
-          <input type="text" v-model="form.kelas" placeholder="Contoh: XII-RPL 2" />
-        </div>
+  <label>Kelas</label>
+  <input type="text" v-model="form.kelas" placeholder="Contoh: XII-RPL 2" />
+</div>
+
+<div class="form-group">
+  <label>NIS</label>
+  <input type="text" v-model="form.nis" placeholder="Nomor Induk Siswa" />
+</div>
+
+<div class="form-group">
+  <label>Tanggal Lahir</label>
+  <input type="date" v-model="form.tanggalLahir" />
+</div>
 
         <div class="modal-actions">
           <button class="btn-secondary" @click="tutupModal">Batal</button>

@@ -29,7 +29,7 @@
         </div>
         <div>
           <p class="stat-label">Sedang Dipinjam</p>
-          <p class="stat-value">{{ pinjamanAktif.length }}</p>
+          <p class="stat-value">{{ stats.sedangDipinjam }}</p>
         </div>
       </div>
       <div class="stat-card">
@@ -42,7 +42,7 @@
         </div>
         <div>
           <p class="stat-label">Hampir Jatuh Tempo</p>
-          <p class="stat-value">{{ hampirJatuhTempo }}</p>
+          <p class="stat-value">{{ stats.hampirJatuhTempo }}</p>
         </div>
       </div>
       <div class="stat-card">
@@ -54,7 +54,7 @@
         </div>
         <div>
           <p class="stat-label">Sudah Dikembalikan</p>
-          <p class="stat-value">12</p>
+<p class="stat-value">{{ stats.sudahDikembalikan }}</p>
         </div>
       </div>
     </div>
@@ -102,32 +102,61 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 const props = defineProps({
   siswa: {
     type: Object,
-    default: () => ({
-      nama: 'Ahmad Fauzi',
-      nis: '2024001',
-      kelas: 'X TPM 2',
-      role: 'Siswa'
-    })
+    default: () => ({})
   }
 })
 
 const router = useRouter()
 const dataSiswa = computed(() => props.siswa)
 
-const pinjamanAktif = ref([
-  { id: 1, judul: 'Laskar Pelangi', kategori: 'Fiksi', tanggalPinjam: '2026-08-28', jatuhTempo: '2026-09-11' },
-  { id: 2, judul: 'Bumi Manusia', kategori: 'Fiksi', tanggalPinjam: '2026-09-01', jatuhTempo: '2026-09-15' },
-  { id: 3, judul: 'Filosofi Teras', kategori: 'Non-Fiksi', tanggalPinjam: '2026-09-02', jatuhTempo: '2026-09-07' }
-])
+const API_BASE = import.meta.env.VITE_API_BASE_URL
 
-const hampirJatuhTempo = computed(() => {
-  return pinjamanAktif.value.filter(item => isAlmostDue(item.jatuhTempo)).length
+const pinjamanAktif = ref([])
+const stats = ref({ sedangDipinjam: 0, hampirJatuhTempo: 0, sudahDikembalikan: 0 })
+const isLoading = ref(true)
+const errorMessage = ref('')
+
+function authHeaders() {
+  const token = localStorage.getItem('token')
+  return { Authorization: `Bearer ${token}` }
+}
+
+async function fetchStats() {
+  const res = await fetch(`${API_BASE}/dashboard-siswa/stats`, { headers: authHeaders() })
+  if (!res.ok) throw new Error('Gagal mengambil statistik')
+  stats.value = await res.json()
+}
+
+async function fetchPeminjamanAktif() {
+  const res = await fetch(`${API_BASE}/dashboard-siswa/peminjaman-aktif`, { headers: authHeaders() })
+  if (!res.ok) throw new Error('Gagal mengambil data peminjaman')
+  const data = await res.json()
+  pinjamanAktif.value = data.map(item => ({
+    id: item.id,
+    judul: item.judul,
+    kategori: item.kategori || '-',
+    tanggalPinjam: item.tanggalPinjam,
+    jatuhTempo: item.tanggalKembali
+  }))
+}
+
+onMounted(async () => {
+  isLoading.value = true
+  errorMessage.value = ''
+  try {
+    await Promise.all([fetchStats(), fetchPeminjamanAktif()])
+  } catch (err) {
+    console.error(err)
+    errorMessage.value = 'Gagal memuat data dashboard'
+  } finally {
+    isLoading.value = false
+  }
 })
 
 function isAlmostDue(tanggal) {
@@ -145,10 +174,23 @@ function formatTanggal(tanggal) {
   })
 }
 
-function kembalikan(item) {
-  if (confirm(`Yakin ingin mengembalikan "${item.judul}"?`)) {
+async function kembalikan(item) {
+  if (!confirm(`Yakin ingin mengembalikan "${item.judul}"?`)) return
+
+  try {
+    const res = await fetch(`${API_BASE}/dashboard-siswa/kembalikan/${item.id}`, {
+      method: 'PATCH',
+      headers: authHeaders()
+    })
+    if (!res.ok) throw new Error('Gagal mengembalikan buku')
+
     pinjamanAktif.value = pinjamanAktif.value.filter(p => p.id !== item.id)
+    stats.value.sedangDipinjam = Math.max(0, stats.value.sedangDipinjam - 1)
+    stats.value.sudahDikembalikan += 1
     alert(`Buku "${item.judul}" berhasil dikembalikan.`)
+  } catch (err) {
+    console.error(err)
+    alert('Gagal mengembalikan buku, coba lagi.')
   }
 }
 

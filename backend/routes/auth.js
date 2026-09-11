@@ -29,17 +29,19 @@ router.post('/login', async (req, res) => {
     const token = jwt.sign({ id: akun.id, username: akun.username }, JWT_SECRET, { expiresIn: '8h' })
 
     res.json({
-      token,
-      admin: {
-        id: akun.id,
-        username: akun.username,
-        namaLengkap: akun.namaLengkap,
-        email: akun.email,
-        telepon: akun.telepon,
-        jabatan: akun.jabatan,
-        nipNik: akun.nipNik,
-      },
-    })
+  token,
+  role: 'admin',
+  nama: akun.namaLengkap,
+  admin: {
+    id: akun.id,
+    username: akun.username,
+    namaLengkap: akun.namaLengkap,
+    email: akun.email,
+    telepon: akun.telepon,
+    jabatan: akun.jabatan,
+    nipNik: akun.nipNik,
+  },
+})
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Gagal login' })

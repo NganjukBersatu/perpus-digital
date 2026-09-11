@@ -40,33 +40,70 @@ async function handleLogin() {
   let payload = { role: selectedRole.value }
 
   if (selectedRole.value === 'siswa') {
-    payload = { ...payload, nis: form.value.nis, tanggalLahir: form.value.tanggalLahir }
+    payload = {
+      ...payload,
+      nis: form.value.nis,
+      tanggalLahir: form.value.tanggalLahir
+    }
   } else if (selectedRole.value === 'guru') {
-    payload = { ...payload, nip: form.value.nip, password: form.value.password }
+    payload = {
+      ...payload,
+      nip: form.value.nip,
+      password: form.value.password
+    }
   } else {
-    payload = { ...payload, username: form.value.username, password: form.value.password }
+    payload = {
+      ...payload,
+      username: form.value.username,
+      password: form.value.password
+    }
   }
 
+  // DEBUG
+  console.log('=== LOGIN DEBUG ===')
+  console.log('URL:', `${import.meta.env.VITE_API_BASE_URL}/auth/login`)
+  console.log('Payload:', payload)
+
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
+    const res = await fetch(
+      `${import.meta.env.VITE_API_BASE_URL}/auth/login`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      }
+    )
+
+    console.log('HTTP Status:', res.status)
+    console.log('HTTP OK:', res.ok)
 
     const data = await res.json()
 
+    console.log('Response backend:', data)
+
     if (!res.ok) {
-      errorMessage.value = data.message || 'Login gagal'
-      return
-    }
+  errorMessage.value =
+    data.error || data.message || `Login gagal (${res.status})`
+  return
+}
+
+    console.log('LOGIN BERHASIL')
 
     localStorage.setItem('token', data.token)
-    localStorage.setItem('role', data.role || selectedRole.value)
-    localStorage.setItem('user', JSON.stringify({
-      role: data.role || selectedRole.value,
-      nama: data.nama
-    }))
+    localStorage.setItem(
+      'role',
+      data.role || selectedRole.value
+    )
+
+    localStorage.setItem(
+      'user',
+      JSON.stringify({
+        role: data.role || selectedRole.value,
+        nama: data.nama
+      })
+    )
 
     const tujuan = {
       admin: '/admin',
@@ -74,13 +111,18 @@ async function handleLogin() {
       guru: '/guru'
     }
 
-    router.push(tujuan[selectedRole.value] || '/admin')
+    router.push(
+      tujuan[data.role || selectedRole.value] || '/admin'
+    )
+
   } catch (err) {
+    console.error('LOGIN ERROR:', err)
     errorMessage.value = 'Tidak bisa terhubung ke server'
   } finally {
     isLoading.value = false
   }
 }
+
 </script>
 
 <template>

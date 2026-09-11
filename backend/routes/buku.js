@@ -103,6 +103,18 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const id = Number(req.params.id)
+
+    const eksemplarTerkait = await db
+      .select({ id: eksemplarBuku.id })
+      .from(eksemplarBuku)
+      .where(eq(eksemplarBuku.bukuId, id))
+
+    if (eksemplarTerkait.length > 0) {
+      return res.status(400).json({
+        error: `Buku tidak bisa dihapus karena masih memiliki ${eksemplarTerkait.length} eksemplar terdaftar. Hapus dulu eksemplarnya, atau hubungi admin sistem.`
+      })
+    }
+
     const [deleted] = await db.delete(buku).where(eq(buku.id, id)).returning()
 
     if (!deleted) return res.status(404).json({ error: 'Buku tidak ditemukan' })

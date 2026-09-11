@@ -159,6 +159,17 @@ onBeforeUnmount(() => {
 
 const sidebarOpen = ref(true)
 
+
+const mobileMenuOpen = ref(false)
+
+function toggleMobileMenu() {
+  mobileMenuOpen.value = !mobileMenuOpen.value
+}
+
+function closeMobileMenu() {
+  mobileMenuOpen.value = false
+}
+
 const showLogoutModal = ref(false)
 
 function mintaLogout() {

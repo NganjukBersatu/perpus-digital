@@ -21,8 +21,8 @@ const kelasOptions = computed(() => {
 
 const filteredSiswa = computed(() => {
   const base = !selectedKelas.value
-    ? siswa.value
-    : siswa.value.filter((s) => s.kelas === selectedKelas.value)
+    ? daftarSiswa.value
+    : daftarSiswa.value.filter((s) => s.kelas === selectedKelas.value)
 
   // Tampilkan hanya 1 baris per nama (tidak peduli besar-kecil huruf/spasi)
   const namaTerlihat = new Set()
@@ -39,7 +39,7 @@ const filteredSiswa = computed(() => {
 
 onMounted(async () => {
   try {
-    const { data } = await api.get('/admin/siswa')
+const { data } = await api.get('/siswa')
     daftarSiswa.value = data
   } catch (err) {
     errorMessage.value = 'Gagal memuat data siswa'

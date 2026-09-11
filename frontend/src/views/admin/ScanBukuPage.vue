@@ -6,6 +6,15 @@ const activeTab = ref("kamera")
 const isScanning = ref(false)
 const scanError = ref("")
 const barcode = ref("")
+const manualBarcode = ref("")
+
+async function cariBukuManual() {
+  const kode = manualBarcode.value.trim()
+  if (!kode) return
+  barcode.value = kode
+  await cariBuku(kode)
+}
+
 const bookData = ref(null)
 const bookNotFound = ref(false)
 const isSaving = ref(false)
@@ -436,6 +445,22 @@ onBeforeUnmount(() => {
             </template>
           </div>
 
+          <div class="manual-input">
+            <label for="manual-barcode">Atau masukkan barcode secara manual</label>
+            <div class="manual-input-row">
+              <input
+                id="manual-barcode"
+                v-model="manualBarcode"
+                type="text"
+                placeholder="Contoh: 9786020633478-002"
+                @keyup.enter="cariBukuManual"
+              />
+              <button type="button" class="btn-cari-manual" @click="cariBukuManual">
+                Cari
+              </button>
+            </div>
+          </div>
+
           <div v-if="scanError" class="message message--error">
             <div class="message__icon">!</div>
             <div>
@@ -849,6 +874,65 @@ button, input, select { font: inherit; }
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
+}
+
+.manual-input {
+  margin-top: 20px;
+  padding: 20px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.manual-input label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--navy);
+}
+.manual-input-row {
+  display: flex;
+  gap: 10px;
+}
+.manual-input-row input {
+  flex: 1;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+  background: #fff;
+}
+.manual-input-row input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(40, 100, 232, 0.1);
+}
+.btn-cari-manual {
+  min-width: 90px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 8px;
+  background: var(--blue);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-cari-manual:hover {
+  background: #1e56d6;
+}
+
+@media (max-width: 480px) {
+  .manual-input {
+    padding: 14px;
+  }
+  .manual-input-row {
+    flex-direction: column;
+  }
+  .btn-cari-manual {
+    min-height: 42px;
+  }
 }
 
 .primary-button {

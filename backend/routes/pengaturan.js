@@ -9,31 +9,40 @@ const { wajibLogin } = require('./auth')
 router.get('/', async (req, res) => {
   try {
     const [data] = await db.select().from(pengaturanPerpustakaan).limit(1)
-    res.json(data || { namaSekolah: '', namaPerpustakaan: '', alamat: '' })
+    res.json(data || {
+      namaSekolah: '',
+      namaPerpustakaan: '',
+      alamat: '',
+      detail: null
+    })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Gagal mengambil pengaturan' })
   }
 })
 
-// PUT update pengaturan (wajib login)
 router.put('/', wajibLogin, async (req, res) => {
   try {
-    const { namaSekolah, namaPerpustakaan, alamat } = req.body
+    const { namaSekolah, namaPerpustakaan, alamat, detail } = req.body
     const [existing] = await db.select().from(pengaturanPerpustakaan).limit(1)
+
+    const values = {
+      namaSekolah: namaSekolah || '',
+      namaPerpustakaan: namaPerpustakaan || '',
+      alamat: alamat || '',
+      detail: detail || null,
+      updatedAt: new Date()
+    }
 
     let updated
     if (existing) {
       ;[updated] = await db
         .update(pengaturanPerpustakaan)
-        .set({ namaSekolah, namaPerpustakaan, alamat, updatedAt: new Date() })
+        .set(values)
         .where(eq(pengaturanPerpustakaan.id, existing.id))
         .returning()
     } else {
-      ;[updated] = await db
-        .insert(pengaturanPerpustakaan)
-        .values({ namaSekolah, namaPerpustakaan, alamat })
-        .returning()
+      ;[updated] = await db.insert(pengaturanPerpustakaan).values(values).returning()
     }
 
     res.json(updated)

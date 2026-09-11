@@ -19,12 +19,17 @@ const kategoriRoutes = require("./routes/kategori")
 const riwayatRoutes = require("./routes/riwayat")
 const laporanRoutes = require("./routes/laporan")
 const bukuRoutes = require("./routes/buku")
+const { router: authSiswaRoutes, wajibLoginSiswa } = require("./routes/authSiswa")
+const dashboardSiswaRoutes = require("./routes/dashboardSiswa")
+
+
 
 const app = express()
 app.use(cors())
 app.use(express.json())
 
 app.use("/api/auth", authRoutes)
+app.use("/api/auth/siswa", authSiswaRoutes)
 app.use("/api/admin", adminRoutes)
 app.use("/api/pengaturan", pengaturanRoutes)
 app.use("/api/pengembalian", pengembalianRoutes)
@@ -37,6 +42,8 @@ app.use("/api/denda", dendaRoutes)
 app.use("/api/kategori", kategoriRoutes)
 app.use("/api/riwayat", riwayatRoutes)
 app.use("/api/laporan", laporanRoutes)
+app.use('/api/dashboard-siswa', require('./routes/dashboardSiswa'))
+// app.use('/api/katalog-siswa', require('./routes/katalogSiswa'))
 
 // GET data buku berdasarkan barcode
 app.get("/api/eksemplar-buku/:barcode", async (req, res) => {

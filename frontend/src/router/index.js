@@ -21,6 +21,10 @@ import PengaturanPage from '../views/admin/PengaturanPage.vue'
 import AkunAdminPage from '../views/admin/AkunAdminPage.vue'
 import RiwayatAktivitas from '@/views/admin/RiwayatAktivitas.vue'
 import LaporanPage from '@/views/admin/LaporanPage.vue'
+import KatalogSiswaPage from '@/views/siswa/KatalogSiswaPage.vue'
+import RiwayatSiswaPage from '@/views/siswa/RiwayatSiswaPage.vue'
+import ProfilSiswaPage from '@/views/siswa/ProfilSiswaPage.vue'
+
 
 const ComingSoon = {
   props: {
@@ -54,20 +58,17 @@ const router = createRouter({
         {
           path: 'katalog',
           name: 'siswa-katalog',
-          component: ComingSoon,
-          props: { title: 'Katalog Buku' }
+          component: KatalogSiswaPage,
         },
         {
           path: 'riwayat',
           name: 'siswa-riwayat',
-          component: ComingSoon,
-          props: { title: 'Riwayat Pinjam' }
+            component: RiwayatSiswaPage,
         },
         {
           path: 'profil',
           name: 'siswa-profil',
-          component: ComingSoon,
-          props: { title: 'Profil' }
+          component: ProfilSiswaPage,
         }
       ]
     },

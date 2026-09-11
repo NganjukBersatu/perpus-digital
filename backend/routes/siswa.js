@@ -47,10 +47,10 @@ router.get('/:id/riwayat', async (req, res) => {
 // POST tambah siswa baru
 router.post('/', async (req, res) => {
   try {
-    const { nama, kelas } = req.body
+    const { nama, kelas, nis, tanggalLahir } = req.body
     if (!nama) return res.status(400).json({ error: 'Nama wajib diisi' })
 
-    const [baru] = await db.insert(anggota).values({ nama, kelas, peran: 'siswa' }).returning()
+    const [baru] = await db.insert(anggota).values({ nama, kelas, nis, tanggalLahir, peran: 'siswa' }).returning()
     res.status(201).json(baru)
   } catch (err) {
     console.error(err)
@@ -62,11 +62,11 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const id = Number(req.params.id)
-    const { nama, kelas } = req.body
+    const { nama, kelas, nis, tanggalLahir } = req.body
 
     const [updated] = await db
       .update(anggota)
-      .set({ nama, kelas })
+      .set({ nama, kelas, nis, tanggalLahir })
       .where(and(eq(anggota.id, id), eq(anggota.peran, 'siswa')))
       .returning()
 

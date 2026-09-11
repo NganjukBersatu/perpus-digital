@@ -50,9 +50,15 @@ const initials = computed(() => {
     .join('')
 })
 
-function showToast(text) {
+const toastTipe = ref('')
+
+function showToast(text, tipe = '') {
   toast.value = text
-  setTimeout(() => { toast.value = '' }, 2200)
+  toastTipe.value = tipe
+  setTimeout(() => {
+    toast.value = ''
+    toastTipe.value = ''
+  }, 2200)
 }
 
 async function loadProfile() {
@@ -114,16 +120,18 @@ async function saveProfile() {
 }
 
 async function changePassword() {
-  if (!security.passwordLama || !security.passwordBaru) {
-    showToast('Lengkapi password lama dan password baru')
+  if (!security.passwordLama || !security.passwordBaru || !security.konfirmasiPassword) {
+    showToast('Lengkapi password lama, password baru, dan konfirmasi', 'error')
     return
   }
   if (security.passwordBaru.length < 8) {
-    showToast('Password baru minimal 8 karakter')
+    showToast('Password baru minimal 8 karakter', 'error')
     return
   }
+
+  // jika tidak sama → ulangi, jangan kirim ke server
   if (security.passwordBaru !== security.konfirmasiPassword) {
-    showToast('Konfirmasi password tidak sama')
+    showToast('Password tidak sama', 'error')
     return
   }
 
@@ -138,17 +146,18 @@ async function changePassword() {
     })
     const data = await res.json()
     if (!res.ok) {
-      showToast(data.error || 'Gagal mengubah password')
+      showToast(data.error || 'Gagal mengubah password', 'error')
       return
     }
 
     security.passwordLama = ''
     security.passwordBaru = ''
     security.konfirmasiPassword = ''
-    showToast('Password berhasil diperbarui')
+    security.tampilkanPassword = false
+    showToast('Konfirmasi berhasil', 'sukses')
   } catch (err) {
     console.error(err)
-    showToast('Gagal terhubung ke server')
+    showToast('Gagal terhubung ke server', 'error')
   }
 }
 
@@ -278,7 +287,8 @@ onMounted(loadProfile)
           Konfirmasi password baru
           <input
             v-model="security.konfirmasiPassword"
-            :type="security.tampilkanPassword ? 'text' : 'password'"
+            type="password"
+            autocomplete="new-password"
           />
         </label>
       </div>
@@ -347,7 +357,7 @@ onMounted(loadProfile)
       </div>
     </div>
 
-    <div v-if="toast" class="toast">{{ toast }}</div>
+    <div v-if="toast" class="toast" :class="toastTipe">{{ toast }}</div>
   </div>
 </template>
 
@@ -579,6 +589,16 @@ textarea,
   color: #fff;
   padding: 12px 16px;
   border-radius: 12px;
+}
+
+.toast.sukses {
+  background: #16a34a;
+  color: #fff;
+}
+
+.toast.error {
+  background: #dc2626;
+  color: #fff;
 }
 
 .modal-overlay {

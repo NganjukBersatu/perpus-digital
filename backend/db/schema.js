@@ -1,4 +1,4 @@
-const { pgTable, serial, varchar, integer, timestamp, date, text } = require("drizzle-orm/pg-core")
+const { pgTable, serial, varchar, integer, timestamp, date, text, jsonb } = require("drizzle-orm/pg-core")
 
 const adminAkun = pgTable('admin_akun', {
   id: serial('id').primaryKey(),
@@ -17,6 +17,7 @@ const pengaturanPerpustakaan = pgTable('pengaturan_perpustakaan', {
   namaSekolah: varchar('nama_sekolah', { length: 255 }).notNull().default(''),
   namaPerpustakaan: varchar('nama_perpustakaan', { length: 255 }).notNull().default(''),
   alamat: text('alamat'),
+  detail: jsonb('detail'),
   updatedAt: timestamp('updated_at').defaultNow(),
 })
 

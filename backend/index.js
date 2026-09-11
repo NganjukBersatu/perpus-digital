@@ -189,7 +189,12 @@ app.get("/api/dashboard/stats", async (req, res) => {
     const today = new Date().toISOString().split("T")[0]
 
     const totalBuku = await db.select({ count: sql`count(*)` }).from(buku)
-    const totalAnggota = await db.select({ count: sql`count(*)` }).from(anggota)
+        const totalAnggota = await db
+      .select({
+        count: sql`count(distinct lower(btrim(${anggota.nama})))`.mapWith(Number)
+      })
+      .from(anggota)
+      .where(sql`${anggota.peran} in ('siswa', 'guru')`)
 
     const totalDipinjam = await db
       .select({ count: sql`count(*)` })

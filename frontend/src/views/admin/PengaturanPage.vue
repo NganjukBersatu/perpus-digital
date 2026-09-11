@@ -1,5 +1,6 @@
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
+import { authHeaders } from '@/utils/auth'
 
 const STORAGE_KEY = 'perpus_pengaturan'
 
@@ -59,41 +60,106 @@ function showToast(text) {
   }, 2200)
 }
 
-function loadSettings() {
+async function loadSettings() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return
-    const data = JSON.parse(raw)
-    if (data.perpustakaan) Object.assign(form.perpustakaan, data.perpustakaan)
-    if (data.peminjaman) Object.assign(form.peminjaman, data.peminjaman)
-    if (data.denda) Object.assign(form.denda, data.denda)
-    if (data.notifikasi) Object.assign(form.notifikasi, data.notifikasi)
-    savedAt.value = data.savedAt || ''
+    const res = await fetch('http://localhost:3000/api/pengaturan')
+    if (!res.ok) throw new Error('Gagal memuat')
+    const data = await res.json()
+
+    if (data.namaPerpustakaan) form.perpustakaan.namaPerpustakaan = data.namaPerpustakaan
+    if (data.namaSekolah) form.perpustakaan.namaSekolah = data.namaSekolah
+    if (data.alamat != null) form.perpustakaan.alamat = data.alamat
+
+    if (data.detail?.perpustakaan) Object.assign(form.perpustakaan, data.detail.perpustakaan)
+    if (data.detail?.peminjaman) Object.assign(form.peminjaman, data.detail.peminjaman)
+    if (data.detail?.denda) Object.assign(form.denda, data.detail.denda)
+    if (data.detail?.notifikasi) Object.assign(form.notifikasi, data.detail.notifikasi)
+
+    savedAt.value = data.updatedAt
+      ? new Date(data.updatedAt).toLocaleString('id-ID')
+      : ''
   } catch (e) {
-    console.warn('Gagal memuat pengaturan', e)
+    console.warn(e)
+    showToast('Gagal memuat pengaturan dari server')
   }
 }
 
-function saveSettings() {
-  const payload = {
-    perpustakaan: { ...form.perpustakaan },
-    peminjaman: { ...form.peminjaman },
-    denda: { ...form.denda },
-    notifikasi: { ...form.notifikasi },
-    savedAt: new Date().toLocaleString('id-ID')
+async function saveSettings() {
+  try {
+    const res = await fetch('http://localhost:3000/api/pengaturan', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({
+        namaSekolah: form.perpustakaan.namaSekolah,
+        namaPerpustakaan: form.perpustakaan.namaPerpustakaan,
+        alamat: form.perpustakaan.alamat,
+        detail: {
+          perpustakaan: { ...form.perpustakaan },
+          peminjaman: { ...form.peminjaman },
+          denda: { ...form.denda },
+          notifikasi: { ...form.notifikasi }
+        }
+      })
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      showToast(data.error || 'Gagal menyimpan pengaturan')
+      return
+    }
+
+    savedAt.value = new Date(data.updatedAt || Date.now()).toLocaleString('id-ID')
+    showToast('Pengaturan berhasil disimpan')
+  } catch (e) {
+    console.error(e)
+    showToast('Gagal terhubung ke server')
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
-  savedAt.value = payload.savedAt
-  showToast('Pengaturan berhasil disimpan')
 }
 
-function resetSection() {
-  localStorage.removeItem(STORAGE_KEY)
-  location.reload()
+async function resetSection() {
+  form.perpustakaan = {
+    namaPerpustakaan: 'Perpustakaan SMK Negeri 1 Kertosono',
+    namaSekolah: 'SMK Negeri 1 Kertosono',
+    alamat: '',
+    telepon: '',
+    email: '',
+    kepalaPerpustakaan: 'Admin Perpustakaan',
+    tahunAjaran: '2025/2026',
+    deskripsi: ''
+  }
+  form.peminjaman = {
+    durasiSiswa: 7,
+    durasiGuru: 14,
+    maxBukuSiswa: 2,
+    maxBukuGuru: 5,
+    bolehPerpanjang: true,
+    maxPerpanjang: 1,
+    durasiPerpanjang: 7,
+    minStokPinjam: 1
+  }
+  form.denda = {
+    aktif: true,
+    nominalPerHari: 1000,
+    dendaMaksimal: 50000,
+    masaTenggang: 0,
+    dendaGuruAktif: false
+  }
+  form.notifikasi = {
+    pengingatJatuhTempo: true,
+    hariSebelumJatuhTempo: 1,
+    notifikasiTerlambat: true,
+    notifikasiDenda: true,
+    tampilkanBannerDashboard: true
+  }
+  await saveSettings()
 }
 
 function exportSettings() {
-  const raw = localStorage.getItem(STORAGE_KEY) || JSON.stringify(form, null, 2)
+  const raw = JSON.stringify({
+    perpustakaan: { ...form.perpustakaan },
+    peminjaman: { ...form.peminjaman },
+    denda: { ...form.denda },
+    notifikasi: { ...form.notifikasi }
+  }, null, 2)
   const blob = new Blob([raw], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -291,7 +357,7 @@ onMounted(loadSettings)
       </div>
 
       <ul class="notes">
-        <li>Pengaturan saat ini tersimpan di browser (`localStorage`).</li>
+        <li>Pengaturan tersimpan di database server, jadi tetap ada setelah halaman di-refresh.</li>
         <li>Nanti bisa dipindah ke API Laravel/Express tanpa mengubah tampilan form.</li>
         <li>Menu <em>Akun Admin</em> tetap terpisah untuk profil &amp; password.</li>
       </ul>

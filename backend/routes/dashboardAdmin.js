@@ -7,7 +7,12 @@ const { isNull, sql, desc } = require('drizzle-orm')
 router.get('/stats', async (req, res) => {
   try {
     const totalBuku = await db.select({ count: sql`count(*)` }).from(buku)
-    const totalAnggota = await db.select({ count: sql`count(*)` }).from(anggota)
+    const totalAnggota = await db
+      .select({
+        count: sql`count(distinct lower(btrim(${anggota.nama})))`.mapWith(Number)
+      })
+      .from(anggota)
+      .where(sql`${anggota.peran} in ('siswa', 'guru')`)
     const totalDipinjam = await db.select({ count: sql`count(*)` })
       .from(peminjaman)
       .where(isNull(peminjaman.tanggalKembali))

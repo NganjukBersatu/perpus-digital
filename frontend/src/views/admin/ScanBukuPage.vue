@@ -226,8 +226,8 @@ async function handleFileUpload(e) {
   if (!scanner) scanner = new Html5Qrcode("reader")
   try {
     const decodedText = await scanner.scanFile(file, true)
-    barcode.value = decodedText
-    await cariBuku(decodedText)
+    barcode.value = decodedText.trim()        // 👈 pastikan ada .trim() di sini
+    await cariBuku(barcode.value)              // 👈 pastikan pakai barcode.value, BUKAN decodedText langsung
   } catch (err) {
     scanError.value =
       "Barcode tidak terbaca dari gambar ini. Coba foto lain yang lebih jelas dan tidak buram."
@@ -237,6 +237,7 @@ async function handleFileUpload(e) {
 }
 
 async function cariBuku(kodeBarcode) {
+  console.log('RAW:', JSON.stringify(kodeBarcode), 'LENGTH:', kodeBarcode.length)   // 👈 baris baru
   try {
     const res = await fetch(`/api/eksemplar-buku/${kodeBarcode}`)
     if (res.status === 404) {

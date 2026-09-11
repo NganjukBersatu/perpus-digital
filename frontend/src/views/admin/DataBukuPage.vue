@@ -115,7 +115,13 @@ async function konfirmasiHapus() {
   if (!bukuToDelete.value) return
   try {
     const res = await fetch(`${API_URL}/${bukuToDelete.value.id}`, { method: 'DELETE' })
-    if (!res.ok) throw new Error()
+    const data = await res.json()
+
+    if (!res.ok) {
+      errorMessage.value = data.error || 'Gagal menghapus buku'
+      return
+    }
+
     await ambilDataBuku()
   } catch (err) {
     console.error(err)

@@ -1,8 +1,8 @@
 const express = require('express')
 const router = express.Router()
 const db = require('../db')
-const { buku, kategori } = require('../db/schema')
-const { eq, ilike, and } = require('drizzle-orm')
+const { buku, kategori, eksemplarBuku } = require('../db/schema')
+const { eq, ilike, and, sql } = require('drizzle-orm')
 
 // GET semua buku (join ke kategori untuk dapat nama kategorinya)
 router.get('/', async (req, res) => {
@@ -20,12 +20,15 @@ router.get('/', async (req, res) => {
         penerbit: buku.penerbit,
         isbn: buku.isbn,
         stok: buku.stok,
+        kategori: kategori.nama, // <-- tambahkan ini supaya filter kategoriNama bisa jalan
         totalEksemplar: sql`count(${eksemplarBuku.id})`.mapWith(Number),
         tersedia: sql`count(${eksemplarBuku.id}) filter (where ${eksemplarBuku.status} = 'tersedia')`.mapWith(Number),
       })
       .from(buku)
       .leftJoin(kategori, eq(kategori.id, buku.kategoriId))
+      .leftJoin(eksemplarBuku, eq(eksemplarBuku.bukuId, buku.id)) // <-- ini yang kurang, penyebab error
       .where(conditions.length ? and(...conditions) : undefined)
+      .groupBy(buku.id, kategori.nama) // <-- wajib karena ada count()
       .orderBy(buku.id)
 
     const hasil = kategoriNama ? rows.filter((r) => r.kategori === kategoriNama) : rows
@@ -98,6 +101,18 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const id = Number(req.params.id)
+
+    const eksemplarTerkait = await db
+      .select({ id: eksemplarBuku.id })
+      .from(eksemplarBuku)
+      .where(eq(eksemplarBuku.bukuId, id))
+
+    if (eksemplarTerkait.length > 0) {
+      return res.status(400).json({
+        error: `Buku tidak bisa dihapus karena masih memiliki ${eksemplarTerkait.length} eksemplar terdaftar. Hapus dulu eksemplarnya, atau hubungi admin sistem.`
+      })
+    }
+
     const [deleted] = await db.delete(buku).where(eq(buku.id, id)).returning()
 
     if (!deleted) return res.status(404).json({ error: 'Buku tidak ditemukan' })

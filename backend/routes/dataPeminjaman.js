@@ -4,12 +4,13 @@ const db = require('../db')
 const { peminjaman, eksemplarBuku, anggota, buku } = require('../db/schema')
 const { eq, and, gte, lte, or, ilike, sql } = require('drizzle-orm')
 
-// GET /api/data-peminjaman?search=&status=&start=&end=
+// GET /api/data-peminjaman?search=&status=&start=&end=&anggotaId=
 // Menampilkan SEMUA transaksi peminjaman: yang masih dipinjam, tepat waktu, maupun terlambat.
+// anggotaId (opsional): filter hanya peminjaman milik anggota tertentu (dipakai di dashboard guru/siswa).
 // Belum ada pagination/limit dulu — semua data yang cocok filter langsung dikirim.
 router.get('/', async (req, res) => {
   try {
-    const { search = '', status = 'Semua', start, end } = req.query
+    const { search = '', status = 'Semua', start, end, anggotaId } = req.query
 
     const conditions = []
 
@@ -26,6 +27,10 @@ router.get('/', async (req, res) => {
     if (start && end) {
       conditions.push(gte(peminjaman.tanggalPinjam, start))
       conditions.push(lte(peminjaman.tanggalPinjam, end))
+    }
+
+    if (anggotaId) {
+      conditions.push(eq(peminjaman.anggotaId, Number(anggotaId)))
     }
 
     const rows = await db

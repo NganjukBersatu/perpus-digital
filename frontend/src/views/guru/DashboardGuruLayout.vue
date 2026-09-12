@@ -1,7 +1,6 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-
 
 const router = useRouter()
 
@@ -9,11 +8,26 @@ const icons = {
   userCircle: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M6.5 19.5a6.5 6.5 0 0 1 11 0"/></svg>`
 }
 
-const guru = ref({
-  nama: 'Andi Prasetyo',
-  role: 'Guru',
-  mapel: 'Guru RPL',
-  nip: '198005152010011005'
+const guru = ref({ id: null, nama: '', role: 'Guru', mapel: '', nip: '' })
+
+onMounted(() => {
+  const token = localStorage.getItem('token')
+  const role = localStorage.getItem('role')
+  const userRaw = localStorage.getItem('user')
+
+  if (!token || role !== 'guru' || !userRaw) {
+    router.push('/')
+    return
+  }
+
+  const user = JSON.parse(userRaw)
+  guru.value = {
+    id: user.id,
+    nama: user.nama || 'Guru',
+    role: 'Guru',
+    mapel: user.mapel || '-',
+    nip: user.nip || '-'
+  }
 })
 
 const notifikasi = ref([
@@ -29,7 +43,9 @@ function toggleSidebar() {
 }
 
 function logout() {
-  console.log('logout guru')
+  localStorage.removeItem('token')
+  localStorage.removeItem('role')
+  localStorage.removeItem('user')
   router.push('/')
 }
 </script>
@@ -64,7 +80,6 @@ function logout() {
           </span>
         </router-link>
 
-        <div class="nav-section">KOLEKSI</div>
         <router-link to="/guru/katalog" class="nav-item" active-class="active">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -74,85 +89,48 @@ function logout() {
             <span class="nav-label">Katalog Buku</span>
           </span>
         </router-link>
-        <router-link to="/guru/favorit" class="nav-item" active-class="active">
-          <span class="nav-item-left">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M20.59 13.41L11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .58 1.42l9.58 9.58a2 2 0 0 0 2.83 0l4.36-4.36a2 2 0 0 0 0-2.82z" />
-              <line x1="7" y1="7" x2="7.01" y2="7" />
-            </svg>
-            <span class="nav-label">Buku Favorit</span>
-          </span>
-        </router-link>
-        <router-link to="/guru/rekomendasi" class="nav-item" active-class="active">
-          <span class="nav-item-left">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 3v4M12 17v4M4.2 4.2l2.8 2.8M17 17l2.8 2.8M3 12h4M17 12h4M4.2 19.8l2.8-2.8M17 7l2.8-2.8" />
-            </svg>
-            <span class="nav-label">Rekomendasi</span>
-          </span>
-        </router-link>
 
-        <div class="nav-section">PEMINJAMAN</div>
-        <router-link to="/guru/peminjaman-saya" class="nav-item" active-class="active">
+        <router-link to="/guru/peminjaman" class="nav-item" active-class="active">
           <span class="nav-item-left">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
-              <path d="M9 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3" />
-              <line x1="9" y1="12" x2="15" y2="12" />
-              <line x1="9" y1="16" x2="15" y2="16" />
+           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
             </svg>
             <span class="nav-label">Peminjaman Saya</span>
           </span>
         </router-link>
+
         <router-link to="/guru/riwayat" class="nav-item" active-class="active">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
+                 <circle cx="12" cy="12" r="10" />
+                 <polyline points="12 6 12 12 16 14" />
             </svg>
             <span class="nav-label">Riwayat Peminjaman</span>
           </span>
         </router-link>
-        <router-link to="/guru/pengembalian" class="nav-item" active-class="active">
-          <span class="nav-item-left">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="9 14 4 9 9 4" />
-              <path d="M20 20v-7a4 4 0 0 0-4-4H4" />
-            </svg>
-            <span class="nav-label">Pengembalian</span>
-          </span>
-        </router-link>
 
-        <div class="nav-section">LAINNYA</div>
-        <router-link to="/guru/notifikasi" class="nav-item" active-class="active">
+        <router-link to="/guru/profil" class="nav-item" active-class="active">
           <span class="nav-item-left">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
             </svg>
-            <span class="nav-label">Notifikasi</span>
-          </span>
-          <span class="badge">{{ notifikasi.length }}</span>
-        </router-link>
-        <router-link to="/guru/bantuan" class="nav-item" active-class="active">
-          <span class="nav-item-left">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-            <span class="nav-label">Bantuan</span>
+            <span class="nav-label">Profil</span>
           </span>
         </router-link>
-
+        
+        <!-- Profile Card -->
         <div class="profile-card">
           <div class="avatar avatar-icon" v-html="icons.userCircle"></div>
           <div class="profile-text">
             <div class="profile-greet">Selamat datang,</div>
             <div class="profile-name">{{ guru.nama }}</div>
-            <div class="profile-role">{{ guru.mapel }}</div>
+            <div class="profile-role">{{ guru.mapel || 'Guru' }}</div>
           </div>
-          <button class="btn-outline-light">Lihat Profil</button>
+          <router-link to="/guru/profil" class="btn-outline-light">Lihat Profil</router-link>
         </div>
       </nav>
 
@@ -233,31 +211,28 @@ function logout() {
   padding: 16px 10px;
   align-items: center;
 }
+
 .sidebar-closed .brand .icon-lg {
   display: none;
-}.sidebar-closed .brand {
+}
+
+.sidebar-closed .brand {
   flex-direction: column;
   justify-content: center;
   margin-bottom: 12px;
 }
+
 .sidebar-closed .sidebar-toggle-inside,
 .sidebar-closed .brand {
   display: none;
 }
 
 .sidebar-closed .brand-text,
-.sidebar-closed .nav-section,
 .sidebar-closed .nav-label,
 .sidebar-closed .profile-text,
 .sidebar-closed .btn-outline-light,
 .sidebar-closed .badge {
   display: none;
-}
-
-.sidebar-closed .brand {
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 16px;
 }
 
 .sidebar-closed .nav-item,
@@ -275,10 +250,6 @@ function logout() {
   justify-content: center;
   padding: 10px 0;
   background: transparent;
-}
-
-.sidebar-closed .sidebar-toggle-inside svg {
-  transform: rotate(180deg);
 }
 
 .brand {
@@ -305,13 +276,6 @@ function logout() {
   height: 32px;
   border-radius: 8px;
   flex-shrink: 0;
-  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.5);
-  transition: background 0.2s ease, transform 0.2s ease;
-}
-
-.sidebar-toggle-inside:hover {
-  background: #1d4ed8;
-  transform: scale(1.08);
 }
 
 .icon-toggle {
@@ -336,28 +300,6 @@ function logout() {
   gap: 4px;
   overflow-y: auto;
   min-height: 0;
-  scrollbar-width: thin;
-  scrollbar-color: #3b5bdb transparent;
-}
-
-.nav::-webkit-scrollbar {
-  width: 5px;
-}
-
-.nav::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.nav::-webkit-scrollbar-thumb {
-  background-color: #3b5bdb;
-  border-radius: 999px;
-}
-
-.nav-section {
-  font-size: 11px;
-  opacity: 0.5;
-  margin: 12px 0 4px;
-  letter-spacing: 0.5px;
 }
 
 .nav-item {
@@ -394,7 +336,7 @@ function logout() {
   background: #12235a;
   border-radius: 12px;
   padding: 12px;
-  margin-top: 1cm;
+  margin-top: auto;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -447,6 +389,8 @@ function logout() {
   padding: 6px;
   border-radius: 8px;
   font-size: 12px;
+  text-align: center;
+  text-decoration: none;
   cursor: pointer;
 }
 
@@ -481,7 +425,6 @@ function logout() {
   background: #fff;
   padding: 14px 24px;
   display: flex;
-  justify-content: flex-start;
   align-items: center;
   border-bottom: 1px solid #e5e7eb;
   position: sticky;
@@ -500,7 +443,6 @@ function logout() {
   width: 24px;
   height: 32px;
   border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.5);
 }
 
 .topbar-right {

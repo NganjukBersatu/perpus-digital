@@ -1,8 +1,14 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 
-const API_BASE =
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+const props = defineProps({
+  guru: {
+    type: Object,
+    default: () => ({ id: null, nama: '', mapel: '', nip: '' })
+  }
+})
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL
 
 const riwayat = ref([])
 const isLoading = ref(true)
@@ -17,28 +23,58 @@ const tabs = [
   { label: 'Terlambat', value: 'Terlambat' }
 ]
 
+const userFromStorage = (() => {
+  try {
+    return JSON.parse(localStorage.getItem('user') || '{}')
+  } catch {
+    return {}
+  }
+})()
+
+const userId = computed(() => props.guru?.id || userFromStorage.id || null)
+
 function authHeaders() {
   const token = localStorage.getItem('token')
-  return {
-    Authorization: `Bearer ${token}`
-  }
+  return { Authorization: `Bearer ${token}` }
 }
 
 async function fetchRiwayat() {
   isLoading.value = true
   errorMessage.value = ''
 
+  if (!userId.value) {
+    errorMessage.value = 'Data guru tidak ditemukan. Silakan login ulang.'
+    riwayat.value = []
+    isLoading.value = false
+    return
+  }
+
   try {
-    const res = await fetch(`${API_BASE}/dashboard-siswa/riwayat`, {
-      headers: authHeaders()
-    })
+    const res = await fetch(
+      `${API_BASE}/data-peminjaman?anggotaId=${userId.value}`,
+      { headers: authHeaders() }
+    )
 
     if (!res.ok) throw new Error('Gagal mengambil riwayat peminjaman')
 
-    riwayat.value = await res.json()
+    const data = await res.json()
+    const list = Array.isArray(data) ? data : (data.data || [])
+
+    riwayat.value = list.map((item) => ({
+      id: item.id,
+      judul: item.judulBuku || item.judul || '-',
+      penulis: item.penulisBuku || item.penulis || '',
+      kategori: item.kategori || '',
+      tanggalPinjam: item.tanggalPinjam,
+      tanggalKembali: item.batasKembali || item.tanggalKembali,
+      tanggalDikembalikan: item.tanggalDikembalikan || null,
+      status: item.status || 'Dipinjam',
+      denda: Number(item.denda || 0)
+    }))
   } catch (err) {
     console.error(err)
     errorMessage.value = 'Gagal memuat riwayat. Coba periksa koneksi kamu.'
+    riwayat.value = []
   } finally {
     isLoading.value = false
   }
@@ -46,9 +82,13 @@ async function fetchRiwayat() {
 
 onMounted(fetchRiwayat)
 
+watch(userId, (id) => {
+  if (id) fetchRiwayat()
+})
+
 const ringkasan = computed(() => ({
-  dipinjam: riwayat.value.filter((r) => r.status === 'Dipinjam').length,
-  dikembalikan: riwayat.value.filter((r) => r.status === 'Dikembalikan').length,
+  dipinjam: riwayat.value.filter((r) => r.status === 'Dipinjam' && !r.tanggalDikembalikan).length,
+  dikembalikan: riwayat.value.filter((r) => r.status === 'Dikembalikan' || r.tanggalDikembalikan).length,
   terlambat: riwayat.value.filter((r) => r.status === 'Terlambat').length
 }))
 
@@ -56,14 +96,17 @@ const riwayatTerfilter = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
 
   return riwayat.value.filter((item) => {
+    const statusAsli = item.tanggalDikembalikan ? 'Dikembalikan' : item.status
+
     const cocokStatus =
       filterStatus.value === 'semua' ||
+      statusAsli === filterStatus.value ||
       item.status === filterStatus.value
 
     const cocokSearch =
       !q ||
-      item.judul?.toLowerCase().includes(q) ||
-      item.penulis?.toLowerCase().includes(q)
+      item.judul.toLowerCase().includes(q) ||
+      item.penulis.toLowerCase().includes(q)
 
     return cocokStatus && cocokSearch
   })
@@ -94,11 +137,10 @@ function formatRupiah(angka) {
     <div class="page-header">
       <h1>Riwayat Peminjaman</h1>
       <p class="muted">
-        Lihat seluruh riwayat peminjaman buku kamu, dari yang masih berjalan sampai yang sudah selesai.
+        Lihat seluruh riwayat peminjaman buku Anda, dari yang masih berjalan sampai yang sudah selesai.
       </p>
     </div>
 
-    <!-- KARTU RINGKASAN -->
     <div class="stats-row">
       <div class="stat-card">
         <div class="stat-icon blue">
@@ -141,7 +183,6 @@ function formatRupiah(angka) {
       </div>
     </div>
 
-    <!-- KARTU TABEL -->
     <div class="table-card">
       <div class="card-toolbar">
         <h2>Semua Riwayat</h2>
@@ -195,9 +236,7 @@ function formatRupiah(angka) {
               <tr v-for="item in riwayatTerfilter" :key="item.id">
                 <td>
                   <div class="book-title">{{ item.judul }}</div>
-                  <div v-if="item.penulis && item.penulis !== '-'" class="book-author">
-                    {{ item.penulis }}
-                  </div>
+                  <div v-if="item.penulis" class="book-author">{{ item.penulis }}</div>
                 </td>
                 <td>
                   <span v-if="item.kategori" class="kategori-badge">{{ item.kategori }}</span>

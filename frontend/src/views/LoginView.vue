@@ -86,11 +86,14 @@ async function handleLogin() {
     localStorage.setItem('token', data.token)
     localStorage.setItem('role', data.role || selectedRole.value)
     localStorage.setItem('user', JSON.stringify({
-  role: data.role || selectedRole.value,
-  nama,
-  kelas: data.siswa?.kelas || data.guru?.kelas,
-  nis: data.siswa?.nis
-}))
+      id: data.siswa?.id || data.guru?.id,
+      role: data.role || selectedRole.value,
+      nama,
+      kelas: data.siswa?.kelas || data.guru?.kelas,
+      nis: data.siswa?.nis,
+      nip: data.guru?.nip,
+      mapel: data.guru?.mapel
+    }))
 
     const tujuan = {
       admin: '/admin',

@@ -1,79 +1,89 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
-const API_BASE =
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+const props = defineProps({
+  guru: {
+    type: Object,
+    default: () => ({ id: null, nama: '', mapel: '', nip: '' })
+  }
+})
 
-const riwayat = ref([])
-const isLoading = ref(true)
-const errorMessage = ref('')
-const searchQuery = ref('')
-const filterStatus = ref('semua')
+const router = useRouter()
+const API_BASE = import.meta.env.VITE_API_BASE_URL
 
-const tabs = [
-  { label: 'Semua', value: 'semua' },
-  { label: 'Dipinjam', value: 'Dipinjam' },
-  { label: 'Dikembalikan', value: 'Dikembalikan' },
-  { label: 'Terlambat', value: 'Terlambat' }
-]
+const loading = ref(true)
+const error = ref('')
+const keyword = ref('')
+const filterStatus = ref('Semua')
+const peminjamanAktif = ref([])
+
+const userFromStorage = (() => {
+  try {
+    return JSON.parse(localStorage.getItem('user') || '{}')
+  } catch {
+    return {}
+  }
+})()
+
+const userId = computed(() => props.guru?.id || userFromStorage.id || null)
 
 function authHeaders() {
   const token = localStorage.getItem('token')
   return {
-    Authorization: `Bearer ${token}`
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json'
   }
 }
 
-async function fetchRiwayat() {
-  isLoading.value = true
-  errorMessage.value = ''
+async function fetchPeminjaman() {
+  loading.value = true
+  error.value = ''
+
+  if (!userId.value) {
+    error.value = 'Data guru tidak ditemukan. Silakan login ulang.'
+    peminjamanAktif.value = []
+    loading.value = false
+    return
+  }
 
   try {
-    const res = await fetch(`${API_BASE}/dashboard-siswa/riwayat`, {
-      headers: authHeaders()
-    })
+    const res = await fetch(
+      `${API_BASE}/data-peminjaman?anggotaId=${userId.value}`,
+      { headers: authHeaders() }
+    )
 
-    if (!res.ok) throw new Error('Gagal mengambil riwayat peminjaman')
+    if (!res.ok) throw new Error('Gagal mengambil data peminjaman')
 
-    riwayat.value = await res.json()
+    const data = await res.json()
+    const list = Array.isArray(data) ? data : (data.data || [])
+
+    peminjamanAktif.value = list
+      .map((item) => ({
+        id: item.id,
+        judul: item.judulBuku || item.judul || '-',
+        penulis: item.penulisBuku || item.penulis || '',
+        kategori: item.kategori || '',
+        tanggalPinjam: item.tanggalPinjam,
+        batasKembali: item.batasKembali || item.tanggalKembali,
+        status: item.status || 'Dipinjam',
+        tanggalDikembalikan: item.tanggalDikembalikan || null
+      }))
+      .filter((p) => !p.tanggalDikembalikan)
   } catch (err) {
     console.error(err)
-    errorMessage.value = 'Gagal memuat riwayat. Coba periksa koneksi kamu.'
+    error.value = 'Gagal memuat data peminjaman. Coba refresh halaman.'
+    peminjamanAktif.value = []
   } finally {
-    isLoading.value = false
+    loading.value = false
   }
 }
 
-onMounted(fetchRiwayat)
+onMounted(fetchPeminjaman)
 
-const ringkasan = computed(() => ({
-  dipinjam: riwayat.value.filter((r) => r.status === 'Dipinjam').length,
-  dikembalikan: riwayat.value.filter((r) => r.status === 'Dikembalikan').length,
-  terlambat: riwayat.value.filter((r) => r.status === 'Terlambat').length
-}))
-
-const riwayatTerfilter = computed(() => {
-  const q = searchQuery.value.trim().toLowerCase()
-
-  return riwayat.value.filter((item) => {
-    const cocokStatus =
-      filterStatus.value === 'semua' ||
-      item.status === filterStatus.value
-
-    const cocokSearch =
-      !q ||
-      item.judul?.toLowerCase().includes(q) ||
-      item.penulis?.toLowerCase().includes(q)
-
-    return cocokStatus && cocokSearch
-  })
+watch(userId, (id) => {
+  if (id) fetchPeminjaman()
 })
-
-function statusClass(status) {
-  if (status === 'Dikembalikan') return 'status-done'
-  if (status === 'Terlambat') return 'status-late'
-  return 'status-active'
-}
 
 function formatTanggal(tanggal) {
   if (!tanggal) return '—'
@@ -84,21 +94,70 @@ function formatTanggal(tanggal) {
   })
 }
 
-function formatRupiah(angka) {
-  return Number(angka).toLocaleString('id-ID')
+function hitungHariTerlambat(item) {
+  if (!item.batasKembali) return 0
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(item.batasKembali)
+  due.setHours(0, 0, 0, 0)
+  const selisih = Math.floor((today - due) / (1000 * 60 * 60 * 24))
+  return selisih > 0 ? selisih : 0
+}
+
+function isTerlambat(item) {
+  return item.status === 'Terlambat' || hitungHariTerlambat(item) > 0
+}
+
+function isHampirJatuhTempo(item) {
+  if (!item.batasKembali || isTerlambat(item)) return false
+  const today = new Date()
+  const due = new Date(item.batasKembali)
+  const diff = (due - today) / (1000 * 60 * 60 * 24)
+  return diff <= 3
+}
+
+function statusTampil(item) {
+  if (isTerlambat(item)) return 'Terlambat'
+  if (isHampirJatuhTempo(item)) return 'Hampir Jatuh Tempo'
+  return 'Dipinjam'
+}
+
+const jumlahDipinjam = computed(() => peminjamanAktif.value.length)
+const jumlahHampir = computed(() => peminjamanAktif.value.filter(isHampirJatuhTempo).length)
+const jumlahTerlambat = computed(() => peminjamanAktif.value.filter(isTerlambat).length)
+
+const daftarTampil = computed(() => {
+  const q = keyword.value.trim().toLowerCase()
+
+  return peminjamanAktif.value.filter((item) => {
+    const cocokKeyword =
+      !q ||
+      item.judul.toLowerCase().includes(q) ||
+      item.penulis.toLowerCase().includes(q)
+
+    const status = statusTampil(item)
+    const cocokFilter =
+      filterStatus.value === 'Semua' ||
+      (filterStatus.value === 'Dipinjam' && status === 'Dipinjam') ||
+      (filterStatus.value === 'Hampir Jatuh Tempo' && status === 'Hampir Jatuh Tempo') ||
+      (filterStatus.value === 'Terlambat' && status === 'Terlambat')
+
+    return cocokKeyword && cocokFilter
+  })
+})
+
+function goToKatalog() {
+  router.push('/guru/katalog')
 }
 </script>
 
 <template>
   <div class="page">
     <div class="page-header">
-      <h1>Riwayat Peminjaman</h1>
-      <p class="muted">
-        Lihat seluruh riwayat peminjaman buku kamu, dari yang masih berjalan sampai yang sudah selesai.
-      </p>
+      <h1>Peminjaman Saya</h1>
+      <p class="muted">Daftar buku yang sedang Anda pinjam saat ini.</p>
     </div>
 
-    <!-- KARTU RINGKASAN -->
     <div class="stats-row">
       <div class="stat-card">
         <div class="stat-icon blue">
@@ -109,25 +168,25 @@ function formatRupiah(angka) {
         </div>
         <div>
           <div class="stat-label">Sedang Dipinjam</div>
-          <div class="stat-value">{{ ringkasan.dipinjam }}</div>
-        </div>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-icon green">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-            <polyline points="22 4 12 14.01 9 11.01"/>
-          </svg>
-        </div>
-        <div>
-          <div class="stat-label">Sudah Dikembalikan</div>
-          <div class="stat-value">{{ ringkasan.dikembalikan }}</div>
+          <div class="stat-value">{{ jumlahDipinjam }}</div>
         </div>
       </div>
 
       <div class="stat-card">
         <div class="stat-icon orange">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </div>
+        <div>
+          <div class="stat-label">Hampir Jatuh Tempo</div>
+          <div class="stat-value">{{ jumlahHampir }}</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon red">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
             <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
             <line x1="12" y1="9" x2="12" y2="13"/>
@@ -135,25 +194,24 @@ function formatRupiah(angka) {
           </svg>
         </div>
         <div>
-          <div class="stat-label">Pernah Terlambat</div>
-          <div class="stat-value">{{ ringkasan.terlambat }}</div>
+          <div class="stat-label">Terlambat</div>
+          <div class="stat-value">{{ jumlahTerlambat }}</div>
         </div>
       </div>
     </div>
 
-    <!-- KARTU TABEL -->
     <div class="table-card">
       <div class="card-toolbar">
-        <h2>Semua Riwayat</h2>
+        <h2>Daftar Peminjaman</h2>
         <div class="filter-chips">
           <button
-            v-for="tab in tabs"
-            :key="tab.value"
+            v-for="f in ['Semua', 'Dipinjam', 'Hampir Jatuh Tempo', 'Terlambat']"
+            :key="f"
             class="chip"
-            :class="{ active: filterStatus === tab.value }"
-            @click="filterStatus = tab.value"
+            :class="{ active: filterStatus === f }"
+            @click="filterStatus = f"
           >
-            {{ tab.label }}
+            {{ f }}
           </button>
         </div>
       </div>
@@ -163,18 +221,19 @@ function formatRupiah(angka) {
           <circle cx="11" cy="11" r="8"/>
           <line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
-        <input v-model="searchQuery" type="text" placeholder="Cari judul atau penulis..." />
+        <input v-model="keyword" type="text" placeholder="Cari judul atau penulis..." />
       </div>
 
-      <div v-if="isLoading" class="empty-state">Memuat riwayat peminjaman...</div>
+      <div v-if="loading" class="empty-state">Memuat data peminjaman...</div>
+      <div v-else-if="error" class="empty-state error">{{ error }}</div>
 
-      <div v-else-if="errorMessage" class="empty-state error">
-        <p>{{ errorMessage }}</p>
-        <button class="btn-primary" @click="fetchRiwayat">Coba Lagi</button>
+      <div v-else-if="peminjamanAktif.length === 0" class="empty-state">
+        <p>Belum ada buku yang sedang dipinjam.</p>
+        <button class="btn-primary" @click="goToKatalog">Cari Buku</button>
       </div>
 
-      <div v-else-if="riwayatTerfilter.length === 0" class="empty-state">
-        Tidak ada riwayat peminjaman yang cocok.
+      <div v-else-if="daftarTampil.length === 0" class="empty-state">
+        Tidak ada peminjaman yang cocok dengan pencarian.
       </div>
 
       <template v-else>
@@ -183,39 +242,34 @@ function formatRupiah(angka) {
             <thead>
               <tr>
                 <th>Judul Buku</th>
-                <th>Kategori</th>
                 <th>Tanggal Pinjam</th>
                 <th>Jatuh Tempo</th>
-                <th>Tanggal Kembali</th>
                 <th>Status</th>
-                <th>Denda</th>
+                <th>Keterlambatan</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in riwayatTerfilter" :key="item.id">
+              <tr v-for="item in daftarTampil" :key="item.id">
                 <td>
                   <div class="book-title">{{ item.judul }}</div>
-                  <div v-if="item.penulis && item.penulis !== '-'" class="book-author">
-                    {{ item.penulis }}
-                  </div>
-                </td>
-                <td>
-                  <span v-if="item.kategori" class="kategori-badge">{{ item.kategori }}</span>
-                  <span v-else>—</span>
+                  <div v-if="item.penulis" class="book-author">{{ item.penulis }}</div>
                 </td>
                 <td>{{ formatTanggal(item.tanggalPinjam) }}</td>
-                <td>{{ formatTanggal(item.tanggalKembali) }}</td>
-                <td>{{ item.tanggalDikembalikan ? formatTanggal(item.tanggalDikembalikan) : '—' }}</td>
+                <td>{{ formatTanggal(item.batasKembali) }}</td>
                 <td>
-                  <span class="status-badge" :class="statusClass(item.status)">
-                    {{ item.status }}
+                  <span
+                    class="status-badge"
+                    :class="{
+                      'status-active': statusTampil(item) === 'Dipinjam',
+                      'status-soon': statusTampil(item) === 'Hampir Jatuh Tempo',
+                      'status-late': statusTampil(item) === 'Terlambat'
+                    }"
+                  >
+                    {{ statusTampil(item) }}
                   </span>
                 </td>
                 <td>
-                  <span v-if="item.denda > 0" class="denda-text">
-                    Rp{{ formatRupiah(item.denda) }}
-                  </span>
-                  <span v-else class="denda-kosong">—</span>
+                  {{ hitungHariTerlambat(item) > 0 ? hitungHariTerlambat(item) + ' hari' : '—' }}
                 </td>
               </tr>
             </tbody>
@@ -223,7 +277,7 @@ function formatRupiah(angka) {
         </div>
 
         <div class="table-footer">
-          Menampilkan {{ riwayatTerfilter.length }} dari {{ riwayat.length }} data
+          Menampilkan {{ daftarTampil.length }} dari {{ peminjamanAktif.length }} data
         </div>
       </template>
     </div>
@@ -245,8 +299,6 @@ function formatRupiah(angka) {
   margin: 6px 0 0;
   color: #64748b;
   font-size: 14px;
-  max-width: 560px;
-  line-height: 1.5;
 }
 
 .stats-row {
@@ -277,8 +329,8 @@ function formatRupiah(angka) {
 }
 
 .stat-icon.blue { background: #dbeafe; color: #2563eb; }
-.stat-icon.green { background: #dcfce7; color: #15803d; }
 .stat-icon.orange { background: #ffedd5; color: #c2410c; }
+.stat-icon.red { background: #fee2e2; color: #b91c1c; }
 
 .stat-label {
   font-size: 13px;
@@ -368,7 +420,7 @@ function formatRupiah(angka) {
 .tabel {
   width: 100%;
   border-collapse: collapse;
-  min-width: 820px;
+  min-width: 680px;
 }
 
 .tabel th {
@@ -401,16 +453,6 @@ function formatRupiah(angka) {
   margin-top: 2px;
 }
 
-.kategori-badge {
-  display: inline-block;
-  background: #eef2ff;
-  color: #4f46e5;
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-weight: 600;
-}
-
 .status-badge {
   display: inline-block;
   padding: 4px 10px;
@@ -420,17 +462,8 @@ function formatRupiah(angka) {
 }
 
 .status-active { background: #dbeafe; color: #1d4ed8; }
-.status-done { background: #dcfce7; color: #15803d; }
+.status-soon { background: #ffedd5; color: #c2410c; }
 .status-late { background: #fee2e2; color: #b91c1c; }
-
-.denda-text {
-  color: #b91c1c;
-  font-weight: 600;
-}
-
-.denda-kosong {
-  color: #cbd5e1;
-}
 
 .table-footer {
   padding: 12px 4px 16px;

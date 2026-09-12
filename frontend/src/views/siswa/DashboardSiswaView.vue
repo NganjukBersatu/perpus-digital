@@ -1,106 +1,3 @@
-<template>
-  <div class="content">
-    <div class="welcome-banner">
-      <div class="welcome-text">
-        <h1>Halo, {{ dataSiswa.nama }}!</h1>
-        <p>NIS: {{ dataSiswa.nis }} · Kelas {{ dataSiswa.kelas }}</p>
-        <p class="welcome-desc">
-          Selamat datang di sistem perpustakaan digital.
-          Kamu bisa mencari, meminjam, dan mengembalikan buku sendiri.
-        </p>
-        <button class="btn-banner" @click="goToKatalog">Cari Buku Sekarang</button>
-      </div>
-      <div class="welcome-illustration">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="80" height="80">
-          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-          <line x1="12" y1="6" x2="12" y2="14"/>
-          <line x1="9" y1="10" x2="15" y2="10"/>
-        </svg>
-      </div>
-    </div>
-
-    <div class="stats">
-      <div class="stat-card">
-        <div class="stat-icon blue">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
-            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-          </svg>
-        </div>
-        <div>
-          <p class="stat-label">Sedang Dipinjam</p>
-          <p class="stat-value">{{ stats.sedangDipinjam }}</p>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon orange">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/>
-            <line x1="12" y1="17" x2="12.01" y2="17"/>
-          </svg>
-        </div>
-        <div>
-          <p class="stat-label">Hampir Jatuh Tempo</p>
-          <p class="stat-value">{{ stats.hampirJatuhTempo }}</p>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon green">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-            <polyline points="22 4 12 14.01 9 11.01"/>
-          </svg>
-        </div>
-        <div>
-          <p class="stat-label">Sudah Dikembalikan</p>
-<p class="stat-value">{{ stats.sudahDikembalikan }}</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="section-card">
-      <div class="section-header">
-        <h2>Buku yang Sedang Dipinjam</h2>
-      </div>
-
-      <div v-if="pinjamanAktif.length === 0" class="empty-state">
-        <p>Kamu belum meminjam buku apa pun.</p>
-        <button class="btn-primary" @click="goToKatalog">Cari Buku</button>
-      </div>
-
-      <div v-else class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Judul Buku</th>
-              <th>Kategori</th>
-              <th>Tanggal Pinjam</th>
-              <th>Jatuh Tempo</th>
-              <th>Aksi</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in pinjamanAktif" :key="item.id">
-              <td class="book-title">{{ item.judul }}</td>
-              <td><span class="badge">{{ item.kategori }}</span></td>
-              <td>{{ formatTanggal(item.tanggalPinjam) }}</td>
-              <td>
-                <span :class="{ 'due-warning': isAlmostDue(item.jatuhTempo) }">
-                  {{ formatTanggal(item.jatuhTempo) }}
-                </span>
-              </td>
-              <td>
-                <button class="btn-return" @click="kembalikan(item)">Kembalikan</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -137,12 +34,13 @@ async function fetchPeminjamanAktif() {
   const res = await fetch(`${API_BASE}/dashboard-siswa/peminjaman-aktif`, { headers: authHeaders() })
   if (!res.ok) throw new Error('Gagal mengambil data peminjaman')
   const data = await res.json()
-  pinjamanAktif.value = data.map(item => ({
+  pinjamanAktif.value = data.map((item) => ({
     id: item.id,
     judul: item.judul,
-    kategori: item.kategori || '-',
+    penulis: item.penulis || item.penulisBuku || '',
+    kategori: item.kategori || '',
     tanggalPinjam: item.tanggalPinjam,
-    jatuhTempo: item.tanggalKembali
+    jatuhTempo: item.tanggalKembali || item.batasKembali
   }))
 }
 
@@ -160,6 +58,7 @@ onMounted(async () => {
 })
 
 function isAlmostDue(tanggal) {
+  if (!tanggal) return false
   const today = new Date()
   const due = new Date(tanggal)
   const diff = (due - today) / (1000 * 60 * 60 * 24)
@@ -167,6 +66,7 @@ function isAlmostDue(tanggal) {
 }
 
 function formatTanggal(tanggal) {
+  if (!tanggal) return '—'
   return new Date(tanggal).toLocaleDateString('id-ID', {
     day: 'numeric',
     month: 'short',
@@ -184,7 +84,7 @@ async function kembalikan(item) {
     })
     if (!res.ok) throw new Error('Gagal mengembalikan buku')
 
-    pinjamanAktif.value = pinjamanAktif.value.filter(p => p.id !== item.id)
+    pinjamanAktif.value = pinjamanAktif.value.filter((p) => p.id !== item.id)
     stats.value.sedangDipinjam = Math.max(0, stats.value.sedangDipinjam - 1)
     stats.value.sudahDikembalikan += 1
     alert(`Buku "${item.judul}" berhasil dikembalikan.`)
@@ -197,50 +97,190 @@ async function kembalikan(item) {
 function goToKatalog() {
   router.push('/siswa/katalog')
 }
+
+function goToPeminjaman() {
+  router.push('/siswa/peminjaman')
+}
 </script>
 
+<template>
+  <div class="page">
+    <div class="welcome-banner">
+      <div class="welcome-text">
+        <h1>Halo, {{ dataSiswa.nama }}!</h1>
+        <p>NIS: {{ dataSiswa.nis }} · Kelas {{ dataSiswa.kelas }}</p>
+        <p class="welcome-desc">
+          Selamat datang di sistem perpustakaan digital.
+          Kamu bisa mencari, meminjam, dan mengembalikan buku sendiri.
+        </p>
+        <div class="banner-actions">
+          <button class="btn-banner" @click="goToKatalog">Cari Buku Sekarang</button>
+          <button class="btn-banner-outline" @click="goToPeminjaman">Lihat Peminjaman Saya</button>
+        </div>
+      </div>
+      <div class="welcome-illustration">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="72" height="72">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-icon blue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+          </svg>
+        </div>
+        <div>
+          <div class="stat-label">Sedang Dipinjam</div>
+          <div class="stat-value">{{ stats.sedangDipinjam }}</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon orange">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+        <div>
+          <div class="stat-label">Hampir Jatuh Tempo</div>
+          <div class="stat-value">{{ stats.hampirJatuhTempo }}</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon green">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+        </div>
+        <div>
+          <div class="stat-label">Sudah Dikembalikan</div>
+          <div class="stat-value">{{ stats.sudahDikembalikan }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <div class="card-toolbar">
+        <h2>Buku yang Sedang Dipinjam</h2>
+        <button class="btn-link" @click="goToPeminjaman">Lihat semua</button>
+      </div>
+
+      <div v-if="isLoading" class="empty-state">Memuat data...</div>
+      <div v-else-if="errorMessage" class="empty-state error">{{ errorMessage }}</div>
+
+      <div v-else-if="pinjamanAktif.length === 0" class="empty-state">
+        <p>Kamu belum meminjam buku apa pun.</p>
+        <button class="btn-primary" @click="goToKatalog">Cari Buku</button>
+      </div>
+
+      <div v-else class="table-wrap">
+        <table class="tabel">
+          <thead>
+            <tr>
+              <th>Judul Buku</th>
+              <th>Kategori</th>
+              <th>Tanggal Pinjam</th>
+              <th>Jatuh Tempo</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in pinjamanAktif" :key="item.id">
+              <td>
+                <div class="book-title">{{ item.judul }}</div>
+                <div v-if="item.penulis" class="book-author">{{ item.penulis }}</div>
+              </td>
+              <td>
+                <span v-if="item.kategori && item.kategori !== '-'" class="kategori-badge">
+                  {{ item.kategori }}
+                </span>
+                <span v-else>—</span>
+              </td>
+              <td>{{ formatTanggal(item.tanggalPinjam) }}</td>
+              <td>
+                <span :class="{ 'due-warning': isAlmostDue(item.jatuhTempo) }">
+                  {{ formatTanggal(item.jatuhTempo) }}
+                </span>
+              </td>
+              <td>
+                <button class="btn-return" @click="kembalikan(item)">Kembalikan</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</template>
+
 <style scoped>
-.content {
+.page {
   padding: 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
 }
 
 .welcome-banner {
   background: linear-gradient(135deg, #1e40af, #3b82f6);
   border-radius: 16px;
-  padding: 28px 32px;
+  padding: 22px 24px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: white;
+  color: #fff;
+  margin-bottom: 16px;
 }
 
 .welcome-text h1 {
-  margin: 0 0 6px;
-  font-size: 1.6rem;
+  margin: 0 0 4px;
+  font-size: 1.45rem;
 }
 
 .welcome-text p {
-  margin: 0 0 4px;
+  margin: 0;
   opacity: 0.9;
+  font-size: 13px;
 }
 
 .welcome-desc {
-  margin: 12px 0 20px !important;
+  margin: 10px 0 16px !important;
   max-width: 420px;
   line-height: 1.5;
   opacity: 0.85 !important;
 }
 
+.banner-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .btn-banner {
-  background: white;
+  background: #fff;
   color: #1e40af;
   border: none;
-  padding: 10px 20px;
+  padding: 8px 14px;
   border-radius: 8px;
   font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-banner-outline {
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -248,97 +288,126 @@ function goToKatalog() {
   opacity: 0.9;
 }
 
-.stats {
+.stats-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
+  gap: 14px;
+  margin-bottom: 16px;
 }
 
 .stat-card {
-  background: white;
-  border-radius: 14px;
-  padding: 20px;
+  background: #fff;
+  border-radius: 16px;
+  padding: 16px 18px;
   display: flex;
   align-items: center;
-  gap: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
 }
 
 .stat-icon {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
-.stat-icon.blue { background: #dbeafe; color: #1e40af; }
+.stat-icon.blue { background: #dbeafe; color: #2563eb; }
 .stat-icon.orange { background: #ffedd5; color: #c2410c; }
 .stat-icon.green { background: #dcfce7; color: #15803d; }
 
 .stat-label {
-  margin: 0;
-  font-size: 0.85rem;
+  font-size: 13px;
   color: #64748b;
 }
 
 .stat-value {
-  margin: 4px 0 0;
-  font-size: 1.5rem;
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.table-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 18px 20px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+.card-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.card-toolbar h2 {
+  margin: 0;
+  font-size: 16px;
+  color: #0f172a;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: #4f46e5;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.tabel {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 680px;
+}
+
+.tabel th {
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  font-weight: 600;
+  padding: 12px 10px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.tabel td {
+  padding: 14px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13px;
+  color: #334155;
+  vertical-align: middle;
+}
+
+.book-title {
   font-weight: 700;
   color: #0f172a;
 }
 
-.section-card {
-  background: white;
-  border-radius: 14px;
-  padding: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-.section-header h2 {
-  margin: 0 0 20px;
-  font-size: 1.15rem;
-}
-
-.table-wrapper {
-  overflow-x: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th {
-  text-align: left;
-  padding: 12px 16px;
-  font-size: 0.8rem;
-  text-transform: uppercase;
+.book-author {
+  font-size: 12px;
   color: #64748b;
-  border-bottom: 1px solid #e2e8f0;
+  margin-top: 2px;
 }
 
-td {
-  padding: 14px 16px;
-  border-bottom: 1px solid #f1f5f9;
-  font-size: 0.95rem;
-  color: #334155;
-}
-
-.book-title {
-  font-weight: 600;
-  color: #0f172a;
-}
-
-.badge {
+.kategori-badge {
   display: inline-block;
-  padding: 4px 10px;
-  background: #dbeafe;
-  color: #1e40af;
-  border-radius: 20px;
-  font-size: 0.8rem;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-weight: 600;
 }
 
 .due-warning {
@@ -348,31 +417,36 @@ td {
 
 .btn-return {
   background: #ef4444;
-  color: white;
+  color: #fff;
   border: none;
-  padding: 7px 14px;
-  border-radius: 7px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 12px;
   cursor: pointer;
 }
 
 .empty-state {
   text-align: center;
-  padding: 40px 20px;
+  padding: 36px 16px;
   color: #64748b;
+}
+
+.empty-state.error {
+  color: #dc2626;
 }
 
 .btn-primary {
   margin-top: 12px;
-  background: #2563eb;
-  color: white;
+  background: #4f46e5;
+  color: #fff;
   border: none;
-  padding: 10px 20px;
+  padding: 10px 18px;
   border-radius: 8px;
   cursor: pointer;
 }
 
-@media (max-width: 900px) {
-  .stats {
+@media (max-width: 800px) {
+  .stats-row {
     grid-template-columns: 1fr;
   }
   .welcome-illustration {

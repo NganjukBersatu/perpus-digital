@@ -3,8 +3,8 @@ const router = express.Router()
 const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken')
 const { db } = require('../db/client')
-const { adminAkun } = require('../db/schema')
-const { eq } = require('drizzle-orm')
+const { adminAkun, anggota } = require('../db/schema')
+const { eq, and } = require('drizzle-orm')
 
 const JWT_SECRET = process.env.JWT_SECRET || 'ganti_dengan_secret_yang_acak_dan_rahasia'
 
@@ -42,6 +42,51 @@ router.post('/login', async (req, res) => {
     nipNik: akun.nipNik,
   },
 })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Gagal login' })
+  }
+})
+
+// POST login guru
+router.post('/guru/login', async (req, res) => {
+  try {
+    const { nip, password } = req.body
+    if (!nip || !password) {
+      return res.status(400).json({ error: 'NIP dan password wajib diisi' })
+    }
+
+    const [guru] = await db
+      .select()
+      .from(anggota)
+      .where(and(eq(anggota.nip, nip), eq(anggota.peran, 'guru')))
+
+    if (!guru) {
+      return res.status(401).json({ error: 'NIP atau password salah' })
+    }
+
+    if (!guru.password) {
+      return res.status(401).json({ error: 'Akun belum memiliki password, hubungi admin' })
+    }
+
+    const cocok = await bcrypt.compare(password, guru.password)
+    if (!cocok) {
+      return res.status(401).json({ error: 'NIP atau password salah' })
+    }
+
+    const token = jwt.sign({ id: guru.id, nip: guru.nip, role: 'guru' }, JWT_SECRET, { expiresIn: '8h' })
+
+    res.json({
+      token,
+      role: 'guru',
+      nama: guru.nama,
+      guru: {
+        id: guru.id,
+        nip: guru.nip,
+        nama: guru.nama,
+        mapel: guru.mapel,
+      },
+    })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Gagal login' })

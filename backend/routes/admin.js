@@ -19,15 +19,53 @@ router.get('/profil', wajibLogin, async (req, res) => {
   }
 })
 
-// PUT update data profil (nama, email, telepon, jabatan, NIP/NIK)
+// PUT update data profil (termasuk username)
 router.put('/profil', wajibLogin, async (req, res) => {
   try {
-    const { namaLengkap, email, telepon, jabatan, nipNik } = req.body
+    const { namaLengkap, email, telepon, jabatan, nipNik, username } = req.body
+
+    if (!namaLengkap || !String(namaLengkap).trim()) {
+      return res.status(400).json({ error: 'Nama wajib diisi' })
+    }
+
+    const usernameBaru = String(username || '').trim()
+    if (!usernameBaru) {
+      return res.status(400).json({ error: 'Username wajib diisi' })
+    }
+
+    const [akunSekarang] = await db
+      .select()
+      .from(adminAkun)
+      .where(eq(adminAkun.id, req.admin.id))
+
+    if (!akunSekarang) {
+      return res.status(404).json({ error: 'Akun tidak ditemukan' })
+    }
+
+    if (usernameBaru !== akunSekarang.username) {
+      const [sudahAda] = await db
+        .select()
+        .from(adminAkun)
+        .where(eq(adminAkun.username, usernameBaru))
+
+      if (sudahAda) {
+        return res.status(409).json({ error: 'Username sudah dipakai' })
+      }
+    }
+
     const [updated] = await db
       .update(adminAkun)
-      .set({ namaLengkap, email, telepon, jabatan, nipNik })
+      .set({
+        namaLengkap: String(namaLengkap).trim(),
+        username: usernameBaru,
+        email,
+        telepon,
+        jabatan,
+        nipNik,
+      })
       .where(eq(adminAkun.id, req.admin.id))
       .returning()
+
     const { passwordHash, ...tanpaPassword } = updated
     res.json(tanpaPassword)
   } catch (err) {

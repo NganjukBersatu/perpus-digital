@@ -1,4 +1,4 @@
-const { pgTable, serial, varchar, integer, timestamp, date, text, jsonb } = require("drizzle-orm/pg-core")
+const { pgTable, serial, varchar, integer, timestamp, date, text, jsonb, boolean } = require("drizzle-orm/pg-core")
 
 const adminAkun = pgTable('admin_akun', {
   id: serial('id').primaryKey(),
@@ -28,7 +28,6 @@ const buku = pgTable("buku", {
   penerbit: varchar("penerbit", { length: 255 }),
   isbn: varchar("isbn", { length: 20 }),
   kategoriId: integer("kategori_id").references(() => kategori.id),
-  stok: integer("stok").default(0),
   tersedia: integer("tersedia").default(0),
   lokasi: varchar("lokasi", { length: 50 }),
   status: varchar("status", { length: 20 }).default("Tersedia"),
@@ -77,8 +76,12 @@ const peminjaman = pgTable("peminjaman", {
   tanggalKembali: date("tanggal_kembali"),
   tanggalDikembalikan: date("tanggal_dikembalikan"),
   denda: integer("denda").default(0),
-  statusDenda: varchar("status_denda", { length: 20 }).default("belum_dibayar"), // BARU
-  tanggalBayarDenda: date("tanggal_bayar_denda"), // BARU
+  statusDenda: varchar("status_denda", { length: 20 }).default("belum_dibayar"),
+  tanggalBayarDenda: date("tanggal_bayar_denda"),
+  nominalDendaPerHari: integer("nominal_denda_per_hari").default(0),
+  dendaMaksimal: integer("denda_maksimal").default(0),
+  dendaGuruAktif: boolean("denda_guru_aktif").default(false),
+  masaTenggang: integer("masa_tenggang").default(0),
 })
 
 const kategori = pgTable("kategori", {

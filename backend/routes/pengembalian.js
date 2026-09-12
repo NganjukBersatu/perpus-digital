@@ -2,9 +2,8 @@ const express = require('express')
 const router = express.Router()
 const db = require('../db')
 const { peminjaman, eksemplarBuku, anggota, buku } = require('../db/schema')
+const { ambilPengaturanDenda, hitungDenda } = require('../utils/hitungDenda')
 const { eq, and, isNotNull, isNull, gte, lte, or, ilike, sql } = require('drizzle-orm')
-
-const DENDA_PER_HARI = 2000 // Rp1.000/hari, sesuaikan kalau beda
 
 // GET /api/pengembalian?search=&status=&start=&end=&page=&limit=
 router.get('/', async (req, res) => {
@@ -96,6 +95,13 @@ router.get('/summary', async (req, res) => {
         hariIni: sql`count(*) filter (where ${peminjaman.tanggalDikembalikan} = ${today})`.mapWith(Number),
         tepatWaktu: sql`count(*) filter (where ${peminjaman.tanggalDikembalikan} <= ${peminjaman.tanggalKembali})`.mapWith(Number),
         terlambat: sql`count(*) filter (where ${peminjaman.tanggalDikembalikan} > ${peminjaman.tanggalKembali})`.mapWith(Number),
+        // ============================================================
+        // [DIHAPUS] Baris ini menyebabkan error SQL karena kolom
+        // nominal_denda_per_hari & denda_maksimal bukan aggregate,
+        // tapi tidak ada di GROUP BY. Summary tidak butuh kolom ini.
+        // ============================================================
+        // nominalDendaPerHari: peminjaman.nominalDendaPerHari,
+        // dendaMaksimal: peminjaman.dendaMaksimal,
       })
       .from(peminjaman)
       .where(isNotNull(peminjaman.tanggalDikembalikan))
@@ -113,14 +119,46 @@ router.patch('/:id', async (req, res) => {
     const { id } = req.params
     const today = new Date().toISOString().slice(0, 10)
 
-    const [row] = await db.select().from(peminjaman).where(eq(peminjaman.id, id))
+    // ============================================================
+    // [DIUBAH] Tambahkan snapshot denda yang tersimpan di baris
+    // peminjaman, supaya perhitungan denda pakai nominal saat pinjam.
+    // ============================================================
+    const [row] = await db
+      .select({
+        id: peminjaman.id,
+        tanggalKembali: peminjaman.tanggalKembali,
+        eksemplarId: peminjaman.eksemplarId,
+        peran: anggota.peran,
+        nominalDendaPerHari: peminjaman.nominalDendaPerHari,
+        dendaMaksimal: peminjaman.dendaMaksimal,
+        dendaGuruAktif: peminjaman.dendaGuruAktif,
+        masaTenggang: peminjaman.masaTenggang,
+      })
+      .from(peminjaman)
+      .innerJoin(anggota, eq(peminjaman.anggotaId, anggota.id))
+      .where(eq(peminjaman.id, id))
+
     if (!row) return res.status(404).json({ message: 'Data tidak ditemukan' })
 
-    const telatHari = Math.max(
-      0,
-      Math.round((new Date(today) - new Date(row.tanggalKembali)) / 86400000)
-    )
-    const denda = telatHari * DENDA_PER_HARI
+    // ============================================================
+    // [DIUBAH] Pakai snapshot dari baris peminjaman, bukan pengaturan
+    // real-time. Termasuk dendaGuruAktif supaya aturan guru juga
+    // mengikuti pengaturan saat peminjaman.
+    // ============================================================
+    const pengaturanDenda = {
+      aktif: row.nominalDendaPerHari > 0,
+      nominalPerHari: row.nominalDendaPerHari,
+      dendaMaksimal: row.dendaMaksimal,
+      dendaGuruAktif: row.dendaGuruAktif ?? false,
+      masaTenggang: row.masaTenggang ?? 0,
+    }
+
+    const { denda } = hitungDenda({
+      tanggalKembali: row.tanggalKembali,
+      tanggalDikembalikan: today,
+      peran: row.peran,
+      pengaturanDenda,
+    })
 
     await db
       .update(peminjaman)

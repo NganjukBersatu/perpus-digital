@@ -31,7 +31,7 @@ const dataTerlambat = ref([])
 const loadingTepatWaktu = ref(false)
 const loadingTerlambat = ref(false)
 
-const tarifDendaPerHari = 10000 /* denda menyesuaikan */ 
+const tarifDendaPerHari = 0
 
 const fetchSummary = async () => {
   const res = await axios.get('http://localhost:3000/api/pengembalian/summary')

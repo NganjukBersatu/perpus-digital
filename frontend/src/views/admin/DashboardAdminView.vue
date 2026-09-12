@@ -176,6 +176,8 @@ const peminjamanBelumKembaliFiltered = computed(() => {
 })
 
 const pengingat = ref([])
+const totalBelumDikembalikan = ref(0)
+const tampilkanTotalBelumDikembalikan = ref(false)
 
 async function fetchTotalDenda() {
   try {

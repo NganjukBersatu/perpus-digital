@@ -1,8 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import { logoutUser } from '@/utils/auth'
-import { getAdmin } from '@/utils/auth'
+import { logoutUser, getAdmin, authHeaders } from '@/utils/auth'
 
 
 const router = useRouter()
@@ -10,12 +9,35 @@ const router = useRouter()
 const dataLogin = getAdmin()
 const admin = ref({
   nama: dataLogin?.namaLengkap || 'Admin Perpustakaan',
-  role: dataLogin?.jabatan || 'Pustakawan'
+  role: dataLogin?.jabatan || 'Pustakawan',
+  username: dataLogin?.username || '',
 })
 
+function terapkanProfil(data = {}) {
+  if (data.namaLengkap) admin.value.nama = data.namaLengkap
+  if (data.jabatan !== undefined) admin.value.role = data.jabatan
+  if (data.username !== undefined) admin.value.username = data.username
+}
+
+function onProfilUpdated(e) {
+  terapkanProfil(e.detail || {})
+}
+
+async function sinkronkanDariServer() {
+  try {
+    const res = await fetch('http://localhost:3000/api/admin/profil', {
+      headers: { ...authHeaders() },
+    })
+    if (!res.ok) return
+    terapkanProfil(await res.json())
+  } catch (err) {
+    console.error(err)
+  }
+}
+
 const notifikasi = ref({
-  terlambat: { jumlah: 0, waktu: null },
-  jatuhTempoHariIni: { jumlah: 0, waktu: null },
+  terlambat: { aktif: true, jumlah: 0, waktu: null },
+  jatuhTempoHariIni: { aktif: true, jumlah: 0, waktu: null },
 })
 const notifOpen = ref(false)
 
@@ -64,10 +86,12 @@ async function fetchNotifikasi() {
 
       notifikasi.value = {
         terlambat: {
+          aktif: data.terlambat.aktif,
           jumlah: data.terlambat.jumlah,
           waktu: waktuTersimpan.terlambat || sekarang,
         },
         jatuhTempoHariIni: {
+          aktif: data.jatuhTempoHariIni.aktif,
           jumlah: data.jatuhTempoHariIni.jumlah,
           waktu: waktuTersimpan.jatuhTempoHariIni || sekarang,
         },
@@ -100,8 +124,8 @@ async function fetchNotifikasi() {
     }
 
     notifikasi.value = {
-      terlambat: { jumlah: data.terlambat.jumlah, waktu: waktuTerlambat },
-      jatuhTempoHariIni: { jumlah: data.jatuhTempoHariIni.jumlah, waktu: waktuJatuhTempo },
+      terlambat: { aktif: data.terlambat.aktif, jumlah: data.terlambat.jumlah, waktu: waktuTerlambat },
+      jatuhTempoHariIni: { aktif: data.jatuhTempoHariIni.aktif, jumlah: data.jatuhTempoHariIni.jumlah, waktu: waktuJatuhTempo },
     }
 
     simpanWaktu({ terlambat: waktuTerlambat, jatuhTempoHariIni: waktuJatuhTempo })
@@ -136,6 +160,8 @@ onMounted(() => {
   fetchNotifikasi()
   window.addEventListener('click', closeNotifOutside)
   window.addEventListener('scroll', closeNotifOnScroll, { capture: true })
+  sinkronkanDariServer()
+  window.addEventListener('admin-profil-updated', onProfilUpdated)
 
   // Polling: cek notifikasi setiap 30 detik tanpa perlu refresh halaman
   notifInterval = setInterval(fetchNotifikasi, 30000)
@@ -155,6 +181,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('scroll', closeNotifOnScroll, { capture: true })
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   if (notifInterval) clearInterval(notifInterval)
+  window.removeEventListener('admin-profil-updated', onProfilUpdated)
 })
 
 const sidebarOpen = ref(true)
@@ -513,34 +540,38 @@ function tutupSearchDelay() {
             </button>
 
             <div v-if="notifOpen" class="notif-dropdown">
-              <div class="notif-item">
-                <div class="notif-item-title">
-                  <svg class="icon notif-icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                  </svg>
-                  Buku Terlambat
-                </div>
-                <div class="notif-item-body">
-                  {{ notifikasi.terlambat.jumlah }} buku belum dikembalikan melebihi jatuh tempo
-                </div>
-                <div class="notif-item-time">{{ formatWaktu(notifikasi.terlambat.waktu) }}</div>
-              </div>
+  <div class="notif-item" v-if="notifikasi.terlambat.aktif">
+    <div class="notif-item-title">
+      <svg class="icon notif-icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+      </svg>
+      Buku Terlambat
+    </div>
+    <div class="notif-item-body">
+      {{ notifikasi.terlambat.jumlah }} buku belum dikembalikan melebihi jatuh tempo
+    </div>
+    <div class="notif-item-time">{{ formatWaktu(notifikasi.terlambat.waktu) }}</div>
+  </div>
 
-              <div class="notif-item">
-                <div class="notif-item-title">
-                  <svg class="icon notif-icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" />
-                  </svg>
-                  Jatuh Tempo Hari Ini
-                </div>
-              <div class="notif-item-body">
-                {{ notifikasi.jatuhTempoHariIni.jumlah }} buku harus dikembalikan hari ini
-              </div>
-              <div class="notif-item-time">{{ formatWaktu(notifikasi.jatuhTempoHariIni.waktu) }}</div>
-              </div>
-            </div>
+  <div class="notif-item" v-if="notifikasi.jatuhTempoHariIni.aktif">
+    <div class="notif-item-title">
+      <svg class="icon notif-icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
+      </svg>
+      Jatuh Tempo Hari Ini
+    </div>
+    <div class="notif-item-body">
+      {{ notifikasi.jatuhTempoHariIni.jumlah }} buku harus dikembalikan hari ini
+    </div>
+    <div class="notif-item-time">{{ formatWaktu(notifikasi.jatuhTempoHariIni.waktu) }}</div>
+  </div>
+
+  <p v-if="!notifikasi.terlambat.aktif && !notifikasi.jatuhTempoHariIni.aktif" class="notif-item-body">
+    Tidak ada notifikasi aktif.
+  </p>
+</div>
           </div>
           <div class="avatar-sm avatar-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

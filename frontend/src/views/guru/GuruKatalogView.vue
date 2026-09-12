@@ -1,110 +1,182 @@
 <script setup>
-import { ref, computed } from 'vue'
-
+import { ref, computed, onMounted, watch } from 'vue'
 
 const keyword = ref('')
 const kategoriAktif = ref('Semua')
+const sortBy = ref('terbaru')
+const viewMode = ref('grid')
+const loading = ref(false)
+const error = ref('')
 
-const kategoriList = ['Semua', 'Teknologi', 'Pendidikan', 'Fiksi', 'Sains', 'Anak', 'Sejarah', 'Bahasa']
+const kategoriList = ref(['Semua'])
+const bukuList = ref([])
 
-const statistik = [
-  { label: 'Total Koleksi', value: '1.250', satuan: 'Buku', warna: '#7c3aed', bg: '#f3e8ff', icon: 'book' },
-  { label: 'Tersedia', value: '980', satuan: 'Buku', warna: '#16a34a', bg: '#dcfce7', icon: 'check' },
-  { label: 'Dipinjam', value: '210', satuan: 'Buku', warna: '#d97706', bg: '#fef3c7', icon: 'clock' },
-  { label: 'Favorit Saya', value: '8', satuan: 'Buku', warna: '#db2777', bg: '#fce7f3', icon: 'heart' }
-]
+const coverColors = {
+  Teknologi: '#2563eb',
+  Pendidikan: '#f59e0b',
+  Fiksi: '#ec4899',
+  Sains: '#7c3aed',
+  Anak: '#10b981',
+  Sejarah: '#b45309',
+  Bahasa: '#0f766e'
+}
 
-const bukuList = ref([
-  { judul: 'Dasar Pemrograman Web', penulis: 'Abdul Kadir', kategori: 'Teknologi', rating: 4.5, jumlahRating: 128, stok: 5, cover: '#2563eb', favorit: false },
-  { judul: 'Strategi Pembelajaran Inovatif', penulis: 'Dr. H. Syaiful Bahri', kategori: 'Pendidikan', rating: 4.6, jumlahRating: 96, stok: 3, cover: '#f59e0b', favorit: true },
-  { judul: 'Manajemen Kelas Efektif', penulis: 'Drs. Mulyasa', kategori: 'Pendidikan', rating: 4.4, jumlahRating: 74, stok: 0, cover: '#10b981', favorit: false },
-  { judul: 'Algoritma & Pemrograman dengan Python', penulis: 'Munir', kategori: 'Teknologi', rating: 4.7, jumlahRating: 150, stok: 7, cover: '#0f766e', favorit: false },
-  { judul: 'Database System Concepts', penulis: 'Abraham Silberschatz', kategori: 'Teknologi', rating: 4.3, jumlahRating: 61, stok: 2, cover: '#b45309', favorit: false },
-  { judul: 'Kecerdasan Artifisial', penulis: 'Suyanto', kategori: 'Sains', rating: 4.5, jumlahRating: 84, stok: 4, cover: '#7c3aed', favorit: true }
-])
+function getCoverColor(kategori) {
+  return coverColors[kategori] || '#4f46e5'
+}
+
+async function fetchKategori() {
+  try {
+    const res = await fetch('/api/kategori')
+    if (!res.ok) throw new Error('Gagal mengambil kategori')
+    const data = await res.json()
+    kategoriList.value = ['Semua', ...data.map(k => k.nama)]
+  } catch (err) {
+    console.error(err)
+    kategoriList.value = ['Semua', 'Teknologi', 'Pendidikan', 'Fiksi', 'Sains', 'Anak', 'Sejarah', 'Bahasa']
+  }
+}
+
+async function fetchBuku() {
+  loading.value = true
+  error.value = ''
+  try {
+    const params = new URLSearchParams()
+    if (keyword.value.trim()) params.append('q', keyword.value.trim())
+    if (kategoriAktif.value !== 'Semua') params.append('kategoriNama', kategoriAktif.value)
+
+    const res = await fetch(`/api/buku?${params.toString()}`)
+    if (!res.ok) throw new Error('Gagal mengambil data buku')
+
+    const data = await res.json()
+
+    bukuList.value = data.map((b) => ({
+      id: b.id,
+      judul: b.judul,
+      penulis: b.penulis,
+      kategori: b.kategori || 'Lainnya',
+      rating: 4.5,
+      jumlahRating: Math.floor(Math.random() * 100) + 20,
+      stok: b.tersedia ?? b.stok ?? 0,
+      cover: getCoverColor(b.kategori),
+      favorit: false
+    }))
+  } catch (err) {
+    console.error(err)
+    error.value = 'Gagal memuat data katalog.'
+    bukuList.value = []
+  } finally {
+    loading.value = false
+  }
+}
 
 const bukuFiltered = computed(() => {
-  return bukuList.value.filter(b => {
-    const cocokKategori = kategoriAktif.value === 'Semua' || b.kategori === kategoriAktif.value
-    const kata = keyword.value.toLowerCase()
-    const cocokKeyword =
+  let result = [...bukuList.value]
+
+  const kata = keyword.value.toLowerCase()
+  if (kata) {
+    result = result.filter(b =>
       b.judul.toLowerCase().includes(kata) ||
       b.penulis.toLowerCase().includes(kata)
-    return cocokKategori && cocokKeyword
-  })
+    )
+  }
+
+  if (kategoriAktif.value !== 'Semua') {
+    result = result.filter(b => b.kategori === kategoriAktif.value)
+  }
+
+  if (sortBy.value === 'judul') {
+    result.sort((a, b) => a.judul.localeCompare(b.judul))
+  } else if (sortBy.value === 'penulis') {
+    result.sort((a, b) => a.penulis.localeCompare(b.penulis))
+  }
+
+  return result
 })
 
 function toggleFavorit(buku) {
   buku.favorit = !buku.favorit
 }
+
+onMounted(async () => {
+  await fetchKategori()
+  await fetchBuku()
+})
+
+watch(kategoriAktif, () => fetchBuku())
+
+let searchTimeout = null
+watch(keyword, () => {
+  clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(() => fetchBuku(), 400)
+})
 </script>
 
 <template>
   <div class="katalog-page">
-    <!-- HEADER + STATISTIK -->
-    <div class="page-top">
-      <div class="page-header">
-        <h1>
-          <span class="title-icon">♥</span>
-          Katalog Buku
-        </h1>
+    <!-- HEADER -->
+    <div class="page-header">
+      <div>
+        <h1>Katalog Buku</h1>
         <p class="muted">Temukan berbagai koleksi buku yang tersedia di perpustakaan.</p>
       </div>
 
-      <div class="stats-row">
-        <div class="stat-mini" v-for="s in statistik" :key="s.label">
-          <div class="stat-icon" :style="{ background: s.bg, color: s.warna }">
-            <span v-if="s.icon === 'book'">📘</span>
-            <span v-else-if="s.icon === 'check'">✓</span>
-            <span v-else-if="s.icon === 'clock'">⏱</span>
-            <span v-else>♥</span>
-          </div>
-          <div>
-            <div class="stat-label">{{ s.label }}</div>
-            <div class="stat-value" :style="{ color: s.warna }">{{ s.value }}</div>
-            <div class="stat-satuan">{{ s.satuan }}</div>
-          </div>
-        </div>
+      <div class="view-toggle">
+        <button
+          class="toggle-btn"
+          :class="{ active: viewMode === 'grid' }"
+          @click="viewMode = 'grid'"
+        >
+          Grid
+        </button>
+        <button
+          class="toggle-btn"
+          :class="{ active: viewMode === 'list' }"
+          @click="viewMode = 'list'"
+        >
+          List
+        </button>
       </div>
     </div>
 
-    <!-- PENCARIAN -->
-    <div class="search-box">
-      <span class="search-icon">⌕</span>
-      <input v-model="keyword" type="text" placeholder="Cari judul, penulis, atau ISBN..." />
+    <!-- SEARCH + FILTER -->
+    <div class="filter-bar">
+      <div class="search-box">
+        <span class="search-icon">⌕</span>
+        <input
+          v-model="keyword"
+          type="text"
+          placeholder="Cari judul, penulis, atau ISBN..."
+        />
+      </div>
+
+      <select v-model="kategoriAktif" class="filter-select">
+        <option v-for="k in kategoriList" :key="k" :value="k">
+          {{ k }}
+        </option>
+      </select>
+
+      <select v-model="sortBy" class="filter-select">
+        <option value="terbaru">Terbaru ditambahkan</option>
+        <option value="judul">Judul A-Z</option>
+        <option value="penulis">Penulis A-Z</option>
+      </select>
     </div>
 
-    <!-- KATEGORI -->
-    <div class="kategori-list">
-      <button
-        v-for="k in kategoriList"
-        :key="k"
-        class="kategori-chip"
-        :class="{ active: kategoriAktif === k }"
-        @click="kategoriAktif = k"
-      >
-        {{ k }}
-      </button>
-    </div>
+    <!-- LOADING / ERROR -->
+    <div v-if="loading" class="empty-state">Memuat katalog...</div>
+    <div v-else-if="error" class="empty-state" style="color:#dc2626">{{ error }}</div>
 
-    <!-- GRID BUKU -->
-    <div class="buku-grid">
-      <div class="buku-card" v-for="b in bukuFiltered" :key="b.judul">
+    <!-- ==================== MODE GRID ==================== -->
+    <div v-else-if="viewMode === 'grid'" class="buku-grid">
+      <div class="buku-card" v-for="b in bukuFiltered" :key="b.id || b.judul">
         <div class="buku-cover" :style="{ background: b.cover }">
           <div class="cover-title">{{ b.judul }}</div>
-          <button
-            class="btn-fav"
-            :class="{ on: b.favorit }"
-            @click="toggleFavorit(b)"
-          >
-            ♥
-          </button>
         </div>
 
         <div class="buku-info">
           <div class="buku-judul">{{ b.judul }}</div>
           <div class="buku-penulis">{{ b.penulis }}</div>
-          <div class="buku-rating">★ {{ b.rating }} ({{ b.jumlahRating }})</div>
           <div class="buku-kategori">{{ b.kategori }}</div>
           <div class="buku-stok" :class="{ habis: b.stok === 0 }">
             {{ b.stok > 0 ? `Tersedia (${b.stok})` : 'Stok habis' }}
@@ -116,6 +188,35 @@ function toggleFavorit(buku) {
         Tidak ada buku yang cocok dengan pencarian.
       </p>
     </div>
+
+<!-- ==================== MODE LIST ==================== -->
+<div v-else class="buku-list">
+  <div class="list-item" v-for="b in bukuFiltered" :key="b.id || b.judul">
+    <!-- Cover kiri -->
+    <div class="list-cover" :style="{ background: b.cover }">
+      <div class="list-cover-title">{{ b.judul }}</div>
+    </div>
+
+    <!-- Info tengah -->
+    <div class="list-info">
+      <div class="list-judul">{{ b.judul }}</div>
+      <div class="list-penulis">{{ b.penulis }}</div>
+      <div class="list-meta">
+        <span class="buku-kategori">{{ b.kategori }}</span>
+      </div>
+
+      <div class="list-actions">
+        <button class="btn-pinjam" :disabled="b.stok === 0">
+          {{ b.stok > 0 ? 'Pinjam Buku' : 'Stok Habis' }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <p v-if="bukuFiltered.length === 0" class="empty-state">
+    Tidak ada buku yang cocok dengan pencarian.
+  </p>
+</div>
   </div>
 </template>
 
@@ -124,25 +225,18 @@ function toggleFavorit(buku) {
   padding: 24px;
 }
 
-.page-top {
+/* ===== HEADER ===== */
+.page-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 20px;
-  flex-wrap: wrap;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
+  gap: 16px;
 }
 
 .page-header h1 {
   margin: 0;
   font-size: 26px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.title-icon {
-  color: #7c3aed;
 }
 
 .muted {
@@ -151,58 +245,52 @@ function toggleFavorit(buku) {
   font-size: 14px;
 }
 
-.stats-row {
+/* Tombol Grid / List (mirip Favorit) */
+.view-toggle {
   display: flex;
-  gap: 10px;
+  gap: 8px;
+}
+
+.toggle-btn {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #374151;
+  transition: all 0.15s ease;
+}
+
+.toggle-btn.active {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+}
+
+.toggle-btn:hover:not(.active) {
+  background: #f9fafb;
+}
+
+/* ===== FILTER BAR ===== */
+.filter-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
   flex-wrap: wrap;
 }
 
-.stat-mini {
-  background: #fff;
-  border-radius: 14px;
-  padding: 10px 14px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 140px;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
-}
-
-.stat-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-}
-
-.stat-label {
-  font-size: 11px;
-  color: #6b7280;
-}
-
-.stat-value {
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.1;
-}
-
-.stat-satuan {
-  font-size: 11px;
-  color: #9ca3af;
-}
-
 .search-box {
+  flex: 1;
+  min-width: 220px;
   display: flex;
   align-items: center;
   gap: 8px;
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 999px;
-  padding: 12px 16px;
-  margin-bottom: 16px;
+  padding: 10px 16px;
 }
 
 .search-icon {
@@ -214,30 +302,21 @@ function toggleFavorit(buku) {
   outline: none;
   width: 100%;
   font-size: 14px;
+  background: transparent;
 }
 
-.kategori-list {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 20px;
-}
-
-.kategori-chip {
-  border: none;
-  background: #f3f4f6;
-  padding: 8px 16px;
+.filter-select {
+  border: 1px solid #e5e7eb;
   border-radius: 999px;
+  padding: 10px 16px;
   font-size: 13px;
+  background: #fff;
   color: #374151;
   cursor: pointer;
+  min-width: 150px;
 }
 
-.kategori-chip.active {
-  background: #4f46e5;
-  color: #fff;
-}
-
+/* ===== GRID ===== */
 .buku-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -274,9 +353,10 @@ function toggleFavorit(buku) {
   height: 28px;
   border: none;
   border-radius: 50%;
-  background: rgba(255,255,255,0.85);
+  background: rgba(255, 255, 255, 0.85);
   color: #d1d5db;
   cursor: pointer;
+  font-size: 14px;
 }
 
 .btn-fav.on {
@@ -324,16 +404,148 @@ function toggleFavorit(buku) {
   color: #dc2626;
 }
 
-.empty-state {
-  grid-column: 1 / -1;
-  text-align: center;
-  color: #6b7280;
-  padding: 40px 0;
+/* ===== LIST MODE (mirip Favorit) ===== */
+.buku-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-@media (max-width: 900px) {
-  .page-top {
+.list-item {
+  background: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.05);
+  transition: box-shadow 0.15s ease;
+}
+
+.list-item:hover {
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+.list-cover {
+  width: 140px;
+  min-height: 160px;
+  flex-shrink: 0;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  padding: 16px;
+  color: white;
+}
+
+.list-cover-title {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.btn-fav-cover {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  color: #d1d5db;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-fav-cover.on {
+  color: #db2777;
+}
+
+.list-info {
+  flex: 1;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.list-judul {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.list-penulis {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.list-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.list-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-pinjam {
+  background: #4f46e5;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn-pinjam:disabled {
+  background: #e5e7eb;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.btn-fav-outline {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #d1d5db;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-fav-outline.on {
+  color: #db2777;
+  border-color: #f9a8d4;
+  background: #fdf2f8;
+}
+
+@media (max-width: 700px) {
+  .page-header {
     flex-direction: column;
+  }
+  .filter-bar {
+    flex-direction: column;
+  }
+  .filter-select {
+    width: 100%;
+  }
+  .list-item {
+    flex-wrap: wrap;
   }
 }
 </style>

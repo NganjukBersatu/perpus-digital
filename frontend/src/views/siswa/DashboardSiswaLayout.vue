@@ -105,7 +105,7 @@ function logout() {
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
               <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
-            <span class="nav-label">Dashboard</span>
+            <span class="nav-label">Beranda</span>
           </span>
         </router-link>
 
@@ -119,7 +119,7 @@ function logout() {
           </span>
         </router-link>
 
-        <router-link to="/siswa/riwayat" class="nav-item" active-class="active">
+        <router-link to="/siswa/peminjaman" class="nav-item" active-class="active">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -127,11 +127,21 @@ function logout() {
               <line x1="16" y1="13" x2="8" y2="13" />
               <line x1="16" y1="17" x2="8" y2="17" />
             </svg>
-            <span class="nav-label">Riwayat Pinjam</span>
+            <span class="nav-label">Peminjaman Saya</span>
           </span>
         </router-link>
 
-        <router-link to="/siswa/profil" class="nav-item" active-class="active">
+        <router-link to="/siswa/riwayat" class="nav-item" active-class="active">
+          <span class="nav-item-left">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                 <circle cx="12" cy="12" r="10" />
+                 <polyline points="12 6 12 12 16 14" />
+            </svg>
+            <span class="nav-label">Riwayat Peminjaman</span>
+          </span>
+        </router-link>
+
+          <router-link to="/siswa/profil" class="nav-item" active-class="active">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />

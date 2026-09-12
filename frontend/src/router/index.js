@@ -6,7 +6,6 @@ import DashboardSiswaView from '../views/siswa/DashboardSiswaView.vue'
 import DashboardGuruLayout from '../views/guru/DashboardGuruLayout.vue'
 import DashboardGuruView from '../views/guru/DashboardGuruView.vue'
 import GuruKatalogView from '../views/guru/GuruKatalogView.vue'
-import GuruFavoritView from '../views/guru/GuruFavoritView.vue'
 import ScanBukuPage from '../views/admin/ScanBukuPage.vue'
 import DashboardAdminLayout from '../views/admin/DashboardAdminLayout.vue'
 import DashboardAdminView from '../views/admin/DashboardAdminView.vue'
@@ -24,7 +23,10 @@ import LaporanPage from '@/views/admin/LaporanPage.vue'
 import KatalogSiswaPage from '@/views/siswa/KatalogSiswaPage.vue'
 import RiwayatSiswaPage from '@/views/siswa/RiwayatSiswaPage.vue'
 import ProfilSiswaPage from '@/views/siswa/ProfilSiswaPage.vue'
-
+import PeminjamanSiswaPage from '@/views/siswa/PeminjamanSiswaPage.vue'
+import PeminjamanGuruPage from '@/views/guru/PeminjamanGuruPage.vue'
+import RiwayatGuruPage from '@/views/guru/RiwayatGuruPage.vue'
+import ProfilGuruPage from '@/views/guru/ProfilGuruPage.vue'
 
 const ComingSoon = {
   props: {
@@ -60,6 +62,11 @@ const router = createRouter({
           name: 'siswa-katalog',
           component: KatalogSiswaPage,
         },
+         {
+          path: 'peminjaman',
+          name: 'siswa-peminjaman',
+          component: PeminjamanSiswaPage,
+        },
         {
           path: 'riwayat',
           name: 'siswa-riwayat',
@@ -87,46 +94,20 @@ const router = createRouter({
           component: GuruKatalogView
         },
         {
-          path: 'favorit',
-          name: 'guru-favorit',
-          component: GuruFavoritView
+         path: 'peminjaman',
+         name: 'guru-peminjaman',
+         component: PeminjamanGuruPage,
         },
         {
-          path: 'rekomendasi',
-          name: 'guru-rekomendasi',
-          component: ComingSoon,
-          props: { title: 'Rekomendasi' }
+         path: 'riwayat',
+         name: 'guru-riwayat',
+         component: RiwayatGuruPage,
         },
         {
-          path: 'peminjaman-saya',
-          name: 'guru-peminjaman',
-          component: ComingSoon,
-          props: { title: 'Peminjaman Saya' }
-        },
-        {
-          path: 'riwayat',
-          name: 'guru-riwayat',
-          component: ComingSoon,
-          props: { title: 'Riwayat Peminjaman' }
-        },
-        {
-          path: 'pengembalian',
-          name: 'guru-pengembalian',
-          component: ComingSoon,
-          props: { title: 'Pengembalian' }
-        },
-        {
-          path: 'notifikasi',
-          name: 'guru-notifikasi',
-          component: ComingSoon,
-          props: { title: 'Notifikasi' }
-        },
-        {
-          path: 'bantuan',
-          name: 'guru-bantuan',
-          component: ComingSoon,
-          props: { title: 'Bantuan' }
-        }
+         path: 'profil',
+         name: 'guru-profil',
+         component: ProfilGuruPage,
+        }, 
       ]
     },
     {

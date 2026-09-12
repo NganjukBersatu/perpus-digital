@@ -48,8 +48,7 @@ const form = reactive({
     pengingatJatuhTempo: true,
     hariSebelumJatuhTempo: 1,
     notifikasiTerlambat: true,
-    notifikasiDenda: true,
-    tampilkanBannerDashboard: true
+    notifikasiJatuhTempoHariIni: true
   }
 })
 
@@ -116,6 +115,10 @@ async function saveSettings() {
 }
 
 async function resetSection() {
+  if (!confirm('Yakin ingin mengembalikan SEMUA pengaturan (informasi perpustakaan, aturan peminjaman, denda, dan notifikasi) ke nilai default? Perubahan ini langsung tersimpan ke server.')) {
+    return
+  }
+
   form.perpustakaan = {
     namaPerpustakaan: 'Perpustakaan SMK Negeri 1 Kertosono',
     namaSekolah: 'SMK Negeri 1 Kertosono',
@@ -147,8 +150,7 @@ async function resetSection() {
     pengingatJatuhTempo: true,
     hariSebelumJatuhTempo: 1,
     notifikasiTerlambat: true,
-    notifikasiDenda: true,
-    tampilkanBannerDashboard: true
+    notifikasiJatuhTempoHariIni: true
   }
   await saveSettings()
 }
@@ -208,23 +210,23 @@ onMounted(loadSettings)
       <div class="grid-2">
         <label>
           Nama Perpustakaan
-          <input v-model="form.perpustakaan.namaPerpustakaan" type="text" />
+          <input v-model="form.perpustakaan.namaPerpustakaan" type="text" placeholder="Nama Perpustakaan" />
         </label>
         <label>
           Nama Sekolah
-          <input v-model="form.perpustakaan.namaSekolah" type="text" />
+          <input v-model="form.perpustakaan.namaSekolah" type="text" placeholder="Nama Sekolah" />
         </label>
         <label>
           Kepala / Pustakawan
-          <input v-model="form.perpustakaan.kepalaPerpustakaan" type="text" />
+          <input v-model="form.perpustakaan.kepalaPerpustakaan" type="text" placeholder="Nama Kepala / Pustakawan" />
         </label>
         <label>
           Tahun Ajaran
-          <input v-model="form.perpustakaan.tahunAjaran" type="text" />
+          <input v-model="form.perpustakaan.tahunAjaran" type="text" placeholder="Tahun Ajaran" />
         </label>
         <label>
           Telepon
-          <input v-model="form.perpustakaan.telepon" type="text" placeholder="Contoh: 0351-xxxxxx" />
+          <input v-model="form.perpustakaan.telepon" type="text" placeholder="Contoh: 08xxxxxxxxxx" />
         </label>
         <label>
           Email
@@ -323,27 +325,23 @@ onMounted(loadSettings)
       <p class="hint">Pengingat yang tampil di dashboard admin / pustakawan.</p>
 
       <div class="grid-2">
-        <label class="switch-row">
-          Pengingat sebelum jatuh tempo
-          <input v-model="form.notifikasi.pengingatJatuhTempo" type="checkbox" />
-        </label>
-        <label>
-          Hari sebelum jatuh tempo
-          <input v-model.number="form.notifikasi.hariSebelumJatuhTempo" type="number" min="1" />
-        </label>
-        <label class="switch-row">
-          Notifikasi buku terlambat
-          <input v-model="form.notifikasi.notifikasiTerlambat" type="checkbox" />
-        </label>
-        <label class="switch-row">
-          Notifikasi denda belum dibayar
-          <input v-model="form.notifikasi.notifikasiDenda" type="checkbox" />
-        </label>
-        <label class="switch-row full">
-          Tampilkan banner pengingat di dashboard
-          <input v-model="form.notifikasi.tampilkanBannerDashboard" type="checkbox" />
-        </label>
-      </div>
+  <label class="switch-row">
+    Pengingat sebelum jatuh tempo
+    <input v-model="form.notifikasi.pengingatJatuhTempo" type="checkbox" />
+  </label>
+  <label>
+    Hari sebelum jatuh tempo
+    <input v-model.number="form.notifikasi.hariSebelumJatuhTempo" type="number" min="1" />
+  </label>
+  <label class="switch-row">
+    Notifikasi buku terlambat
+    <input v-model="form.notifikasi.notifikasiTerlambat" type="checkbox" />
+  </label>
+  <label class="switch-row">
+    Notifikasi jatuh tempo hari ini
+    <input v-model="form.notifikasi.notifikasiJatuhTempoHariIni" type="checkbox" />
+  </label>
+</div>
     </section>
 
     <!-- SISTEM -->

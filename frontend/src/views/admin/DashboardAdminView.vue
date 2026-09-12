@@ -30,7 +30,7 @@ const icons = {
   clock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`
 }
 
-const totalDenda = ref('Rp350.000')
+const totalDenda = ref('Rp0')
 
 const rangeOptions = [
   { value: '1minggu', label: '1 Minggu Terakhir' },
@@ -176,6 +176,18 @@ const peminjamanBelumKembaliFiltered = computed(() => {
 })
 
 const pengingat = ref([])
+const totalBelumDikembalikan = ref(0)
+const tampilkanTotalBelumDikembalikan = ref(false)
+
+async function fetchTotalDenda() {
+  try {
+    const res = await fetch('http://localhost:3000/api/denda')
+    const data = await res.json()
+    totalDenda.value = `Rp${(data.totalBelumDibayar || 0).toLocaleString('id-ID')}`
+  } catch (err) {
+    console.error('Gagal mengambil total denda', err)
+  }
+}
 
 async function fetchStats() {
   try {
@@ -223,10 +235,16 @@ async function fetchBukuTerpopuler() {
   }
 }
 
+const totalJatuhTempoHariIni = ref(0)
+const tampilkanJatuhTempoHariIni = ref(false)
+
 async function fetchPengingat() {
   try {
     const res = await fetch('http://localhost:3000/api/dashboard/pengingat')
-    pengingat.value = await res.json()
+    const data = await res.json()
+    pengingat.value = data.daftar
+    totalBelumDikembalikan.value = data.totalBelumDikembalikan
+    tampilkanTotalBelumDikembalikan.value = data.tampilkanTotalBelumDikembalikan
   } catch (err) {
     console.error('Gagal mengambil pengingat', err)
   }
@@ -258,6 +276,7 @@ onMounted(async () => {
   await fetchBukuTerpopuler()
   await fetchPengingat()
   await muatStatistikPeminjaman()
+  await fetchTotalDenda()
 })
 </script>
 
@@ -437,18 +456,25 @@ onMounted(async () => {
       </section>
 
       <section class="card reminder-card">
-        <h2>Pengingat</h2>
-        <div class="reminder-row" v-for="r in pengingat" :key="r.id">
-          <div class="reminder-info">
-            <strong>{{ r.nama }}</strong>
-            <span>{{ r.kelas }}</span>
-            <span v-if="r.denda > 0" class="reminder-denda">
-              Denda: Rp{{ r.denda.toLocaleString('id-ID') }}
-            </span>
-          </div>
-          <span class="reminder-badge-text" :class="`badge-${r.color}`">{{ r.badge }}</span>
-        </div>
-      </section>
+  <h2>Pengingat</h2>
+
+  <p v-if="tampilkanJatuhTempoHariIni" class="reminder-summary">
+    {{ totalJatuhTempoHariIni }} buku jatuh tempo hari ini
+  </p>
+
+  <div class="reminder-row" v-for="r in pengingat" :key="r.id">
+    <div class="reminder-info">
+      <strong>{{ r.nama }}</strong>
+      <span>{{ r.kelas }}</span>
+      <span v-if="r.denda > 0" class="reminder-denda">
+        Denda: Rp{{ r.denda.toLocaleString('id-ID') }}
+      </span>
+    </div>
+    <span class="reminder-badge-text" :class="`badge-${r.color}`">{{ r.badge }}</span>
+  </div>
+
+  <p v-if="pengingat.length === 0" class="reminder-empty">Tidak ada pengingat aktif.</p>
+</section>
 
     </div>
     

@@ -52,7 +52,9 @@ router.get('/peminjaman-aktif', wajibLoginSiswa, async (req, res) => {
       tanggalPinjam: peminjaman.tanggalPinjam,
       tanggalKembali: peminjaman.tanggalKembali,
       judul: buku.judul,
-      kategori: kategori.nama
+      kategori: kategori.nama,
+      nominalDendaPerHari: peminjaman.nominalDendaPerHari,
+      dendaMaksimal: peminjaman.dendaMaksimal
     })
       .from(peminjaman)
       .innerJoin(eksemplarBuku, eq(peminjaman.eksemplarId, eksemplarBuku.id))
@@ -61,7 +63,27 @@ router.get('/peminjaman-aktif', wajibLoginSiswa, async (req, res) => {
       .where(and(eq(peminjaman.anggotaId, anggotaId), isNull(peminjaman.tanggalDikembalikan)))
       .orderBy(desc(peminjaman.id))
 
-    res.json(data)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const hasil = data.map(row => {
+      const batas = new Date(row.tanggalKembali)
+      batas.setHours(0, 0, 0, 0)
+      const hariTerlambat = Math.max(0, Math.round((today - batas) / (1000 * 60 * 60 * 24)))
+
+      let denda = 0
+      if (hariTerlambat > 0) {
+        const tarif = row.nominalDendaPerHari || 0
+        denda = hariTerlambat * tarif
+        if (row.dendaMaksimal > 0) {
+          denda = Math.min(denda, row.dendaMaksimal)
+        }
+      }
+
+      return { ...row, hariTerlambat, denda }
+    })
+
+    res.json(hasil)
   } catch (err) {
     console.error(err)
     res.status(500).json({ message: 'Gagal mengambil data peminjaman' })

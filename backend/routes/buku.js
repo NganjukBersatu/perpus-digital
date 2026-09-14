@@ -42,9 +42,13 @@ router.get('/', async (req, res) => {
 })
 
 // POST tambah buku baru
+// [BARU] Kalau body request menyertakan "barcode", setelah buku berhasil
+// dibuat, sekalian insert 1 baris eksemplar dengan barcode tersebut.
+// Kalau "barcode" tidak dikirim, perilaku tetap seperti semula (tidak
+// membuat eksemplar apa pun).
 router.post('/', async (req, res) => {
   try {
-    const { judul, penulis, kategoriId, isbn, stok, tersedia, lokasi, status } = req.body
+    const { judul, penulis, kategoriId, isbn, stok, tersedia, lokasi, status, barcode } = req.body
     if (!judul || !penulis) {
       return res.status(400).json({ error: 'Judul dan penulis wajib diisi' })
     }
@@ -63,7 +67,21 @@ router.post('/', async (req, res) => {
       })
       .returning()
 
-    res.status(201).json(baru)
+    // [BARU] Buat eksemplar otomatis kalau barcode dikirim
+    let eksemplarBaru = null
+    if (barcode) {
+      const [eksemplar] = await db
+        .insert(eksemplarBuku)
+        .values({
+          bukuId: baru.id,
+          barcode,
+          status: 'tersedia',
+        })
+        .returning()
+      eksemplarBaru = eksemplar
+    }
+
+    res.status(201).json({ ...baru, eksemplar: eksemplarBaru })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Gagal menambah buku' })

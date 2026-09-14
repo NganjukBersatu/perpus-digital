@@ -45,6 +45,9 @@ router.get('/', async (req, res) => {
         batasKembali: peminjaman.tanggalKembali,
         tanggalDikembalikan: peminjaman.tanggalDikembalikan,
         denda: peminjaman.denda,
+        nominalDendaPerHari: peminjaman.nominalDendaPerHari,
+        dendaMaksimal: peminjaman.dendaMaksimal,
+        dendaGuruAktif: peminjaman.dendaGuruAktif,
       })
       .from(peminjaman)
       .innerJoin(anggota, eq(peminjaman.anggotaId, anggota.id))
@@ -59,6 +62,7 @@ router.get('/', async (req, res) => {
     const dataLengkap = rows.map((r) => {
       let statusHitung
       let keterlambatan = '-'
+      let denda = r.denda || 0
 
       if (r.tanggalDikembalikan) {
         const telat = Math.max(
@@ -67,15 +71,29 @@ router.get('/', async (req, res) => {
         )
         statusHitung = telat > 0 ? 'Terlambat' : 'Tepat Waktu'
         if (telat > 0) keterlambatan = `${telat} hari`
+        // sudah dikembalikan -> denda sudah final, pakai kolom r.denda apa adanya
       } else if (r.batasKembali < today) {
         const telat = Math.round((new Date(today) - new Date(r.batasKembali)) / 86400000)
         statusHitung = 'Terlambat'
         keterlambatan = `${telat} hari`
+
+        // belum dikembalikan tapi sudah lewat jatuh tempo -> hitung denda berjalan (estimasi)
+        const dendaDinonaktifkanUntukGuru = r.peranPeminjam === 'guru' && !r.dendaGuruAktif
+        if (dendaDinonaktifkanUntukGuru) {
+          denda = 0
+        } else {
+          const tarif = r.nominalDendaPerHari || 0
+          denda = telat * tarif
+          if (r.dendaMaksimal > 0) {
+            denda = Math.min(denda, r.dendaMaksimal)
+          }
+        }
       } else {
         statusHitung = 'Dipinjam'
+        denda = 0
       }
 
-      return { ...r, status: statusHitung, keterlambatan }
+      return { ...r, status: statusHitung, keterlambatan, denda }
     })
 
     const data =

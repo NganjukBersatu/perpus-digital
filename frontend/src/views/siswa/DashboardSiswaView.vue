@@ -195,23 +195,23 @@ function goToPeminjaman() {
           </thead>
           <tbody>
             <tr v-for="item in pinjamanAktif" :key="item.id">
-              <td>
+              <td data-label="Judul">
                 <div class="book-title">{{ item.judul }}</div>
                 <div v-if="item.penulis" class="book-author">{{ item.penulis }}</div>
               </td>
-              <td>
+              <td data-label="Kategori">
                 <span v-if="item.kategori && item.kategori !== '-'" class="kategori-badge">
                   {{ item.kategori }}
                 </span>
                 <span v-else>—</span>
               </td>
-              <td>{{ formatTanggal(item.tanggalPinjam) }}</td>
-              <td>
+              <td data-label="Tanggal Pinjam">{{ formatTanggal(item.tanggalPinjam) }}</td>
+              <td data-label="Jatuh Tempo">
                 <span :class="{ 'due-warning': isAlmostDue(item.jatuhTempo) }">
                   {{ formatTanggal(item.jatuhTempo) }}
                 </span>
               </td>
-              <td>
+              <td data-label="Aksi">
                 <button class="btn-return" @click="kembalikan(item)">Kembalikan</button>
               </td>
             </tr>
@@ -446,11 +446,135 @@ function goToPeminjaman() {
 }
 
 @media (max-width: 800px) {
-  .stats-row {
-    grid-template-columns: 1fr;
+  .page {
+    padding: 16px 12px 24px;
   }
+
+  .welcome-banner {
+    padding: 16px;
+    align-items: flex-start;
+  }
+
   .welcome-illustration {
     display: none;
+  }
+
+  .welcome-text h1 {
+    font-size: 1.2rem;
+  }
+
+  .welcome-desc {
+    max-width: none;
+    margin: 8px 0 12px !important;
+  }
+
+  .banner-actions {
+    width: 100%;
+  }
+
+  .btn-banner,
+  .btn-banner-outline {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+  }
+
+  .stats-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .stat-card {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 10px 8px;
+    gap: 8px;
+    border-radius: 12px;
+  }
+
+  .stat-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+  }
+
+  .stat-icon svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .stat-label {
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  .stat-value {
+    font-size: 18px;
+  }
+
+  .table-card {
+    padding: 14px 12px;
+  }
+
+  .card-toolbar h2 {
+    font-size: 14px;
+  }
+
+  .tabel {
+    min-width: 0;
+  }
+
+  .tabel thead {
+    display: none;
+  }
+
+  .tabel,
+  .tabel tbody,
+  .tabel tr,
+  .tabel td {
+    display: block;
+    width: 100%;
+  }
+
+  .tabel tr {
+    border: 1px solid #eef2f7;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+
+  .tabel td {
+    border: none;
+    padding: 6px 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .tabel td::before {
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  .tabel td:first-child {
+    display: block;
+  }
+
+  .tabel td:first-child::before {
+    display: none;
+  }
+
+  .tabel td:last-child {
+    padding-top: 10px;
+  }
+
+  .btn-return {
+    width: 100%;
   }
 }
 </style>

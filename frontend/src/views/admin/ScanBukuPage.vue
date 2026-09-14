@@ -1,8 +1,12 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue"
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from "vue"
 import { Html5Qrcode } from "html5-qrcode"
+import { useRouter, useRoute } from "vue-router"
 
+const notFoundMessageRef = ref(null)
 const activeTab = ref("kamera")
+const router = useRouter()
+const route = useRoute()
 const isScanning = ref(false)
 const scanError = ref("")
 const barcode = ref("")
@@ -13,6 +17,52 @@ async function cariBukuManual() {
   if (!kode) return
   barcode.value = kode
   await cariBuku(kode)
+}
+
+async function cariBuku(kodeBarcode) {
+  try {
+    const res = await fetch(`/api/eksemplar-buku/${kodeBarcode}`)
+    if (res.status === 404) {
+      bookNotFound.value = true
+      bookData.value = null
+      currentStep.value = 1
+
+      await nextTick()
+      notFoundMessageRef.value?.scrollIntoView({ behavior: "smooth", block: "center" })
+      return
+    }
+    if (!res.ok) throw new Error("Gagal mengambil data buku")
+    bookData.value = await res.json()
+    currentStep.value = 2
+  } catch (err) {
+    console.error(err)
+    scanError.value = "Terjadi kesalahan saat mencari data buku."
+  }
+}
+
+function tambahBukuBaru() {
+  router.push({
+    path: '/admin/data-buku',
+    query: {
+      barcode: barcode.value,
+      from: 'scan'
+    }
+  })
+}
+
+async function lanjutDariQuery() {
+  const kode = String(route.query.barcode || '').trim()
+  const lanjutPinjam = route.query.lanjut === 'pinjam'
+
+  if (!kode) return
+
+  barcode.value = kode
+  manualBarcode.value = kode
+  await cariBuku(kode)
+
+  if (lanjutPinjam && bookData.value && bookData.value.status === 'tersedia') {
+    currentStep.value = 3
+  }
 }
 
 const bookData = ref(null)
@@ -177,10 +227,11 @@ async function siapkanDaftarKamera() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   siapkanDaftarKamera()
   ambilDaftarKelas()
   ambilDaftarGuru()
+  await lanjutDariQuery()
 })
 
 // ===== SCAN =====
@@ -235,32 +286,13 @@ async function handleFileUpload(e) {
   if (!scanner) scanner = new Html5Qrcode("reader")
   try {
     const decodedText = await scanner.scanFile(file, true)
-    barcode.value = decodedText.trim()        // 👈 pastikan ada .trim() di sini
-    await cariBuku(barcode.value)              // 👈 pastikan pakai barcode.value, BUKAN decodedText langsung
+    barcode.value = decodedText.trim()
+    await cariBuku(barcode.value)
   } catch (err) {
     scanError.value =
       "Barcode tidak terbaca dari gambar ini. Coba foto lain yang lebih jelas dan tidak buram."
   } finally {
     e.target.value = ""
-  }
-}
-
-async function cariBuku(kodeBarcode) {
-  console.log('RAW:', JSON.stringify(kodeBarcode), 'LENGTH:', kodeBarcode.length)   // 👈 baris baru
-  try {
-    const res = await fetch(`/api/eksemplar-buku/${kodeBarcode}`)
-    if (res.status === 404) {
-      bookNotFound.value = true
-      bookData.value = null
-      currentStep.value = 1
-      return
-    }
-    if (!res.ok) throw new Error("Gagal mengambil data buku")
-    bookData.value = await res.json()
-    currentStep.value = 2
-  } catch (err) {
-    console.error(err)
-    scanError.value = "Terjadi kesalahan saat mencari data buku."
   }
 }
 
@@ -329,7 +361,7 @@ function resetForm() {
   bookData.value = null
   barcode.value = ""
   kelasQuery.value = ""
-  guruQuery.value = ""   // ← tambahkan ini
+  guruQuery.value = ""
   tipePeminjam.value = "siswa"
   peminjam.value = {
     nama: "",
@@ -401,6 +433,13 @@ onBeforeUnmount(() => {
             >
               Unggah foto
             </button>
+            <button
+              class="scan-tab"
+              :class="{ 'scan-tab--active': activeTab === 'manual' }"
+              @click="activeTab = 'manual'"
+            >
+              Manual
+            </button>
           </div>
 
           <div class="scanner-area">
@@ -428,7 +467,7 @@ onBeforeUnmount(() => {
               </div>
             </template>
 
-            <template v-else>
+            <template v-else-if="activeTab === 'unggah'">
               <div class="upload-zone" @click="fileInput.click()">
                 <h3>Unggah foto barcode</h3>
                 <p>Klik area ini untuk memilih foto barcode dari perangkat.</p>
@@ -443,22 +482,24 @@ onBeforeUnmount(() => {
               </div>
               <div id="reader" class="reader-hidden"></div>
             </template>
-          </div>
 
-          <div class="manual-input">
-            <label for="manual-barcode">Atau masukkan barcode secara manual</label>
-            <div class="manual-input-row">
-              <input
-                id="manual-barcode"
-                v-model="manualBarcode"
-                type="text"
-                placeholder="Contoh: 9786020633478-002"
-                @keyup.enter="cariBukuManual"
-              />
-              <button type="button" class="btn-cari-manual" @click="cariBukuManual">
-                Cari
-              </button>
-            </div>
+            <template v-else-if="activeTab === 'manual'">
+              <div class="manual-input manual-input--inline">
+                <label for="manual-barcode">Masukkan barcode secara manual</label>
+                <div class="manual-input-row">
+                  <input
+                    id="manual-barcode"
+                    v-model="manualBarcode"
+                    type="text"
+                    placeholder="Contoh: 9786020633478-002"
+                    @keyup.enter="cariBukuManual"
+                  />
+                  <button type="button" class="btn-cari-manual" @click="cariBukuManual">
+                    Cari
+                  </button>
+                </div>
+              </div>
+            </template>
           </div>
 
           <div v-if="scanError" class="message message--error">
@@ -469,13 +510,16 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div v-if="bookNotFound" class="message message--warning">
+          <div v-if="bookNotFound" ref="notFoundMessageRef" class="message message--warning">
             <div class="message__icon">!</div>
             <div>
               <strong>Buku tidak ditemukan</strong>
               <p>
                 Barcode <span class="mono">{{ barcode }}</span> belum terdaftar di katalog.
               </p>
+              <button type="button" class="btn-tambah-buku" @click="tambahBukuBaru">
+                + Tambah Buku
+              </button>
             </div>
           </div>
         </div>
@@ -820,7 +864,7 @@ button, input, select { font: inherit; }
 
 .scan-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   max-width: 480px;
   margin: 0 auto 14px;
   padding: 3px;
@@ -882,6 +926,9 @@ button, input, select { font: inherit; }
   background: #f8fafc;
   border: 1px solid var(--border);
   border-radius: 12px;
+}
+.manual-input--inline {
+  margin-top: 0;
 }
 .manual-input label {
   display: block;
@@ -1050,6 +1097,21 @@ button, input, select { font: inherit; }
 .message--error .message__icon { background: #ffdada; }
 .message--warning { color: var(--orange); background: var(--orange-bg); border: 1px solid #ffe2b4; }
 .message--warning .message__icon { background: #ffe7c5; }
+
+.btn-tambah-buku {
+  margin-top: 8px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 8px;
+  background: var(--orange);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-tambah-buku:hover {
+  opacity: 0.9;
+}
 
 .book-result { padding: 24px; }
 .result-status {
@@ -1294,7 +1356,6 @@ button, input, select { font: inherit; }
     border-radius: 12px;
   }
 
-  /* Progress stepper: sembunyikan teks label, sisakan angka/centang saja */
   .progress {
     padding: 10px 12px;
   }

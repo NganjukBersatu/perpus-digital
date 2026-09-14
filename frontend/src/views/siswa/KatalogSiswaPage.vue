@@ -35,7 +35,6 @@ async function fetchKategori() {
     kategoriList.value = ['Semua', ...data.map(k => k.nama)]
   } catch (err) {
     console.error(err)
-    // fallback dari data buku
     const set = new Set(bukuList.value.map(b => b.kategori).filter(Boolean))
     kategoriList.value = ['Semua', ...Array.from(set).sort()]
   }
@@ -112,7 +111,6 @@ watch(keyword, () => {
 
 <template>
   <div class="katalog-page">
-    <!-- HEADER -->
     <div class="page-header">
       <div>
         <h1>Katalog Buku</h1>
@@ -137,7 +135,6 @@ watch(keyword, () => {
       </div>
     </div>
 
-    <!-- SEARCH + FILTER -->
     <div class="filter-bar">
       <div class="search-box">
         <span class="search-icon">⌕</span>
@@ -161,11 +158,9 @@ watch(keyword, () => {
       </select>
     </div>
 
-    <!-- LOADING / ERROR -->
     <div v-if="loading" class="empty-state">Memuat katalog...</div>
     <div v-else-if="error" class="empty-state" style="color:#dc2626">{{ error }}</div>
 
-    <!-- ==================== MODE GRID ==================== -->
     <div v-else-if="viewMode === 'grid'" class="buku-grid">
       <div class="buku-card" v-for="b in bukuFiltered" :key="b.id || b.judul">
         <div class="buku-cover" :style="{ background: b.cover }">
@@ -187,7 +182,6 @@ watch(keyword, () => {
       </p>
     </div>
 
-    <!-- ==================== MODE LIST ==================== -->
     <div v-else class="buku-list">
       <div class="list-item" v-for="b in bukuFiltered" :key="b.id || b.judul">
         <div class="list-cover" :style="{ background: b.cover }">
@@ -221,7 +215,6 @@ watch(keyword, () => {
   padding: 24px;
 }
 
-/* ===== HEADER ===== */
 .page-header {
   display: flex;
   justify-content: space-between;
@@ -244,6 +237,7 @@ watch(keyword, () => {
 .view-toggle {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .toggle-btn {
@@ -268,7 +262,6 @@ watch(keyword, () => {
   background: #f9fafb;
 }
 
-/* ===== FILTER BAR ===== */
 .filter-bar {
   display: flex;
   gap: 12px;
@@ -311,7 +304,6 @@ watch(keyword, () => {
   min-width: 150px;
 }
 
-/* ===== GRID ===== */
 .buku-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -375,7 +367,6 @@ watch(keyword, () => {
   color: #dc2626;
 }
 
-/* ===== LIST MODE ===== */
 .buku-list {
   display: flex;
   flex-direction: column;
@@ -388,11 +379,6 @@ watch(keyword, () => {
   overflow: hidden;
   display: flex;
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.05);
-  transition: box-shadow 0.15s ease;
-}
-
-.list-item:hover {
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
 }
 
 .list-cover {
@@ -464,7 +450,6 @@ watch(keyword, () => {
   cursor: not-allowed;
 }
 
-/* ===== EMPTY ===== */
 .empty-state {
   grid-column: 1 / -1;
   text-align: center;
@@ -473,13 +458,67 @@ watch(keyword, () => {
 }
 
 @media (max-width: 700px) {
+  .katalog-page {
+    padding: 16px 12px 24px;
+  }
+
   .page-header {
     flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
   }
+
+  .page-header h1 {
+    font-size: 22px;
+  }
+
+  .view-toggle {
+    width: 100%;
+  }
+
+  .toggle-btn {
+    flex: 1;
+    text-align: center;
+  }
+
   .filter-bar {
     flex-direction: column;
   }
+
+  .search-box,
   .filter-select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .buku-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .buku-cover {
+    height: 130px;
+    padding: 12px;
+  }
+
+  .cover-title {
+    font-size: 13px;
+  }
+
+  .list-item {
+    flex-direction: column;
+  }
+
+  .list-cover {
+    width: 100%;
+    min-height: 120px;
+  }
+
+  .list-info {
+    padding: 14px;
+  }
+
+  .btn-pinjam {
     width: 100%;
   }
 }

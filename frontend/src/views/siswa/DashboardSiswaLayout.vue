@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -10,78 +10,158 @@ const icons = {
 
 const userTersimpan = JSON.parse(localStorage.getItem('user') || '{}')
 const siswa = ref({
+  id: userTersimpan.id || null,
   nama: userTersimpan.nama || '',
   role: 'Siswa',
   kelas: userTersimpan.kelas || '',
   nis: userTersimpan.nis || ''
 })
 
-const notifikasi = ref([
-  { judul: 'Buku hampir jatuh tempo' },
-  { judul: 'Peminjaman disetujui' }
-])
+function authHeaders() {
+  const token = localStorage.getItem('token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
 
-const searchQuery = ref('')
-const searchResults = ref({ buku: [], siswa: [], guru: [] })
-const searchOpen = ref(false)
-let searchTimeout = null
+const NOTIF_STORAGE_KEY = computed(() => `notifikasi_siswa_${siswa.value.id || 'guest'}`)
 
-function onSearchInput() {
-  clearTimeout(searchTimeout)
-  const q = searchQuery.value.trim()
+const notifikasi = ref([])
+const notifOpen = ref(false)
+const notifLoading = ref(false)
 
-  if (!q) {
-    searchResults.value = { buku: [], siswa: [], guru: [] }
-    searchOpen.value = false
-    return
+function muatStatusTersimpan() {
+  try {
+    const raw = localStorage.getItem(NOTIF_STORAGE_KEY.value)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
   }
-
-  searchTimeout = setTimeout(async () => {
-    try {
-      const res = await fetch(`http://localhost:3000/api/search?q=${encodeURIComponent(q)}`)
-      searchResults.value = await res.json()
-      searchOpen.value = true
-    } catch (err) {
-      console.error('Gagal mencari', err)
-    }
-  }, 300)
 }
 
-function pilihHasilBuku(item) {
-  searchOpen.value = false
-  searchQuery.value = ''
-  router.push(`/admin/data-buku?highlight=${item.id}`)
+function simpanStatus(statusMap) {
+  try {
+    localStorage.setItem(NOTIF_STORAGE_KEY.value, JSON.stringify(statusMap))
+  } catch (err) {
+    console.error('Gagal menyimpan status notifikasi', err)
+  }
 }
 
-function pilihHasilSiswa(item) {
-  searchOpen.value = false
-  searchQuery.value = ''
-  router.push(`/admin/data-siswa?highlight=${item.id}`)
+async function fetchNotifikasi() {
+  notifLoading.value = true
+  try {
+    const res = await fetch('http://localhost:3000/api/siswa/notifikasi', {
+      headers: { ...authHeaders() }
+    })
+    if (!res.ok) throw new Error('Gagal ambil notifikasi')
+    const data = await res.json()
+
+    const statusTersimpan = muatStatusTersimpan()
+    const sekarang = new Date().toISOString()
+    const statusBaru = {}
+
+    notifikasi.value = (Array.isArray(data) ? data : []).map(item => {
+      const sebelumnya = statusTersimpan[item.id]
+      const waktu = sebelumnya?.waktu || sekarang
+      const dibaca = sebelumnya?.dibaca || false
+      statusBaru[item.id] = { waktu, dibaca }
+      return { ...item, waktu, dibaca }
+    })
+
+    simpanStatus(statusBaru)
+  } catch (err) {
+    console.error('Gagal memuat notifikasi:', err)
+    notifikasi.value = [
+      { id: 'dummy-1', tipe: 'jatuh_tempo', judul: 'Buku hampir jatuh tempo', pesan: 'Rekayasa Perangkat Lunak Jilid 2 jatuh tempo 2 hari lagi', waktu: new Date().toISOString(), dibaca: false },
+      { id: 'dummy-2', tipe: 'disetujui', judul: 'Peminjaman disetujui', pesan: 'Peminjaman buku kamu sudah disetujui admin', waktu: new Date().toISOString(), dibaca: false }
+    ]
+  } finally {
+    notifLoading.value = false
+  }
 }
 
-function pilihHasilGuru(item) {
-  searchOpen.value = false
-  searchQuery.value = ''
-  router.push(`/admin/data-guru?highlight=${item.id}`)
+const jumlahBelumDibaca = computed(() => notifikasi.value.filter(n => !n.dibaca).length)
+
+function toggleNotif() {
+  notifOpen.value = !notifOpen.value
 }
 
-function tutupSearchDelay() {
-  setTimeout(() => { searchOpen.value = false }, 150)
+function closeNotifOutside(e) {
+  if (!e.target.closest('.notif-wrap')) notifOpen.value = false
 }
+
+function closeNotifOnScroll() {
+  if (notifOpen.value) notifOpen.value = false
+}
+
+function formatWaktu(iso) {
+  if (!iso) return '-'
+  return new Date(iso).toLocaleString('id-ID', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  })
+}
+
+async function tandaiSudahDibaca(item) {
+  if (item.dibaca) return
+  item.dibaca = true
+
+  const statusTersimpan = muatStatusTersimpan()
+  statusTersimpan[item.id] = { waktu: item.waktu, dibaca: true }
+  simpanStatus(statusTersimpan)
+
+  try {
+    await fetch(`http://localhost:3000/api/siswa/notifikasi/${item.id}/baca`, {
+      method: 'PATCH',
+      headers: { ...authHeaders() }
+    })
+  } catch (err) {
+    console.error('Gagal sinkron status baca ke server:', err)
+  }
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') fetchNotifikasi()
+}
+
+let notifInterval = null
 
 const sidebarOpen = ref(true)
 function toggleSidebar() {
   sidebarOpen.value = !sidebarOpen.value
 }
 
+const mobileMenuOpen = ref(false)
+
+function toggleMobileMenu() {
+  mobileMenuOpen.value = !mobileMenuOpen.value
+}
+
+function closeMobileMenu() {
+  mobileMenuOpen.value = false
+}
+
 function logout() {
   router.push('/')
 }
+
+onMounted(() => {
+  fetchNotifikasi()
+  window.addEventListener('click', closeNotifOutside)
+  window.addEventListener('scroll', closeNotifOnScroll, { capture: true })
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  notifInterval = setInterval(fetchNotifikasi, 30000)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('click', closeNotifOutside)
+  window.removeEventListener('scroll', closeNotifOnScroll, { capture: true })
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  if (notifInterval) clearInterval(notifInterval)
+})
 </script>
 
 <template>
   <div class="layout">
-    <aside class="sidebar" :class="{ 'sidebar-closed': !sidebarOpen }">
+    <aside class="sidebar" :class="{ 'sidebar-closed': !sidebarOpen, 'mobile-open': mobileMenuOpen }">
       <div class="brand">
         <svg class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
@@ -98,7 +178,7 @@ function logout() {
         </button>
       </div>
 
-      <nav class="nav">
+      <nav class="nav" @click="closeMobileMenu">
         <router-link to="/siswa" class="nav-item" exact-active-class="active">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -134,14 +214,14 @@ function logout() {
         <router-link to="/siswa/riwayat" class="nav-item" active-class="active">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                 <circle cx="12" cy="12" r="10" />
-                 <polyline points="12 6 12 12 16 14" />
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
             </svg>
             <span class="nav-label">Riwayat Peminjaman</span>
           </span>
         </router-link>
 
-          <router-link to="/siswa/profil" class="nav-item" active-class="active">
+        <router-link to="/siswa/profil" class="nav-item" active-class="active">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
@@ -168,33 +248,116 @@ function logout() {
           <polyline points="16 17 21 12 16 7" />
           <line x1="21" y1="12" x2="9" y2="12" />
         </svg>
-        Keluar
+        <span class="nav-label">Keluar</span>
       </button>
     </aside>
 
+    <div v-if="mobileMenuOpen" class="sidebar-overlay" @click="closeMobileMenu"></div>
+
     <main class="main" :class="{ 'main-expanded': !sidebarOpen }">
       <header class="topbar">
-        <button class="hamburger" @click="toggleSidebar" v-if="!sidebarOpen">
+        <button class="hamburger hamburger-mobile" type="button" @click="toggleMobileMenu">
+          <svg class="icon icon-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+
+        <button class="hamburger hamburger-desktop" type="button" @click="toggleSidebar" v-if="!sidebarOpen">
           <svg class="icon icon-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </button>
+
         <div class="topbar-right">
-          <div class="notif-icon">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-            </svg>
-            <span class="notif-dot">{{ notifikasi.length }}</span>
+          <div class="notif-wrap">
+            <button class="notif-icon" type="button" @click="toggleNotif">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              <span v-if="jumlahBelumDibaca > 0" class="notif-dot">{{ jumlahBelumDibaca }}</span>
+            </button>
+
+            <div v-if="notifOpen" class="notif-dropdown">
+              <div class="notif-header">Notifikasi</div>
+              <div v-if="notifLoading" class="notif-empty">Memuat...</div>
+              <template v-else>
+                <div
+                  v-for="item in notifikasi"
+                  :key="item.id"
+                  class="notif-item"
+                  :class="{ 'notif-unread': !item.dibaca }"
+                  @click="tandaiSudahDibaca(item)"
+                >
+                  <div class="notif-item-title">
+                    <svg
+                      v-if="item.tipe === 'terlambat'"
+                      class="icon notif-icon-inline"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                    </svg>
+                    <svg
+                      v-else-if="item.tipe === 'jatuh_tempo' || item.tipe === 'hampir_jatuh_tempo'"
+                      class="icon notif-icon-inline"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    <svg
+                      v-else-if="item.tipe === 'disetujui'"
+                      class="icon notif-icon-inline"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                      <polyline points="22 4 12 14.01 9 11.01" />
+                    </svg>
+                    <svg
+                      v-else
+                      class="icon notif-icon-inline"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                    </svg>
+                    {{ item.judul }}
+                    <span class="notif-dot-inline" v-if="!item.dibaca"></span>
+                  </div>
+                  <div class="notif-item-body">{{ item.pesan }}</div>
+                  <div class="notif-item-time">{{ formatWaktu(item.waktu) }}</div>
+                </div>
+                <div class="notif-empty" v-if="!notifikasi.length">Tidak ada notifikasi</div>
+              </template>
+            </div>
           </div>
+
           <div class="avatar-sm avatar-icon" v-html="icons.userCircle"></div>
-          <div>
+          <div class="user-meta">
             <div class="user-name">{{ siswa.nama }}</div>
             <div class="user-role">{{ siswa.role }}</div>
           </div>
         </div>
       </header>
-      <router-view :siswa="siswa" />
+
+      <div class="page-wrap">
+        <router-view :siswa="siswa" />
+      </div>
     </main>
   </div>
 </template>
@@ -205,18 +368,11 @@ function logout() {
   min-height: 100vh;
   font-family: 'Segoe UI', sans-serif;
   background: #f4f6fb;
+  overflow-x: hidden;
 }
 
-.icon {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-}
-
-.icon-lg {
-  width: 26px;
-  height: 26px;
-}
+.icon { width: 18px; height: 18px; flex-shrink: 0; }
+.icon-lg { width: 26px; height: 26px; }
 
 .sidebar {
   width: 260px;
@@ -230,7 +386,7 @@ function logout() {
   left: 0;
   height: 100vh;
   overflow: hidden;
-  transition: transform 0.25s ease;
+  transition: transform 0.25s ease, width 0.25s ease;
   z-index: 50;
 }
 
@@ -239,65 +395,33 @@ function logout() {
   padding: 16px 10px;
   align-items: center;
 }
-.sidebar-closed .brand .icon-lg {
-  display: none;
-}.sidebar-closed .brand {
+.sidebar-closed .brand .icon-lg { display: none; }
+.sidebar-closed .brand {
   flex-direction: column;
   justify-content: center;
   margin-bottom: 12px;
 }
 .sidebar-closed .sidebar-toggle-inside,
-.sidebar-closed .brand {
-  display: none;
-}
-
+.sidebar-closed .brand { display: none; }
 .sidebar-closed .brand-text,
-.sidebar-closed .nav-section,
 .sidebar-closed .nav-label,
 .sidebar-closed .profile-text,
 .sidebar-closed .btn-outline-light,
-.sidebar-closed .badge {
-  display: none;
-}
-
-.sidebar-closed .brand {
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-
+.sidebar-closed .badge { display: none; }
 .sidebar-closed .nav-item,
 .sidebar-closed .btn-logout {
   justify-content: center;
   padding: 10px 0;
 }
-
-.sidebar-closed .nav-item-left {
-  justify-content: center;
-  gap: 0;
-}
-
+.sidebar-closed .nav-item-left { justify-content: center; gap: 0; }
 .sidebar-closed .profile-card {
   justify-content: center;
   padding: 10px 0;
   background: transparent;
 }
 
-.sidebar-closed .sidebar-toggle-inside svg {
-  transform: rotate(180deg);
-}
-
-.brand {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 24px;
-}
-
-.brand-text {
-  flex: 1;
-  min-width: 0;
-}
+.brand { display: flex; gap: 10px; align-items: center; margin-bottom: 24px; }
+.brand-text { flex: 1; min-width: 0; }
 
 .sidebar-toggle-inside {
   background: #2563eb;
@@ -313,20 +437,9 @@ function logout() {
   flex-shrink: 0;
 }
 
-.icon-toggle {
-  width: 16px;
-  height: 16px;
-}
-
-.brand-title {
-  font-weight: 700;
-  font-size: 13px;
-}
-
-.brand-sub {
-  font-size: 11px;
-  opacity: 0.7;
-}
+.icon-toggle { width: 16px; height: 16px; }
+.brand-title { font-weight: 700; font-size: 13px; }
+.brand-sub { font-size: 11px; opacity: 0.7; }
 
 .nav {
   flex: 1;
@@ -346,18 +459,8 @@ function logout() {
   display: flex;
   align-items: center;
 }
-
-.nav-item-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.nav-item.active,
-.nav-item:hover {
-  background: #1d4ed8;
-  color: #fff;
-}
+.nav-item-left { display: flex; align-items: center; gap: 10px; }
+.nav-item.active, .nav-item:hover { background: #1d4ed8; color: #fff; }
 
 .profile-card {
   background: #12235a;
@@ -370,12 +473,7 @@ function logout() {
   align-items: center;
 }
 
-.avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-}
-
+.avatar { width: 36px; height: 36px; border-radius: 50%; }
 .avatar-icon {
   display: flex;
   align-items: center;
@@ -383,30 +481,12 @@ function logout() {
   background: #1d4ed8;
   color: #fff;
 }
+.avatar-icon :deep(svg) { width: 70%; height: 70%; }
 
-.avatar-icon :deep(svg) {
-  width: 70%;
-  height: 70%;
-}
-
-.profile-text {
-  flex: 1;
-}
-
-.profile-greet {
-  font-size: 11px;
-  opacity: 0.7;
-}
-
-.profile-name {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.profile-role {
-  font-size: 11px;
-  opacity: 0.7;
-}
+.profile-text { flex: 1; }
+.profile-greet { font-size: 11px; opacity: 0.7; }
+.profile-name { font-size: 13px; font-weight: 600; }
+.profile-role { font-size: 11px; opacity: 0.7; }
 
 .btn-outline-light {
   width: 100%;
@@ -442,9 +522,12 @@ function logout() {
   margin-left: 260px;
   transition: margin-left 0.25s ease;
 }
+.main-expanded { margin-left: 76px; }
 
-.main-expanded {
-  margin-left: 0;
+.page-wrap {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
 }
 
 .topbar {
@@ -452,6 +535,7 @@ function logout() {
   padding: 14px 24px;
   display: flex;
   align-items: center;
+  gap: 12px;
   border-bottom: 1px solid #e5e7eb;
   position: sticky;
   top: 0;
@@ -466,10 +550,13 @@ function logout() {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
+  width: 32px;
   height: 32px;
   border-radius: 8px;
+  flex-shrink: 0;
 }
+
+.hamburger-mobile { display: none; }
 
 .topbar-right {
   display: flex;
@@ -478,36 +565,188 @@ function logout() {
   margin-left: auto;
 }
 
+.notif-wrap { position: relative; }
 .notif-icon {
   position: relative;
   display: flex;
+  align-items: center;
+  justify-content: center;
   color: #374151;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
 }
+.notif-icon:hover { background-color: #f3f4f6; color: #2563eb; }
 
 .notif-dot {
   position: absolute;
-  top: -6px;
-  right: -8px;
+  top: -4px;
+  right: -6px;
   background: #ef4444;
   color: #fff;
   font-size: 10px;
+  font-weight: 700;
   border-radius: 999px;
-  padding: 0 5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 2px #fff;
 }
 
-.avatar-sm {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+.notif-dropdown {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: 280px;
+  max-height: 360px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 70;
 }
 
-.user-name {
+.notif-header {
+  padding: 10px 14px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
+  border-bottom: 1px solid #f1f5f9;
+  position: sticky;
+  top: 0;
+  background: #fff;
 }
 
-.user-role {
-  font-size: 11px;
-  color: #6b7280;
+.notif-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid #f8fafc;
+}
+.notif-item:hover { background: #f3f4f6; }
+.notif-unread { background: #eff6ff; }
+
+.notif-item-title {
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.notif-icon-inline {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  color: #2563eb;
+}
+
+.notif-dot-inline {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ef4444;
+  margin-left: auto;
+}
+
+.notif-item-body { font-size: 12px; color: #374151; }
+.notif-item-time { font-size: 11px; color: #9ca3af; margin-top: 4px; }
+.notif-empty { padding: 16px; font-size: 13px; color: #9ca3af; text-align: center; }
+
+.avatar-sm { width: 32px; height: 32px; border-radius: 50%; }
+.user-name { font-size: 13px; font-weight: 600; }
+.user-role { font-size: 11px; color: #6b7280; }
+
+.sidebar-overlay { display: none; }
+
+@media (max-width: 768px) {
+  .sidebar-toggle-inside {
+    display: none !important;
+  }
+
+  .hamburger-desktop {
+    display: none !important;
+  }
+
+  .hamburger-mobile {
+    display: flex !important;
+  }
+
+  .sidebar,
+  .sidebar.sidebar-closed {
+    width: 260px !important;
+    padding: 20px 16px !important;
+    align-items: stretch !important;
+    transform: translateX(-100%) !important;
+    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.25);
+  }
+
+  .sidebar.mobile-open {
+    transform: translateX(0) !important;
+  }
+
+  .sidebar.sidebar-closed .brand,
+  .sidebar.sidebar-closed .brand-text,
+  .sidebar.sidebar-closed .nav-label,
+  .sidebar.sidebar-closed .profile-text,
+  .sidebar.sidebar-closed .btn-outline-light {
+    display: flex !important;
+  }
+
+  .sidebar.sidebar-closed .brand-text,
+  .sidebar.sidebar-closed .nav-label,
+  .sidebar.sidebar-closed .profile-text {
+    display: block !important;
+  }
+
+  .sidebar.sidebar-closed .nav-item,
+  .sidebar.sidebar-closed .btn-logout {
+    justify-content: flex-start !important;
+    padding: 8px 10px !important;
+  }
+
+  .sidebar.sidebar-closed .nav-item-left {
+    justify-content: flex-start !important;
+    gap: 10px !important;
+  }
+
+  .sidebar.sidebar-closed .profile-card {
+    justify-content: flex-start !important;
+    padding: 12px !important;
+    background: #12235a !important;
+  }
+
+  .main,
+  .main-expanded {
+    margin-left: 0 !important;
+    width: 100%;
+  }
+
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 45;
+  }
+
+  .topbar {
+    padding: 10px 12px;
+  }
+
+  .user-meta,
+  .user-name,
+  .user-role {
+    display: none !important;
+  }
+
+  .notif-dropdown {
+    width: min(280px, calc(100vw - 24px));
+    right: 0;
+  }
 }
 </style>

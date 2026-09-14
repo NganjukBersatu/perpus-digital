@@ -1,7 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
-import * as XLSX from 'xlsx'
-
+import { ref } from 'vue'
 
 const API_URL = 'http://localhost:3000/api/laporan'
 
@@ -48,52 +46,51 @@ async function generateLaporan() {
   }
 }
 
-function unduhExcel() {
-  const ringkasanRows = [
-  ['Periode', `${formatTanggal(dari.value)} - ${formatTanggal(sampai.value)}`],
-  [],
-  ['Total Peminjaman', 'Total Pengembalian', 'Total Terlambat', 'Total Denda'],
-  [ringkasan.value.totalPeminjaman, ringkasan.value.totalPengembalian, ringkasan.value.totalTerlambat, ringkasan.value.totalDenda],
-  [],
-]
+function escapeCsv(nilai) {
+  const teks = String(nilai ?? '')
+  if (/[",\n;]/.test(teks)) {
+    return `"${teks.replace(/"/g, '""')}"`
+  }
+  return teks
+}
 
-  const header = ['Nama', 'Kelas', 'Judul Buku', 'Tanggal Pinjam', 'Tanggal Kembali', 'Dikembalikan', 'Denda']
+function unduhCsv() {
+  if (!ringkasan.value) return
 
-  const dataRows = dataLaporan.value.map((item) => [
-    item.nama,
-    item.kelas || '-',
-    item.judul,
-    formatTanggal(item.tanggalPinjam),
-    formatTanggal(item.tanggalKembali),
-    formatTanggal(item.tanggalDikembalikan),
-    item.denda || 0,
-  ])
-
-  const semuaBaris = [...ringkasanRows, header, ...dataRows]
-
-  const worksheet = XLSX.utils.aoa_to_sheet(semuaBaris)
-
-  worksheet['!cols'] = [
-    { wch: 22 }, // Nama
-    { wch: 10 }, // Kelas
-    { wch: 28 }, // Judul Buku
-    { wch: 14 }, // Tanggal Pinjam
-    { wch: 14 }, // Tanggal Kembali
-    { wch: 14 }, // Dikembalikan
-    { wch: 10 }, // Denda
+  const baris = [
+    ['Periode', `${formatTanggal(dari.value)} - ${formatTanggal(sampai.value)}`],
+    [],
+    ['Total Peminjaman', 'Total Pengembalian', 'Total Terlambat', 'Total Denda'],
+    [
+      ringkasan.value.totalPeminjaman,
+      ringkasan.value.totalPengembalian,
+      ringkasan.value.totalTerlambat,
+      ringkasan.value.totalDenda
+    ],
+    [],
+    ['Nama', 'Kelas', 'Judul Buku', 'Tanggal Pinjam', 'Tanggal Kembali', 'Dikembalikan', 'Denda'],
+    ...dataLaporan.value.map((item) => [
+      item.nama,
+      item.kelas || '-',
+      item.judul,
+      formatTanggal(item.tanggalPinjam),
+      formatTanggal(item.tanggalKembali),
+      formatTanggal(item.tanggalDikembalikan),
+      item.denda || 0
+    ])
   ]
 
-  const cellsHeaderRingkasan = ['A3', 'B3', 'C3', 'D3']
-cellsHeaderRingkasan.forEach((cell) => {
-  if (worksheet[cell]) {
-    worksheet[cell].s = { font: { bold: true } }
-  }
-})
+  const isi = baris
+    .map((row) => row.map(escapeCsv).join(','))
+    .join('\r\n')
 
-  const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Laporan')
-
-  XLSX.writeFile(workbook, `laporan-perpustakaan-${dari.value}_sampai_${sampai.value}.xlsx`)
+  const blob = new Blob(['\uFEFF' + isi], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `laporan-perpustakaan-${dari.value}_sampai_${sampai.value}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 </script>
 
@@ -120,9 +117,9 @@ cellsHeaderRingkasan.forEach((cell) => {
       <button class="btn-primary" @click="generateLaporan" :disabled="isLoading">
         {{ isLoading ? 'Memuat...' : 'Tampilkan Laporan' }}
       </button>
-<button v-if="sudahDicari" class="btn-secondary" @click="unduhExcel">
-  Unduh Excel
-</button>
+      <button v-if="sudahDicari" class="btn-secondary" @click="unduhCsv">
+        Unduh CSV
+      </button>
     </div>
 
     <div v-if="sudahDicari" class="report-area">
@@ -237,7 +234,6 @@ thead th { font-size: 11px; font-weight: 600; color: #6b7280; background: #fafaf
   .summary-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* saat print / save as PDF, sembunyikan elemen yang tidak perlu */
 @media print {
   .no-print { display: none !important; }
   .page { background: #fff; padding: 0; }

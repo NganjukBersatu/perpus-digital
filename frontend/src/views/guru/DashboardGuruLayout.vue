@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -28,14 +28,133 @@ onMounted(() => {
     mapel: user.mapel || '-',
     nip: user.nip || '-'
   }
+
+  // notifikasi baru bisa di-fetch setelah kita tahu id guru
+  fetchNotifikasi()
 })
 
-const notifikasi = ref([
-  { judul: 'Peminjaman disetujui' },
-  { judul: 'Pengembalian segera' },
-  { judul: 'Buku baru tersedia' },
-  { judul: 'Rekomendasi buku baru' }
-])
+function authHeaders() {
+  const token = localStorage.getItem('token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+/* ================= NOTIFIKASI (per-guru) ================= */
+const NOTIF_STORAGE_KEY = computed(() => `notifikasi_guru_${guru.value.id || 'guest'}`)
+
+const notifikasi = ref([])
+const notifOpen = ref(false)
+const notifLoading = ref(false)
+
+function muatStatusTersimpan() {
+  try {
+    const raw = localStorage.getItem(NOTIF_STORAGE_KEY.value)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
+
+function simpanStatus(statusMap) {
+  try {
+    localStorage.setItem(NOTIF_STORAGE_KEY.value, JSON.stringify(statusMap))
+  } catch (err) {
+    console.error('Gagal menyimpan status notifikasi', err)
+  }
+}
+
+async function fetchNotifikasi() {
+  notifLoading.value = true
+  try {
+    const res = await fetch('http://localhost:3000/api/guru/notifikasi', {
+      headers: { ...authHeaders() }
+    })
+    if (!res.ok) throw new Error('Gagal ambil notifikasi')
+    const data = await res.json()
+
+    const statusTersimpan = muatStatusTersimpan()
+    const sekarang = new Date().toISOString()
+    const statusBaru = {}
+
+    notifikasi.value = (Array.isArray(data) ? data : []).map(item => {
+      const sebelumnya = statusTersimpan[item.id]
+      const waktu = sebelumnya?.waktu || sekarang
+      const dibaca = sebelumnya?.dibaca || false
+
+      statusBaru[item.id] = { waktu, dibaca }
+
+      return { ...item, waktu, dibaca }
+    })
+
+    simpanStatus(statusBaru)
+  } catch (err) {
+    console.error('Gagal memuat notifikasi:', err)
+    notifikasi.value = []
+  } finally {
+    notifLoading.value = false
+  }
+}
+
+const jumlahBelumDibaca = computed(() => notifikasi.value.filter(n => !n.dibaca).length)
+
+function toggleNotif() {
+  notifOpen.value = !notifOpen.value
+}
+
+function closeNotifOutside(e) {
+  if (!e.target.closest('.notif-wrap')) notifOpen.value = false
+}
+
+function closeNotifOnScroll() {
+  if (notifOpen.value) notifOpen.value = false
+}
+
+function formatWaktu(iso) {
+  if (!iso) return '-'
+  return new Date(iso).toLocaleString('id-ID', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  })
+}
+
+async function tandaiSudahDibaca(item) {
+  if (item.dibaca) return
+  item.dibaca = true
+
+  const statusTersimpan = muatStatusTersimpan()
+  statusTersimpan[item.id] = { waktu: item.waktu, dibaca: true }
+  simpanStatus(statusTersimpan)
+
+  try {
+    await fetch(`http://localhost:3000/api/guru/notifikasi/${item.id}/baca`, {
+      method: 'PATCH',
+      headers: { ...authHeaders() }
+    })
+  } catch (err) {
+    console.error('Gagal sinkron status baca ke server:', err)
+  }
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') fetchNotifikasi()
+}
+
+let notifInterval = null
+
+onMounted(() => {
+  window.addEventListener('click', closeNotifOutside)
+  window.addEventListener('scroll', closeNotifOnScroll, { capture: true })
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+
+  notifInterval = setInterval(fetchNotifikasi, 30000)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('click', closeNotifOutside)
+  window.removeEventListener('scroll', closeNotifOnScroll, { capture: true })
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  if (notifInterval) clearInterval(notifInterval)
+})
+/* ============================================================ */
 
 const sidebarOpen = ref(true)
 function toggleSidebar() {
@@ -151,14 +270,97 @@ function logout() {
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </button>
+
         <div class="topbar-right">
-          <div class="notif-icon">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-            </svg>
-            <span class="notif-dot">{{ notifikasi.length }}</span>
+          <div class="notif-wrap">
+            <button class="notif-icon" @click="toggleNotif">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              <span v-if="jumlahBelumDibaca > 0" class="notif-dot">{{ jumlahBelumDibaca }}</span>
+            </button>
+
+            <div v-if="notifOpen" class="notif-dropdown">
+              <div class="notif-header">Notifikasi</div>
+
+              <div v-if="notifLoading" class="notif-empty">Memuat...</div>
+
+              <template v-else>
+                <div
+                  v-for="item in notifikasi"
+                  :key="item.id"
+                  class="notif-item"
+                  :class="{ 'notif-unread': !item.dibaca }"
+                  @click="tandaiSudahDibaca(item)"
+                >
+                  <div class="notif-item-title">
+                    <!-- terlambat: ikon buku (sama seperti admin) -->
+                    <svg
+                      v-if="item.tipe === 'terlambat'"
+                      class="icon notif-icon-inline"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                    </svg>
+
+                    <!-- jatuh tempo: ikon jam (sama seperti admin) -->
+                    <svg
+                      v-else-if="item.tipe === 'jatuh_tempo'"
+                      class="icon notif-icon-inline"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+
+                    <!-- disetujui: ikon centang -->
+                    <svg
+                      v-else-if="item.tipe === 'disetujui'"
+                      class="icon notif-icon-inline"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                      <polyline points="22 4 12 14.01 9 11.01" />
+                    </svg>
+
+                    <!-- default: ikon lonceng -->
+                    <svg
+                      v-else
+                      class="icon notif-icon-inline"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                    </svg>
+
+                    {{ item.judul }}
+                    <span class="notif-dot-inline" v-if="!item.dibaca"></span>
+                  </div>
+                  <div class="notif-item-body">{{ item.pesan }}</div>
+                  <div class="notif-item-time">{{ formatWaktu(item.waktu) }}</div>
+                </div>
+
+                <div class="notif-empty" v-if="!notifikasi.length">
+                  Tidak ada notifikasi
+                </div>
+              </template>
+            </div>
           </div>
+
           <div class="avatar-sm avatar-icon" v-html="icons.userCircle"></div>
           <div>
             <div class="user-name">{{ guru.nama }}</div>
@@ -418,7 +620,7 @@ function logout() {
 }
 
 .main-expanded {
-  margin-left: 0;
+  margin-left: 76px;
 }
 
 .topbar {
@@ -452,21 +654,133 @@ function logout() {
   margin-left: auto;
 }
 
+.notif-wrap {
+  position: relative;
+}
+
 .notif-icon {
   position: relative;
   display: flex;
+  align-items: center;
+  justify-content: center;
   color: #374151;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.notif-icon:hover {
+  background-color: #f3f4f6;
+  color: #2563eb;
 }
 
 .notif-dot {
   position: absolute;
-  top: -6px;
-  right: -8px;
+  top: -4px;
+  right: -6px;
   background: #ef4444;
   color: #fff;
   font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
   border-radius: 999px;
-  padding: 0 5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.notif-dropdown {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: 280px;
+  max-height: 360px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 70;
+}
+
+.notif-header {
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+  border-bottom: 1px solid #f1f5f9;
+  position: sticky;
+  top: 0;
+  background: #fff;
+}
+
+.notif-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid #f8fafc;
+}
+
+.notif-item:last-child {
+  border-bottom: none;
+}
+
+.notif-item:hover {
+  background: #f3f4f6;
+}
+
+.notif-unread {
+  background: #eff6ff;
+}
+
+.notif-item-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.notif-icon-inline {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  color: #2563eb;
+}
+
+.notif-dot-inline {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ef4444;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.notif-item-body {
+  font-size: 12px;
+  color: #374151;
+}
+
+.notif-item-time {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+
+.notif-empty {
+  padding: 16px;
+  font-size: 13px;
+  color: #9ca3af;
+  text-align: center;
 }
 
 .avatar-sm {

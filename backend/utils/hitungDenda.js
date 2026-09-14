@@ -2,8 +2,10 @@ const { pengaturanPerpustakaan } = require('../db/schema')
 
 const DEFAULT_DENDA = {
   aktif: true,
-  nominalPerHari: 1000,
-  dendaMaksimal: 50000,
+  nominalPerHariSiswa: 1000,
+  nominalPerHariGuru: 1000,
+  dendaMaksimalSiswa: 50000,
+  dendaMaksimalGuru: 50000,
   masaTenggang: 0,
   dendaGuruAktif: false,
 }
@@ -29,13 +31,18 @@ function hitungDenda({ tanggalKembali, tanggalDikembalikan, peran, pengaturanDen
   const bolehDihitung =
     pengaturanDenda.aktif && (peran !== 'guru' || pengaturanDenda.dendaGuruAktif)
 
-  let denda = 0
-  if (bolehDihitung && hariKenaDenda > 0) {
-    denda = hariKenaDenda * (pengaturanDenda.nominalPerHari || 0)
-    if (pengaturanDenda.dendaMaksimal > 0) {
-      denda = Math.min(denda, pengaturanDenda.dendaMaksimal)
-    }
+  const nominalPerHari =
+  peran === 'guru' ? pengaturanDenda.nominalPerHariGuru : pengaturanDenda.nominalPerHariSiswa
+const dendaMaksimal =
+  peran === 'guru' ? pengaturanDenda.dendaMaksimalGuru : pengaturanDenda.dendaMaksimalSiswa
+
+let denda = 0
+if (bolehDihitung && hariKenaDenda > 0) {
+  denda = hariKenaDenda * (nominalPerHari || 0)
+  if (dendaMaksimal > 0) {
+    denda = Math.min(denda, dendaMaksimal)
   }
+}
 
   return { denda, hariTerlambat }
 }

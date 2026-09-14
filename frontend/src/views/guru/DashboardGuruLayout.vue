@@ -395,17 +395,26 @@ function logout() {
 }
 
 .btn-logout {
-  margin-top: 12px;
-  background: transparent;
-  border: none;
+  margin-top: 12px; 
+  background: transparent; 
+  border: none; 
   color: #cbd5e1;
-  text-align: left;
-  padding: 8px 10px;
-  cursor: pointer;
+  text-align: left; 
+  padding: 8px 10px; 
+  cursor: pointer; 
   font-size: 14px;
-  display: flex;
-  align-items: center;
+  display: flex; 
+  align-items: center; 
   gap: 10px;
+  width: 100%;
+  border-radius: 8px; 
+  transition: 
+  background-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-logout:hover {
+  background: #1d4ed8;
+  color: #fff;
 }
 
 .main {

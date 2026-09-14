@@ -216,6 +216,10 @@ function toggleSidebar() {
   sidebarOpen.value = !sidebarOpen.value
 }
 
+function bukaSidebarJikaTertutup() {
+  if (!sidebarOpen.value) sidebarOpen.value = true
+}
+
 const searchQuery = ref('')
 const searchResults = ref({ buku: [], siswa: [], guru: [] })
 const searchOpen = ref(false)
@@ -268,7 +272,7 @@ function tutupSearchDelay() {
 <template>
   <div class="layout">
     <aside class="sidebar" :class="{ 'sidebar-closed': !sidebarOpen, 'mobile-open': mobileMenuOpen }">
-      <div class="brand">
+      <div class="brand" @click="bukaSidebarJikaTertutup">
         <svg class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
           <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
@@ -277,11 +281,16 @@ function tutupSearchDelay() {
           <div class="brand-title">MANAGEMENT PERPUS</div>
           <div class="brand-sub">SMK NEGERI 1 KERTOSONO</div>
         </div>
-        <button class="sidebar-toggle-inside" @click="toggleSidebar">
+        <button class="sidebar-toggle-inside" type="button" @click.stop="toggleSidebar">
           <svg class="icon icon-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
+        <span class="sidebar-open-hint" aria-hidden="true">
+          <svg class="icon icon-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </span>
       </div>
 
       <nav class="nav" @click="closeMobileMenu">
@@ -458,12 +467,6 @@ function tutupSearchDelay() {
       <line x1="3" y1="6" x2="21" y2="6" />
       <line x1="3" y1="12" x2="21" y2="12" />
       <line x1="3" y1="18" x2="21" y2="18" />
-    </svg>
-  </button>
-
-  <button class="hamburger" @click="toggleSidebar" v-if="!sidebarOpen">
-    <svg class="icon icon-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-      <polyline points="9 18 15 12 9 6" />
     </svg>
   </button>
 
@@ -650,6 +653,30 @@ function tutupSearchDelay() {
 .sidebar-closed .profile-text,
 .sidebar-closed .sidebar-toggle-inside {
   display: none;
+}
+
+.sidebar-open-hint {
+  display: none;
+}
+
+.sidebar-closed .brand {
+  position: relative;
+  cursor: pointer;
+}
+
+.sidebar-closed .brand:hover {
+  background: #1d4ed8;
+}
+
+.sidebar-closed .brand:hover .icon-lg {
+  display: none;
+}
+
+.sidebar-closed .brand:hover .sidebar-open-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
 }
 
 .sidebar-closed .brand {

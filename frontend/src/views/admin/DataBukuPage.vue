@@ -260,11 +260,11 @@ onMounted(() => {
               </span>
             </td>
             <td>
-  <div class="aksi-cell">
-    <button class="btn-aksi" type="button" @click="openEdit(b)">Edit</button>
-    <button class="btn-aksi danger" type="button" @click="hapusBuku(b)">Hapus</button>
-  </div>
-</td>
+              <div class="aksi-cell">
+                <button class="btn-aksi" type="button" @click="openEdit(b)">Edit</button>
+                <button class="btn-aksi danger" type="button" @click="hapusBuku(b)">Hapus</button>
+              </div>
+            </td>
           </tr>
           <tr v-if="pagedList.length === 0">
             <td colspan="11" class="empty">Belum ada data buku</td>
@@ -559,6 +559,34 @@ thead th {
   font-weight: 600;
   color: #6b7280;
   background: #fafafa;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+/* Kolom No & Judul Buku tetap terlihat saat scroll ke kiri */
+th:nth-child(1),
+td:nth-child(1) {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #fff;
+  min-width: 44px;
+}
+
+th:nth-child(2),
+td:nth-child(2) {
+  position: sticky;
+  left: 44px;
+  z-index: 2;
+  background: #fff;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.04);
+}
+
+thead th:nth-child(1),
+thead th:nth-child(2) {
+  background: #fafafa;
+  z-index: 4;
 }
 
 tbody tr:hover { background: #f9fafb; }
@@ -854,21 +882,21 @@ tbody tr:hover { background: #f9fafb; }
 
   /* Toolbar: search + filter ditumpuk vertikal */
   .toolbar {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  padding: 12px;
-}
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 12px;
+  }
 
-.search-box {
-  grid-column: 1 / -1;
-  width: 100%;
-}
+  .search-box {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
 
-.select {
-  width: 100%;
-  min-width: 0;
-}
+  .select {
+    width: 100%;
+    min-width: 0;
+  }
 
   .search-box {
     width: 100%;
@@ -891,6 +919,15 @@ tbody tr:hover { background: #f9fafb; }
 
   th, td {
     padding: 10px 12px;
+  }  
+  
+  th:nth-child(2),
+  td:nth-child(2) {
+    width: 110px;
+    max-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* Pagination: ditumpuk agar tidak sempit */

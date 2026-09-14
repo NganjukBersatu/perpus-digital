@@ -663,6 +663,31 @@ thead th {
   font-weight: 600;
   color: #6b7280;
   background: #fafafa;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+th:nth-child(1),
+td:nth-child(1) {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #fff;
+  min-width: 44px;
+}
+th:nth-child(2),
+td:nth-child(2) {
+  position: sticky;
+  left: 44px;
+  z-index: 2;
+  background: #fff;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.04);
+}
+thead th:nth-child(1),
+thead th:nth-child(2) {
+  background: #fafafa;
+  z-index: 4;
 }
 
 tbody tr:hover {
@@ -814,7 +839,17 @@ tbody tr:hover {
   /* Peminjam */
   th:nth-child(2),
   td:nth-child(2) {
-    min-width: 170px;
+    width: 120px;
+    max-width: 120px;
+    min-width: 120px;
+  }
+
+  td:nth-child(2) strong,
+  td:nth-child(2) .sub-text {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* Buku */

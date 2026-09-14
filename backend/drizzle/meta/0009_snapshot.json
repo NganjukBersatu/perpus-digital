@@ -1,6 +1,6 @@
 {
-  "id": "bde91107-6210-4e22-9728-5ee9ee338350",
-  "prevId": "ba075a68-ff66-4a06-9ab1-cdd7afd83b03",
+  "id": "29584680-1dd5-4e4c-8ef3-d83d0c2e496a",
+  "prevId": "bde91107-6210-4e22-9728-5ee9ee338350",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -107,6 +107,12 @@
         "alamat": {
           "name": "alamat",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "detail": {
+          "name": "detail",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },
@@ -330,15 +336,9 @@
           "primaryKey": false,
           "notNull": false
         },
-        "username": {
-          "name": "username",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "password_hash": {
-          "name": "password_hash",
-          "type": "text",
+        "password": {
+          "name": "password",
+          "type": "varchar(255)",
           "primaryKey": false,
           "notNull": false
         },
@@ -372,13 +372,6 @@
           "nullsNotDistinct": false,
           "columns": [
             "nip"
-          ]
-        },
-        "anggota_username_unique": {
-          "name": "anggota_username_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "username"
           ]
         }
       },
@@ -457,6 +450,34 @@
           "type": "date",
           "primaryKey": false,
           "notNull": false
+        },
+        "nominal_denda_per_hari": {
+          "name": "nominal_denda_per_hari",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "denda_maksimal": {
+          "name": "denda_maksimal",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
+        },
+        "denda_guru_aktif": {
+          "name": "denda_guru_aktif",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "masa_tenggang": {
+          "name": "masa_tenggang",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "default": 0
         }
       },
       "indexes": {},

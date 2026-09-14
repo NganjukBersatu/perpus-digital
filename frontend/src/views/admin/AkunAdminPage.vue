@@ -275,7 +275,7 @@ onMounted(loadProfile)
             <rect x="2" y="4" width="20" height="16" rx="2"/>
             <polyline points="22,6 12,13 2,6"/>
           </svg>
-          {{ profile.email || '-' }}
+          <span>{{ profile.email || '-' }}</span>
         </p>
       </div>
 
@@ -1038,6 +1038,37 @@ label {
 
   .hero-art {
     display: none;
+  }
+
+  .hero {
+    overflow: visible;
+    align-items: flex-start;
+  }
+
+  .hero-info {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .hero-email {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .hero-email svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .hero-email span {
+    min-width: 0;
+    flex: 1;
+    overflow-wrap: anywhere;
+    word-break: break-all;
+    white-space: normal;
   }
 
   .grid-2 {

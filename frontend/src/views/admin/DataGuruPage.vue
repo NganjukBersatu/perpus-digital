@@ -256,14 +256,34 @@ onMounted(muatData)
   font-size: 13px; background: #fff; color: #374151; min-width: 150px;
 }
 
-.table-wrap { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.table-wrap { background: #fff; border-radius: 12px; overflow-x: auto; overflow-y: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); -webkit-overflow-scrolling: touch; }
 
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 600px; }
 th, td {
   padding: 12px 14px; text-align: left; border-bottom: 1px solid #f3f4f6;
   color: #374151; vertical-align: middle; white-space: nowrap;
 }
-thead th { font-size: 12px; font-weight: 600; color: #6b7280; background: #fafafa; }
+thead th {
+  font-size: 12px; font-weight: 600; color: #6b7280; background: #fafafa;
+  position: sticky; top: 0; z-index: 3;
+}
+
+th:nth-child(1),
+td:nth-child(1) {
+  position: sticky; left: 0; z-index: 2; background: #fff; min-width: 44px;
+}
+th:nth-child(2),
+td:nth-child(2) {
+  position: sticky;
+  left: 44px;
+  z-index: 2;
+  background: #fff;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.04);
+}
+thead th:nth-child(1),
+thead th:nth-child(2) {
+  background: #fafafa; z-index: 4;
+}
 tbody tr:hover { background: #f9fafb; }
 
 .judul { font-weight: 600; color: #111827; }
@@ -379,7 +399,12 @@ tbody tr:hover { background: #f9fafb; }
 
   th:nth-child(2),
   td:nth-child(2) {
-    min-width: 180px;
+    width: 110px;
+    max-width: 110px;
+    min-width: 110px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   th:nth-child(3),

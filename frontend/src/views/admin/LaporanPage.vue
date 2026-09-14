@@ -234,7 +234,36 @@ thead th { font-size: 11px; font-weight: 600; color: #6b7280; background: #fafaf
 .empty { text-align: center; color: #9ca3af; padding: 24px; }
 
 @media (max-width: 700px) {
-  .summary-grid { grid-template-columns: repeat(2, 1fr); }
+  .page {
+    padding: 14px;
+  }
+
+  .toolbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: end;
+    gap: 10px;
+  }
+
+  .field {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .field input {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 /* saat print / save as PDF, sembunyikan elemen yang tidak perlu */

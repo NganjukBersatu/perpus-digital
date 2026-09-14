@@ -51,11 +51,28 @@ const totalDikembalikan = ref('0')
 const chartW = 380
 const chartH = 130
 
+const lebarKolomChart = 44
+
+const chartInnerMinWidth = computed(() => {
+  const n = chartLabels.value.length
+  if (selectedRange.value !== '1bulan') return '100%'
+  return `${n * lebarKolomChart}px`
+})
+
 function toPoints(series, max, w, h) {
   if (series.length === 0) return ''
-  const stepX = series.length > 1 ? w / (series.length - 1) : 0
+
+  const padY = 8
+  const innerH = h - padY * 2
+  const n = series.length
+  const stepX = n > 1 ? w / n : w
+
   return series
-    .map((v, i) => `${i * stepX},${h - (max > 0 ? (v / max) * h : 0)}`)
+    .map((v, i) => {
+      const x = stepX * i + stepX / 2
+      const y = padY + innerH - (max > 0 ? (v / max) * innerH : 0)
+      return `${x},${y}`
+    })
     .join(' ')
 }
 
@@ -322,13 +339,17 @@ onMounted(async () => {
           <span class="legend-item"><span class="dot dot-green"></span> Dikembalikan</span>
         </div>
 
-        <svg :viewBox="`0 0 ${chartW} ${chartH}`" class="chart-svg" preserveAspectRatio="none">
-          <polyline :points="dipinjamPoints" fill="none" stroke="#7c6fe8" stroke-width="2" />
-          <polyline :points="dikembalikanPoints" fill="none" stroke="#18865b" stroke-width="2" />
-        </svg>
+        <div class="chart-scroll">
+          <div class="chart-inner" :style="{ width: chartInnerMinWidth }">
+            <svg :viewBox="`0 0 ${chartW} ${chartH}`" class="chart-svg" preserveAspectRatio="none">
+              <polyline :points="dipinjamPoints" fill="none" stroke="#7c6fe8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+              <polyline :points="dikembalikanPoints" fill="none" stroke="#18865b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+            </svg>
 
-        <div class="chart-labels">
-          <span v-for="m in chartLabels" :key="m">{{ m }}</span>
+            <div class="chart-labels">
+              <span v-for="m in chartLabels" :key="m">{{ m }}</span>
+            </div>
+          </div>
         </div>
 
         <div class="chart-footer">
@@ -756,17 +777,45 @@ onMounted(async () => {
     background: #18865b; 
 }
 
-.chart-svg { 
-    width: 100%; 
-    height: 130px; 
+.chart-card {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.chart-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chart-inner {
+  min-width: 100%;
+}
+
+.chart-svg {
+  width: 100%;
+  height: 130px;
+  display: block;
 }
 
 .chart-labels {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: 0;
   font-size: 10px;
   color: #9ca3af;
   margin-top: 4px;
+}
+
+.chart-labels span {
+  flex: 0 0 44px;
+  width: 44px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
 }
 
 .chart-footer {
@@ -1174,17 +1223,42 @@ span.reminder-badge.badge-red {
   .calendar-card {
     min-width: 0;
     flex-direction: row;
-    align-items: center;
+    align-items: stretch;
+    border-radius: 12px;
+    overflow: hidden;
   }
+
   .calendar-top {
     writing-mode: horizontal-tb;
-    padding: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 12px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
     flex: 0 0 auto;
   }
+
   .calendar-body {
+    flex: 1;
     flex-direction: row;
+    align-items: baseline;
+    justify-content: flex-start;
     gap: 8px;
-    padding: 10px;
+    padding: 8px 14px;
+  }
+
+  .calendar-date {
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .calendar-day {
+    font-size: 12px;
+    margin-top: 0;
+    text-transform: capitalize;
   }
 
   .card {
@@ -1231,6 +1305,26 @@ span.reminder-badge.badge-red {
   }
 
   /* Statistik peminjaman: select dropdown full width di bawah judul */
+  .chart-card,
+  .mid-row,
+  .card {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .chart-svg {
+    height: 100px;
+  }
+
+  .chart-scroll::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .chart-scroll::-webkit-scrollbar-thumb {
+    background: #c7c9d1;
+    border-radius: 999px;
+  }
+
   .card-title-row .mini-select {
     width: 100%;
   }

@@ -496,31 +496,31 @@ watch(page, fetchData)
         </thead>
         <tbody>
           <tr v-for="(row, i) in data" :key="row.id">
-            <td>{{ (page - 1) * limit + i + 1 }}</td>
-            <td>
+            <td data-label="No">{{ (page - 1) * limit + i + 1 }}</td>
+            <td data-label="Peminjam">
               <div class="peminjam">
                 <div class="avatar">{{ initial(row.namaPeminjam) }}</div>
-                <div>
-                  <p class="nama">{{ row.namaPeminjam }}</p>
-                  <p class="kelas">{{ row.kelasPeminjam }}</p>
-                </div>
-              </div>
+                  <div>
+                    <p class="nama">{{ row.namaPeminjam }}</p>
+                    <p class="kelas">{{ row.kelasPeminjam }}</p>
+                  </div>
+               </div>
             </td>
-            <td>
+            <td data-label="Buku">
               <p class="nama">{{ row.judulBuku }}</p>
               <p class="kelas">{{ row.penulisBuku }}</p>
             </td>
-            <td>{{ formatTanggal(row.tanggalPinjam) }}</td>
-            <td>{{ formatTanggal(row.batasKembali) }}</td>
-            <td>{{ formatTanggal(row.tanggalDikembalikan) }}</td>
-            <td>
+            <td data-label="Tanggal Pinjam">{{ formatTanggal(row.tanggalPinjam) }}</td>
+            <td data-label="Batas Kembali">{{ formatTanggal(row.batasKembali) }}</td>
+            <td data-label="Tanggal Kembali">{{ formatTanggal(row.tanggalDikembalikan) }}</td>
+            <td data-label="Status">
               <span :class="['badge', row.status === 'Terlambat' ? 'badge-red' : 'badge-green']">
                 {{ row.status }}
               </span>
             </td>
-            <td>{{ row.keterlambatan }}</td>
-            <td>Rp{{ (row.denda || 0).toLocaleString('id-ID') }}</td>
-            <td>
+            <td data-label="Keterlambatan">{{ row.keterlambatan }}</td>
+            <td data-label="Denda">Rp{{ (row.denda || 0).toLocaleString('id-ID') }}</td>
+            <td data-label="Aksi">
               <button class="btn-link" type="button">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>
@@ -531,38 +531,38 @@ watch(page, fetchData)
                 Detail
               </button>
             </td>
-          </tr>
-          <tr v-if="data.length === 0">
-            <td colspan="10" class="empty">Belum ada data pengembalian</td>
+            <tr v-if="data.length === 0">
+              <td colspan="10" class="empty">Belum ada data pengembalian</td>
+            </tr>
           </tr>
         </tbody>
       </table>
+    </div>
 
-      <div class="footer">
-        <span>Menampilkan {{ data.length }} dari {{ total }} data</span>
-        <div class="pagination">
-          <button :disabled="page === 1" @click="page--" type="button" class="page-nav">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m15 18-6-6 6-6"/>
-            </svg>
-          </button>
-          <button
-            v-for="p in Math.min(totalPages, 3)" :key="p"
-            :class="{ active: page === p }" @click="page = p"
-          >{{ p }}</button>
-          <span v-if="totalPages > 3">...</span>
-          <button :disabled="page === totalPages" @click="page++" type="button" class="page-nav">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m9 18 6-6-6-6"/>
-            </svg>
-          </button>
-        </div>
-        <select v-model="limit" class="select">
-          <option :value="5">5 / halaman</option>
-          <option :value="10">10 / halaman</option>
-          <option :value="20">20 / halaman</option>
-        </select>
+    <div class="footer">
+      <span>Menampilkan {{ data.length }} dari {{ total }} data</span>
+      <div class="pagination">
+        <button :disabled="page === 1" @click="page--" type="button" class="page-nav">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m15 18-6-6 6-6"/>
+          </svg>
+        </button>
+        <button
+          v-for="p in Math.min(totalPages, 3)" :key="p"
+          :class="{ active: page === p }" @click="page = p"
+        >{{ p }}</button>
+        <span v-if="totalPages > 3">...</span>
+        <button :disabled="page === totalPages" @click="page++" type="button" class="page-nav">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m9 18 6-6-6-6"/>
+          </svg>
+        </button>
       </div>
+      <select v-model="limit" class="select">
+        <option :value="5">5 / halaman</option>
+        <option :value="10">10 / halaman</option>
+        <option :value="20">20 / halaman</option>
+      </select>
     </div>
 
     <div
@@ -1000,11 +1000,13 @@ watch(page, fetchData)
     font-size: 13px; 
 }
 
-.table-wrap { 
-    background: #fff; 
-    border-radius: 12px; 
-    overflow: hidden; 
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06); 
+.table-wrap {
+    background: #fff;
+    border-radius: 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    -webkit-overflow-scrolling: touch;
 }
 
 table { 
@@ -1023,6 +1025,10 @@ th {
     color: #000000; 
     font-weight: 500; 
     font-size: 12px; 
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: #f9fafb;
 }
 
 td { 
@@ -1030,6 +1036,36 @@ td {
     border-top: 1px solid #f3f4f6; 
     color: #374151; 
     vertical-align: middle; 
+}
+
+/* Kolom "No" tetap terlihat saat discroll ke kiri */
+th:nth-child(1),
+td:nth-child(1) {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #fff;
+  min-width: 44px;
+}
+
+thead th:nth-child(1) {
+  background: #f9fafb;
+  z-index: 4;
+}
+
+/* Kolom "Peminjam" tetap terlihat, nempel tepat setelah kolom No */
+th:nth-child(2),
+td:nth-child(2) {
+  position: sticky;
+  left: 44px;
+  z-index: 2;
+  background: #fff;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.04);
+}
+
+thead th:nth-child(2) {
+  background: #f9fafb;
+  z-index: 4;
 }
 
 .peminjam { 
@@ -1090,7 +1126,10 @@ td {
     justify-content: space-between; 
     align-items: center; 
     padding: 12px 16px; 
-    border-top: 1px solid #f3f4f6; 
+    margin-top: 10px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
     font-size: 13px; 
     color: #6b7280; 
 }
@@ -1301,5 +1340,131 @@ td {
 .table-in-modal {
   box-shadow: none;
   border: 1px solid #e5e7eb;
+}
+
+/* ===== RESPONSIVE MOBILE ===== */
+@media (max-width: 640px) {
+  .page {
+    padding: 16px;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .header .btn-outline {
+    justify-content: center;
+  }
+
+  /* 4 stat cards -> 2 kolom, otomatis jadi 2 baris (atas: Total & Hari Ini, bawah: Tepat Waktu & Terlambat) */
+  .cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .card {
+    padding: 12px;
+  }
+
+  .value {
+    font-size: 20px;
+  }
+
+  .label,
+  .unit {
+    font-size: 11px;
+  }
+
+  /* toolbar: search, filter status, filter tanggal, export -> tumpuk vertikal, full width */
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search,
+  .toolbar > .select,
+  .date-filter-wrap,
+  .toolbar > .btn-primary {
+    width: 100%;
+  }
+
+  .date-filter-wrap .btn-outline {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .date-popover {
+    left: 0;
+    right: 0;
+    width: 100%;
+  }
+
+  /* tabel: ubah dari layout tabel jadi kartu bertumpuk supaya mudah dibaca */
+  .table-wrap {
+    border-radius: 10px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-wrap::-webkit-scrollbar {
+    height: 7px;
+  }
+
+  .table-wrap::-webkit-scrollbar-track {
+    background: #f3f4f6;
+  }
+
+  .table-wrap::-webkit-scrollbar-thumb {
+    background: #c7c9d1;
+    border-radius: 999px;
+  }
+
+  table {
+    min-width: 1000px;
+    font-size: 12px;
+  }
+
+  th, td {
+    padding: 10px 12px;
+  }
+
+  .peminjam {
+   justify-content: flex-start;
+  }
+
+  .peminjam .avatar {
+    display: none;
+  }
+
+  th:nth-child(2),
+  td:nth-child(2) {
+    width: 130px;
+    max-width: 130px;
+  }
+
+  td:nth-child(2) .nama,
+  td:nth-child(2) .kelas {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 120px;
+  }
+
+  /* footer & pagination */
+  .footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    text-align: center;
+  }
+
+  .pagination {
+    justify-content: center;
+  }
+
+  .footer .select {
+    width: 100%;
+  }
 }
 </style>

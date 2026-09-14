@@ -67,7 +67,8 @@ async function fetchPeminjaman() {
         tanggalPinjam: item.tanggalPinjam,
         batasKembali: item.batasKembali || item.tanggalKembali,
         status: item.status || 'Dipinjam',
-        tanggalDikembalikan: item.tanggalDikembalikan || null
+        tanggalDikembalikan: item.tanggalDikembalikan || null,
+        denda: item.denda || 0
       }))
       .filter((p) => !p.tanggalDikembalikan)
   } catch (err) {
@@ -92,6 +93,14 @@ function formatTanggal(tanggal) {
     month: 'short',
     year: 'numeric'
   })
+}
+
+function formatRupiah(angka) {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    maximumFractionDigits: 0
+  }).format(angka || 0)
 }
 
 function hitungHariTerlambat(item) {
@@ -246,6 +255,7 @@ function goToKatalog() {
                 <th>Jatuh Tempo</th>
                 <th>Status</th>
                 <th>Keterlambatan</th>
+                <th>Denda</th>
               </tr>
             </thead>
             <tbody>
@@ -270,6 +280,10 @@ function goToKatalog() {
                 </td>
                 <td>
                   {{ hitungHariTerlambat(item) > 0 ? hitungHariTerlambat(item) + ' hari' : '—' }}
+                </td>
+                <td>
+                  <span v-if="item.denda > 0" class="denda-text">{{ formatRupiah(item.denda) }}</span>
+                  <span v-else>—</span>
                 </td>
               </tr>
             </tbody>
@@ -464,6 +478,11 @@ function goToKatalog() {
 .status-active { background: #dbeafe; color: #1d4ed8; }
 .status-soon { background: #ffedd5; color: #c2410c; }
 .status-late { background: #fee2e2; color: #b91c1c; }
+
+.denda-text {
+  color: #b91c1c;
+  font-weight: 600;
+}
 
 .table-footer {
   padding: 12px 4px 16px;

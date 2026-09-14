@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 const API_URL = 'http://localhost:3000/api/buku'
 const KATEGORI_URL = 'http://localhost:3000/api/kategori'
@@ -9,6 +10,8 @@ const selectedKategori = ref('')
 const selectedStatus = ref('')
 const currentPage = ref(1)
 const perPage = ref(5)
+const route = useRoute()
+const router = useRouter()
 
 const showModal = ref(false)
 const editingId = ref(null)
@@ -28,7 +31,8 @@ const emptyForm = () => ({
   stok: 0,
   tersedia: 0,
   lokasi: '',
-  status: 'Tersedia'
+  status: 'Tersedia',
+  barcode: ''
 })
 
 const form = ref(emptyForm())
@@ -56,9 +60,10 @@ async function ambilDataBuku() {
   }
 }
 
-function openTambah() {
+function openTambah(barcodeAwal = '') {
   editingId.value = null
   form.value = emptyForm()
+  if (barcodeAwal) form.value.barcode = barcodeAwal
   showModal.value = true
 }
 
@@ -72,7 +77,8 @@ function openEdit(buku) {
     stok: buku.stok,
     tersedia: buku.tersedia,
     lokasi: buku.lokasi,
-    status: buku.status
+    status: buku.status,
+    barcode: ''
   }
   showModal.value = true
 }
@@ -97,6 +103,20 @@ async function simpanBuku() {
     })
 
     if (!res.ok) throw new Error()
+
+    const dariScan = route.query.from === 'scan'
+    const barcodeScan = String(route.query.barcode || form.value.barcode || '').trim()
+
+    if (!isEdit && dariScan && barcodeScan) {
+      router.push({
+        path: '/admin/pinjam',
+        query: {
+          barcode: barcodeScan,
+          lanjut: 'pinjam'
+        }
+      })
+      return
+    }
 
     await ambilDataBuku()
     closeModal()
@@ -172,6 +192,11 @@ function resetPage() {
 onMounted(() => {
   ambilDataBuku()
   ambilDaftarKategori()
+
+  const barcodeDariScan = route.query.barcode
+  if (barcodeDariScan) {
+    openTambah(String(barcodeDariScan))
+  }
 })
 </script>
 
@@ -347,6 +372,11 @@ onMounted(() => {
           <div class="form-group">
             <label>ISBN</label>
             <input v-model="form.isbn" type="text" required placeholder="978-xxx-xxxx-xx-x" />
+          </div>
+
+          <div class="form-group" v-if="editingId === null">
+            <label>Barcode</label>
+            <input v-model="form.barcode" type="text" placeholder="Scan atau ketik barcode buku (opsional)" />
           </div>
 
           <div class="form-row">
@@ -857,13 +887,11 @@ tbody tr:hover { background: #f9fafb; }
   background: #dc2626;
 }
 
-/* ===== Responsive Mobile - Data Buku ===== */
 @media (max-width: 640px) {
   .page {
     padding: 14px;
   }
 
-  /* Header: judul + tombol jadi vertikal */
   .header {
     flex-direction: column;
     align-items: stretch;
@@ -880,7 +908,6 @@ tbody tr:hover { background: #f9fafb; }
     padding: 11px 16px;
   }
 
-  /* Toolbar: search + filter ditumpuk vertikal */
   .toolbar {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -907,13 +934,12 @@ tbody tr:hover { background: #f9fafb; }
     min-width: 0;
   }
 
-  /* Tabel tetap bisa di-scroll horizontal */
   .table-wrap {
     border-radius: 10px;
   }
 
   table {
-    min-width: 820px; /* biar kolom tidak terlalu gepeng */
+    min-width: 820px;
     font-size: 12px;
   }
 
@@ -930,7 +956,6 @@ tbody tr:hover { background: #f9fafb; }
     white-space: nowrap;
   }
 
-  /* Pagination: ditumpuk agar tidak sempit */
   .pagination {
     flex-direction: column;
     align-items: stretch;
@@ -951,7 +976,6 @@ tbody tr:hover { background: #f9fafb; }
     width: 100%;
   }
 
-  /* Modal sudah cukup baik, hanya rapikan sedikit */
   .modal-box {
     width: 100%;
     max-width: 94%;

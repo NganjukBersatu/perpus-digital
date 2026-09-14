@@ -8,7 +8,7 @@ const { buku, eksemplarBuku, anggota, peminjaman } = require("./db/schema")
 const { ambilPengaturanDenda, hitungDenda, ambilPengaturanNotifikasi } = require("./utils/hitungDenda")
 const { tanggalHariIniLokal } = require("./utils/tanggal")
 
-const { router: authRoutes } = require("./routes/auth")
+const { router: authRoutes, wajibLogin } = require("./routes/auth")
 const adminRoutes = require("./routes/admin")
 const pengaturanRoutes = require("./routes/pengaturan")
 const pengembalianRoutes = require("./routes/pengembalian")
@@ -23,6 +23,8 @@ const laporanRoutes = require("./routes/laporan")
 const bukuRoutes = require("./routes/buku")
 const { router: authSiswaRoutes, wajibLoginSiswa } = require("./routes/authSiswa")
 const dashboardSiswaRoutes = require("./routes/dashboardSiswa")
+const { pasangRouteNotifikasiSiswa } = require('./routes/notifikasiSiswa')
+const { pasangRouteNotifikasiGuru } = require('./routes/notifikasiGuru')
 
 
 
@@ -46,6 +48,8 @@ app.use("/api/riwayat", riwayatRoutes)
 app.use("/api/laporan", laporanRoutes)
 app.use('/api/dashboard-siswa', require('./routes/dashboardSiswa'))
 // app.use('/api/katalog-siswa', require('./routes/katalogSiswa'))
+pasangRouteNotifikasiSiswa(app, wajibLoginSiswa)
+pasangRouteNotifikasiGuru(app, wajibLogin)
 
 // GET data buku berdasarkan barcode
 app.get("/api/eksemplar-buku/:barcode", async (req, res) => {

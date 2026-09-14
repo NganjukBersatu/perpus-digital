@@ -63,7 +63,8 @@ async function fetchPeminjaman() {
         tanggalPinjam: item.tanggalPinjam,
         batasKembali: item.tanggalKembali || item.batasKembali,
         status: item.status || 'Dipinjam',
-        tanggalDikembalikan: item.tanggalDikembalikan || null
+        tanggalDikembalikan: item.tanggalDikembalikan || null,
+        denda: item.denda || 0
       }))
       .filter((p) => !p.tanggalDikembalikan)
   } catch (err) {
@@ -88,6 +89,14 @@ function formatTanggal(tanggal) {
     month: 'short',
     year: 'numeric'
   })
+}
+
+function formatRupiah(angka) {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    maximumFractionDigits: 0
+  }).format(angka || 0)
 }
 
 function hitungHariTerlambat(item) {
@@ -154,7 +163,6 @@ function goToKatalog() {
       <p class="muted">Daftar buku yang sedang kamu pinjam saat ini.</p>
     </div>
 
-    <!-- KARTU RINGKASAN -->
     <div class="stats-row">
       <div class="stat-card">
         <div class="stat-icon blue">
@@ -197,7 +205,6 @@ function goToKatalog() {
       </div>
     </div>
 
-    <!-- KARTU TABEL -->
     <div class="table-card">
       <div class="card-toolbar">
         <h2>Daftar Peminjaman</h2>
@@ -244,19 +251,20 @@ function goToKatalog() {
                 <th>Jatuh Tempo</th>
                 <th>Status</th>
                 <th>Keterlambatan</th>
+                <th>Denda</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="item in daftarTampil" :key="item.id">
-                <td>
+                <td data-label="Judul">
                   <div class="book-title">{{ item.judul }}</div>
                   <div v-if="item.penulis && item.penulis !== '-'" class="book-author">
                     {{ item.penulis }}
                   </div>
                 </td>
-                <td>{{ formatTanggal(item.tanggalPinjam) }}</td>
-                <td>{{ formatTanggal(item.batasKembali) }}</td>
-                <td>
+                <td data-label="Tanggal Pinjam">{{ formatTanggal(item.tanggalPinjam) }}</td>
+                <td data-label="Jatuh Tempo">{{ formatTanggal(item.batasKembali) }}</td>
+                <td data-label="Status">
                   <span
                     class="status-badge"
                     :class="{
@@ -268,8 +276,12 @@ function goToKatalog() {
                     {{ statusTampil(item) }}
                   </span>
                 </td>
-                <td>
+                <td data-label="Terlambat">
                   {{ hitungHariTerlambat(item) > 0 ? hitungHariTerlambat(item) + ' hari' : '—' }}
+                </td>
+                <td data-label="Denda">
+                  <span v-if="item.denda > 0" class="denda-text">{{ formatRupiah(item.denda) }}</span>
+                  <span v-else>—</span>
                 </td>
               </tr>
             </tbody>
@@ -461,6 +473,11 @@ function goToKatalog() {
 .status-soon { background: #ffedd5; color: #c2410c; }
 .status-late { background: #fee2e2; color: #b91c1c; }
 
+.denda-text {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
 .table-footer {
   padding: 12px 4px 16px;
   font-size: 12px;
@@ -488,8 +505,97 @@ function goToKatalog() {
 }
 
 @media (max-width: 800px) {
+  .page {
+    padding: 16px 12px 24px;
+  }
+
+  .page-header h1 {
+    font-size: 1.3rem;
+  }
+
   .stats-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .stat-card {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 10px 8px;
+    gap: 8px;
+  }
+
+  .stat-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+  }
+
+  .stat-label {
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  .stat-value {
+    font-size: 18px;
+  }
+
+  .table-card {
+    padding: 14px 12px 0;
+  }
+
+  .search-box {
+    max-width: none;
+    width: 100%;
+  }
+
+  .tabel {
+    min-width: 0;
+  }
+
+  .tabel thead {
+    display: none;
+  }
+
+  .tabel,
+  .tabel tbody,
+  .tabel tr,
+  .tabel td {
+    display: block;
+    width: 100%;
+  }
+
+  .tabel tr {
+    border: 1px solid #eef2f7;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+
+  .tabel td {
+    border: none;
+    padding: 6px 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .tabel td::before {
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  .tabel td:first-child {
+    display: block;
+  }
+
+  .tabel td:first-child::before {
+    display: none;
   }
 }
 </style>

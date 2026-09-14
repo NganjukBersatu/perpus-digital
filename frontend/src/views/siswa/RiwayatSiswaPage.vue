@@ -98,7 +98,6 @@ function formatRupiah(angka) {
       </p>
     </div>
 
-    <!-- KARTU RINGKASAN -->
     <div class="stats-row">
       <div class="stat-card">
         <div class="stat-icon blue">
@@ -141,7 +140,6 @@ function formatRupiah(angka) {
       </div>
     </div>
 
-    <!-- KARTU TABEL -->
     <div class="table-card">
       <div class="card-toolbar">
         <h2>Semua Riwayat</h2>
@@ -193,25 +191,27 @@ function formatRupiah(angka) {
             </thead>
             <tbody>
               <tr v-for="item in riwayatTerfilter" :key="item.id">
-                <td>
+                <td data-label="Judul">
                   <div class="book-title">{{ item.judul }}</div>
                   <div v-if="item.penulis && item.penulis !== '-'" class="book-author">
                     {{ item.penulis }}
                   </div>
                 </td>
-                <td>
+                <td data-label="Kategori">
                   <span v-if="item.kategori" class="kategori-badge">{{ item.kategori }}</span>
                   <span v-else>—</span>
                 </td>
-                <td>{{ formatTanggal(item.tanggalPinjam) }}</td>
-                <td>{{ formatTanggal(item.tanggalKembali) }}</td>
-                <td>{{ item.tanggalDikembalikan ? formatTanggal(item.tanggalDikembalikan) : '—' }}</td>
-                <td>
+                <td data-label="Tanggal Pinjam">{{ formatTanggal(item.tanggalPinjam) }}</td>
+                <td data-label="Jatuh Tempo">{{ formatTanggal(item.tanggalKembali) }}</td>
+                <td data-label="Tanggal Kembali">
+                  {{ item.tanggalDikembalikan ? formatTanggal(item.tanggalDikembalikan) : '—' }}
+                </td>
+                <td data-label="Status">
                   <span class="status-badge" :class="statusClass(item.status)">
                     {{ item.status }}
                   </span>
                 </td>
-                <td>
+                <td data-label="Denda">
                   <span v-if="item.denda > 0" class="denda-text">
                     Rp{{ formatRupiah(item.denda) }}
                   </span>
@@ -459,8 +459,101 @@ function formatRupiah(angka) {
 }
 
 @media (max-width: 800px) {
+  .page {
+    padding: 16px 12px 24px;
+  }
+
+  .page-header h1 {
+    font-size: 1.3rem;
+  }
+
   .stats-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .stat-card {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 10px 8px;
+    gap: 8px;
+  }
+
+  .stat-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+  }
+
+  .stat-label {
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  .stat-value {
+    font-size: 18px;
+  }
+
+  .table-card {
+    padding: 14px 12px 0;
+  }
+
+  .filter-chips {
+    width: 100%;
+  }
+
+  .search-box {
+    max-width: none;
+    width: 100%;
+  }
+
+  .tabel {
+    min-width: 0;
+  }
+
+  .tabel thead {
+    display: none;
+  }
+
+  .tabel,
+  .tabel tbody,
+  .tabel tr,
+  .tabel td {
+    display: block;
+    width: 100%;
+  }
+
+  .tabel tr {
+    border: 1px solid #eef2f7;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+
+  .tabel td {
+    border: none;
+    padding: 6px 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .tabel td::before {
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  .tabel td:first-child {
+    display: block;
+  }
+
+  .tabel td:first-child::before {
+    display: none;
   }
 }
 </style>

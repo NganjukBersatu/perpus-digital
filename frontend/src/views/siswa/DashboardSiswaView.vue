@@ -78,7 +78,7 @@ async function kembalikan(item) {
   if (!confirm(`Yakin ingin mengembalikan "${item.judul}"?`)) return
 
   try {
-    const res = await fetch(`${API_BASE}/dashboard-siswa/kembalikan/${item.id}`, {
+    const res = await fetch(`${API_BASE}/pengembalian/${item.id}`, {
       method: 'PATCH',
       headers: authHeaders()
     })

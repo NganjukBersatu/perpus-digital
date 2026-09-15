@@ -161,6 +161,16 @@ function toggleSidebar() {
   sidebarOpen.value = !sidebarOpen.value
 }
 
+const mobileMenuOpen = ref(false)
+
+function toggleMobileMenu() {
+  mobileMenuOpen.value = !mobileMenuOpen.value
+}
+
+function closeMobileMenu() {
+  mobileMenuOpen.value = false
+}
+
 function logout() {
   localStorage.removeItem('token')
   localStorage.removeItem('role')
@@ -171,7 +181,7 @@ function logout() {
 
 <template>
   <div class="layout">
-    <aside class="sidebar" :class="{ 'sidebar-closed': !sidebarOpen }">
+   <aside class="sidebar" :class="{ 'sidebar-closed': !sidebarOpen, 'mobile-open': mobileMenuOpen }">
       <div class="brand">
         <svg class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
@@ -188,7 +198,7 @@ function logout() {
         </button>
       </div>
 
-      <nav class="nav">
+     <nav class="nav" @click="closeMobileMenu">
         <router-link to="/guru" class="nav-item" exact-active-class="active">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -263,9 +273,19 @@ function logout() {
       </button>
     </aside>
 
+    <div v-if="mobileMenuOpen" class="sidebar-overlay" @click="closeMobileMenu"></div>
+
     <main class="main" :class="{ 'main-expanded': !sidebarOpen }">
       <header class="topbar">
-        <button class="hamburger" @click="toggleSidebar" v-if="!sidebarOpen">
+        <button class="hamburger hamburger-mobile" type="button" @click="toggleMobileMenu">
+          <svg class="icon icon-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+
+        <button class="hamburger hamburger-desktop" type="button" @click="toggleSidebar" v-if="!sidebarOpen">
           <svg class="icon icon-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
             <polyline points="9 18 15 12 9 6" />
           </svg>
@@ -362,7 +382,7 @@ function logout() {
           </div>
 
           <div class="avatar-sm avatar-icon" v-html="icons.userCircle"></div>
-          <div>
+          <div class="user-meta">
             <div class="user-name">{{ guru.nama }}</div>
             <div class="user-role">{{ guru.role }}</div>
           </div>
@@ -379,6 +399,7 @@ function logout() {
   min-height: 100vh;
   font-family: 'Segoe UI', sans-serif;
   background: #f4f6fb;
+  overflow-x: hidden;
 }
 
 .icon {
@@ -404,7 +425,7 @@ function logout() {
   left: 0;
   height: 100vh;
   overflow: hidden;
-  transition: transform 0.25s ease;
+  transition: transform 0.25s ease, width 0.25s ease;
   z-index: 50;
 }
 
@@ -610,8 +631,7 @@ function logout() {
   gap: 10px;
   width: 100%;
   border-radius: 8px; 
-  transition: 
-  background-color 0.15s ease, color 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .btn-logout:hover {
@@ -632,11 +652,18 @@ function logout() {
   margin-left: 76px;
 }
 
+.page-wrap {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
 .topbar {
   background: #fff;
   padding: 14px 24px;
   display: flex;
   align-items: center;
+  gap: 12px;
   border-bottom: 1px solid #e5e7eb;
   position: sticky;
   top: 0;
@@ -651,10 +678,13 @@ function logout() {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
+  width: 32px;
   height: 32px;
   border-radius: 8px;
+  flex-shrink: 0;
 }
+
+.hamburger-mobile { display: none; }
 
 .topbar-right {
   display: flex;
@@ -806,5 +836,124 @@ function logout() {
 .user-role {
   font-size: 11px;
   color: #6b7280;
+}
+
+.sidebar-overlay { display: none; }
+
+/* ==================== RESPONSIVE MOBILE (mirip gambar) ==================== */
+@media (max-width: 768px) {
+  .sidebar-toggle-inside {
+    display: none !important;
+  }
+
+  .hamburger-desktop {
+    display: none !important;
+  }
+
+  .hamburger-mobile {
+    display: flex !important;
+  }
+
+  .sidebar,
+  .sidebar.sidebar-closed {
+    width: 280px !important;
+    padding: 20px 16px !important;
+    align-items: stretch !important;
+    transform: translateX(-100%) !important;
+    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.25);
+  }
+
+  .sidebar.mobile-open {
+    transform: translateX(0) !important;
+  }
+
+  .sidebar.sidebar-closed .brand,
+  .sidebar.sidebar-closed .brand-text,
+  .sidebar.sidebar-closed .nav-label,
+  .sidebar.sidebar-closed .profile-text,
+  .sidebar.sidebar-closed .btn-outline-light {
+    display: flex !important;
+  }
+
+  .sidebar.sidebar-closed .brand-text,
+  .sidebar.sidebar-closed .nav-label,
+  .sidebar.sidebar-closed .profile-text {
+    display: block !important;
+  }
+
+  .sidebar.sidebar-closed .nav-item,
+  .sidebar.sidebar-closed .btn-logout {
+    justify-content: flex-start !important;
+    padding: 8px 10px !important;
+  }
+
+  .sidebar.sidebar-closed .nav-item-left {
+    justify-content: flex-start !important;
+    gap: 10px !important;
+  }
+
+  .sidebar.sidebar-closed .profile-card {
+    justify-content: flex-start !important;
+    padding: 12px !important;
+    background: #12235a !important;
+  }
+
+  .main,
+  .main-expanded {
+    margin-left: 0 !important;
+    width: 100%;
+  }
+
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 45;
+  }
+
+  /* Topbar mirip gambar */
+  .topbar {
+    padding: 12px 16px;
+    gap: 10px;
+  }
+
+  .hamburger {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+  }
+
+  .user-meta,
+  .user-name,
+  .user-role {
+    display: none !important;
+  }
+
+  .topbar-right {
+    gap: 10px;
+  }
+
+  .avatar-sm {
+    width: 36px;
+    height: 36px;
+  }
+
+  .notif-icon {
+    padding: 8px;
+  }
+
+  .notif-dropdown {
+    width: min(300px, calc(100vw - 24px));
+    right: -8px;
+    border-radius: 12px;
+  }
+
+  /* Pastikan konten di dalam router-view punya spacing yang nyaman di mobile */
+  :deep(.page-wrap),
+  :deep(.dashboard-content),
+  :deep(.content) {
+    padding: 16px !important;
+  }
 }
 </style>

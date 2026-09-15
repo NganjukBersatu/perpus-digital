@@ -548,4 +548,123 @@ watch(keyword, () => {
     flex-wrap: wrap;
   }
 }
+
+@media (max-width: 700px) {
+  .katalog-page {
+    padding: 16px 12px 24px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .page-header h1 {
+    font-size: 22px;
+  }
+
+  .view-toggle {
+    width: 100%;
+  }
+
+  .toggle-btn {
+    flex: 1;
+    text-align: center;
+  }
+
+  .filter-bar {
+    flex-direction: column;
+  }
+
+  .search-box,
+  .filter-select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .buku-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .buku-cover {
+    height: 130px;
+    padding: 12px;
+  }
+
+  .cover-title {
+    font-size: 13px;
+  }
+
+  /* List view jadi ringkas di mobile */
+  .list-item {
+    flex-direction: row;
+    align-items: center;
+    border-radius: 12px;
+    padding: 8px;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .list-cover {
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 8px;
+    min-height: 0;
+  }
+
+  .list-cover-title {
+    display: none;
+  }
+
+  .list-info {
+    flex: 1;
+    padding: 0;
+    justify-content: center;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .list-judul {
+    font-size: 13px;
+    margin-bottom: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .list-penulis {
+    font-size: 11px;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .list-meta {
+    margin-bottom: 4px;
+    gap: 4px;
+  }
+
+  .buku-kategori {
+    font-size: 9px;
+    padding: 1px 6px;
+    margin-bottom: 0;
+  }
+
+  .list-actions {
+    gap: 6px;
+  }
+
+  .btn-pinjam {
+    padding: 2px 8px;
+    font-size: 10px;
+    width: auto;
+  }
+}
 </style>

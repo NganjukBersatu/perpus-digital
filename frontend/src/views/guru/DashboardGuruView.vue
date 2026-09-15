@@ -15,7 +15,6 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL
 const loading = ref(true)
 const errorMsg = ref('')
 
-const totalBuku = ref(0)
 const semuaPeminjamanSaya = ref([])
 
 const peminjamanAktif = computed(() =>
@@ -29,31 +28,37 @@ const riwayatSelesai = computed(() =>
 const jumlahDipinjam = computed(
   () => peminjamanAktif.value.filter((p) => p.status === 'Dipinjam').length
 )
-const jumlahTerlambat = computed(
-  () => peminjamanAktif.value.filter((p) => p.status === 'Terlambat').length
+
+function isAlmostDue(tanggal) {
+  if (!tanggal) return false
+  const today = new Date()
+  const due = new Date(tanggal)
+  const diff = (due - today) / (1000 * 60 * 60 * 24)
+  return diff <= 3 && diff >= 0
+}
+
+const jumlahHampirJatuhTempo = computed(
+  () => peminjamanAktif.value.filter((p) => isAlmostDue(p.batasKembali)).length
 )
+
 const jumlahSelesai = computed(() => riwayatSelesai.value.length)
+
+function authHeaders() {
+  const token = localStorage.getItem('token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
 
 async function muatData() {
   loading.value = true
   errorMsg.value = ''
   try {
-    const token = localStorage.getItem('token')
-    const headers = { Authorization: `Bearer ${token}` }
+    const res = await fetch(`${API_BASE}/data-peminjaman?anggotaId=${props.guru.id}`, {
+      headers: authHeaders()
+    })
 
-    const [resBuku, resPeminjaman] = await Promise.all([
-      fetch(`${API_BASE}/buku`, { headers }),
-      fetch(`${API_BASE}/data-peminjaman?anggotaId=${props.guru.id}`, { headers })
-    ])
-
-    if (resBuku.ok) {
-      const dataBuku = await resBuku.json()
-      totalBuku.value = Array.isArray(dataBuku) ? dataBuku.length : 0
-    }
-
-    if (resPeminjaman.ok) {
-      const dataPeminjaman = await resPeminjaman.json()
-      semuaPeminjamanSaya.value = dataPeminjaman.data || []
+    if (res.ok) {
+      const data = await res.json()
+      semuaPeminjamanSaya.value = data.data || []
     }
   } catch (err) {
     console.error('Gagal memuat data dashboard guru:', err)
@@ -76,12 +81,26 @@ function formatTanggal(tanggal) {
   })
 }
 
-function isAlmostDue(tanggal) {
-  if (!tanggal) return false
-  const today = new Date()
-  const due = new Date(tanggal)
-  const diff = (due - today) / (1000 * 60 * 60 * 24)
-  return diff <= 3 && diff >= 0
+async function kembalikan(item) {
+  if (!confirm(`Yakin ingin mengembalikan "${item.judulBuku || item.judul}"?`)) return
+
+  try {
+    const res = await fetch(`${API_BASE}/pengembalian/${item.id}`, {
+      method: 'PATCH',
+      headers: authHeaders()
+    })
+    if (!res.ok) throw new Error('Gagal mengembalikan buku')
+
+    const hasil = await res.json()
+
+    semuaPeminjamanSaya.value = semuaPeminjamanSaya.value.map((p) =>
+      p.id === item.id ? { ...p, tanggalDikembalikan: new Date().toISOString(), denda: hasil.denda } : p
+    )
+    alert(`Buku "${item.judulBuku || item.judul}" berhasil dikembalikan.`)
+  } catch (err) {
+    console.error(err)
+    alert('Gagal mengembalikan buku, coba lagi.')
+  }
 }
 
 function goToKatalog() {
@@ -95,13 +114,13 @@ function goToPeminjaman() {
 
 <template>
   <div class="page">
+    <!-- Banner -->
     <div class="welcome-banner">
       <div class="welcome-text">
         <h1>Halo, {{ props.guru.nama }}!</h1>
         <p>NIP: {{ props.guru.nip || '-' }} · {{ props.guru.mapel || 'Guru' }}</p>
         <p class="welcome-desc">
-          Selamat datang di sistem perpustakaan digital.
-          Anda bisa mencari, meminjam, dan mengelola buku dengan mudah.
+          Selamat datang di sistem perpustakaan digital. Anda bisa mencari, meminjam, dan mengelola buku dengan mudah.
         </p>
         <div class="banner-actions">
           <button class="btn-banner" @click="goToKatalog">Cari Buku Sekarang</button>
@@ -116,9 +135,9 @@ function goToPeminjaman() {
       </div>
     </div>
 
-    <p v-if="errorMsg" class="info-text error">{{ errorMsg }}</p>
-    <p v-else-if="loading" class="info-text">Memuat data...</p>
+    <p v-if="errorMsg" class="empty-state error">{{ errorMsg }}</p>
 
+    <!-- Statistik -->
     <div class="stats-row">
       <div class="stat-card">
         <div class="stat-icon blue">
@@ -128,39 +147,27 @@ function goToPeminjaman() {
           </svg>
         </div>
         <div>
-          <div class="stat-label">Total Koleksi</div>
-          <div class="stat-value">{{ totalBuku }}</div>
-        </div>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-icon green">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-            <circle cx="9" cy="7" r="4"/>
-          </svg>
-        </div>
-        <div>
           <div class="stat-label">Sedang Dipinjam</div>
-          <div class="stat-value">{{ jumlahDipinjam }}</div>
+          <div class="stat-value">{{ loading ? '—' : jumlahDipinjam }}</div>
         </div>
       </div>
 
       <div class="stat-card">
         <div class="stat-icon orange">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-            <circle cx="12" cy="12" r="10"/>
-            <polyline points="12 6 12 12 16 14"/>
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
           </svg>
         </div>
         <div>
-          <div class="stat-label">Terlambat</div>
-          <div class="stat-value">{{ jumlahTerlambat }}</div>
+          <div class="stat-label">Hampir Jatuh Tempo</div>
+          <div class="stat-value">{{ loading ? '—' : jumlahHampirJatuhTempo }}</div>
         </div>
       </div>
 
       <div class="stat-card">
-        <div class="stat-icon purple">
+        <div class="stat-icon green">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
             <polyline points="22 4 12 14.01 9 11.01"/>
@@ -168,52 +175,58 @@ function goToPeminjaman() {
         </div>
         <div>
           <div class="stat-label">Sudah Dikembalikan</div>
-          <div class="stat-value">{{ jumlahSelesai }}</div>
+          <div class="stat-value">{{ loading ? '—' : jumlahSelesai }}</div>
         </div>
       </div>
     </div>
 
+    <!-- Daftar Buku -->
     <div class="table-card">
       <div class="card-toolbar">
         <h2>Buku yang Sedang Dipinjam</h2>
         <button class="btn-link" @click="goToPeminjaman">Lihat semua</button>
       </div>
 
-      <div v-if="!loading && peminjamanAktif.length === 0" class="empty-state">
+      <div v-if="loading" class="empty-state">Memuat data...</div>
+
+      <div v-else-if="peminjamanAktif.length === 0" class="empty-state">
         <p>Anda belum meminjam buku apa pun.</p>
         <button class="btn-primary" @click="goToKatalog">Cari Buku</button>
       </div>
 
-      <div v-else-if="peminjamanAktif.length" class="table-wrap">
+      <div v-else class="table-wrap">
         <table class="tabel">
           <thead>
             <tr>
               <th>Judul Buku</th>
-              <th>Penulis</th>
+              <th>Kategori</th>
               <th>Tanggal Pinjam</th>
-              <th>Batas Kembali</th>
-              <th>Status</th>
+              <th>Jatuh Tempo</th>
+              <th>Aksi</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="item in peminjamanAktif" :key="item.id">
-              <td>
+              <td data-label="Judul">
                 <div class="book-title">{{ item.judulBuku || item.judul }}</div>
+                <div v-if="item.penulisBuku || item.penulis" class="book-author">
+                  {{ item.penulisBuku || item.penulis }}
+                </div>
               </td>
-              <td>{{ item.penulisBuku || item.penulis || '—' }}</td>
-              <td>{{ formatTanggal(item.tanggalPinjam) }}</td>
-              <td>
+              <td data-label="Kategori">
+                <span v-if="item.kategori && item.kategori !== '-'" class="kategori-badge">
+                  {{ item.kategori }}
+                </span>
+                <span v-else>—</span>
+              </td>
+              <td data-label="Tanggal Pinjam">{{ formatTanggal(item.tanggalPinjam) }}</td>
+              <td data-label="Jatuh Tempo">
                 <span :class="{ 'due-warning': isAlmostDue(item.batasKembali) }">
                   {{ formatTanggal(item.batasKembali) }}
                 </span>
               </td>
-              <td>
-                <span
-                  class="status-badge"
-                  :class="item.status === 'Terlambat' ? 'status-late' : 'status-active'"
-                >
-                  {{ item.status }}
-                </span>
+              <td data-label="Aksi">
+                <button class="btn-return" @click="kembalikan(item)">Kembalikan</button>
               </td>
             </tr>
           </tbody>
@@ -289,19 +302,9 @@ function goToPeminjaman() {
   opacity: 0.9;
 }
 
-.info-text {
-  font-size: 13px;
-  color: #6b7280;
-  margin: 0 0 12px;
-}
-
-.info-text.error {
-  color: #dc2626;
-}
-
 .stats-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 14px;
   margin-bottom: 16px;
 }
@@ -327,9 +330,8 @@ function goToPeminjaman() {
 }
 
 .stat-icon.blue { background: #dbeafe; color: #2563eb; }
-.stat-icon.green { background: #dcfce7; color: #15803d; }
 .stat-icon.orange { background: #ffedd5; color: #c2410c; }
-.stat-icon.purple { background: #ede9fe; color: #7c3aed; }
+.stat-icon.green { background: #dcfce7; color: #15803d; }
 
 .stat-label {
   font-size: 13px;
@@ -406,26 +408,45 @@ function goToPeminjaman() {
   color: #0f172a;
 }
 
+.book-author {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.kategori-badge {
+  display: inline-block;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
 .due-warning {
   color: #ea580c;
   font-weight: 600;
 }
 
-.status-badge {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
+.btn-return {
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
 }
-
-.status-active { background: #dcfce7; color: #15803d; }
-.status-late { background: #fee2e2; color: #b91c1c; }
 
 .empty-state {
   text-align: center;
   padding: 36px 16px;
   color: #64748b;
+}
+
+.empty-state.error {
+  color: #dc2626;
 }
 
 .btn-primary {
@@ -438,18 +459,136 @@ function goToPeminjaman() {
   cursor: pointer;
 }
 
-@media (max-width: 1100px) {
-  .stats-row {
-    grid-template-columns: repeat(2, 1fr);
+@media (max-width: 800px) {
+  .page {
+    padding: 16px 12px 24px;
   }
-}
 
-@media (max-width: 700px) {
-  .stats-row {
-    grid-template-columns: 1fr;
+  .welcome-banner {
+    padding: 16px;
+    align-items: flex-start;
   }
+
   .welcome-illustration {
     display: none;
+  }
+
+  .welcome-text h1 {
+    font-size: 1.2rem;
+  }
+
+  .welcome-desc {
+    max-width: none;
+    margin: 8px 0 12px !important;
+  }
+
+  .banner-actions {
+    width: 100%;
+  }
+
+  .btn-banner,
+  .btn-banner-outline {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+  }
+
+  .stats-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .stat-card {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 10px 8px;
+    gap: 8px;
+    border-radius: 12px;
+  }
+
+  .stat-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+  }
+
+  .stat-icon svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .stat-label {
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  .stat-value {
+    font-size: 18px;
+  }
+
+  .table-card {
+    padding: 14px 12px;
+  }
+
+  .card-toolbar h2 {
+    font-size: 14px;
+  }
+
+  .tabel {
+    min-width: 0;
+  }
+
+  .tabel thead {
+    display: none;
+  }
+
+  .tabel,
+  .tabel tbody,
+  .tabel tr,
+  .tabel td {
+    display: block;
+    width: 100%;
+  }
+
+  .tabel tr {
+    border: 1px solid #eef2f7;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+
+  .tabel td {
+    border: none;
+    padding: 6px 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .tabel td::before {
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  .tabel td:first-child {
+    display: block;
+  }
+
+  .tabel td:first-child::before {
+    display: none;
+  }
+
+  .tabel td:last-child {
+    padding-top: 10px;
+  }
+
+  .btn-return {
+    width: 100%;
   }
 }
 </style>

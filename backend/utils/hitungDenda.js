@@ -59,4 +59,20 @@ async function ambilPengaturanNotifikasi(db) {
   return { ...DEFAULT_NOTIFIKASI, ...(row?.detail?.notifikasi || {}) }
 }
 
-module.exports = { ambilPengaturanDenda, hitungDenda, ambilPengaturanNotifikasi }
+const DEFAULT_PEMINJAMAN = {
+  durasiSiswa: 7,
+  durasiGuru: 14,
+  maxBukuSiswa: 2,
+  maxBukuGuru: 5,
+  bolehPerpanjang: true,
+  maxPerpanjang: 1,
+  durasiPerpanjang: 7,
+  minStokPinjam: 1,
+}
+
+async function ambilPengaturanPeminjaman(db) {
+  const [row] = await db.select().from(pengaturanPerpustakaan).limit(1)
+  return { ...DEFAULT_PEMINJAMAN, ...(row?.detail?.peminjaman || {}) }
+}
+
+module.exports = { ambilPengaturanDenda, hitungDenda, ambilPengaturanNotifikasi, ambilPengaturanPeminjaman }

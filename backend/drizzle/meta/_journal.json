@@ -71,6 +71,13 @@
       "when": 1789365325249,
       "tag": "0009_silky_jazinda",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789454627111,
+      "tag": "0010_perfect_vin_gonzales",
+      "breakpoints": true
     }
   ]
 }

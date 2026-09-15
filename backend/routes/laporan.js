@@ -1,7 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const db = require('../db')
-const { peminjaman, anggota, eksemplarBuku, buku } = require('../db/schema')
+const { peminjaman, anggota, eksemplarBuku, buku, pengaturanPerpustakaan } = require('../db/schema')
 const { eq, and, gte, lte, desc } = require('drizzle-orm')
 
 router.get('/', async (req, res) => {
@@ -39,7 +39,16 @@ router.get('/', async (req, res) => {
       totalDenda: rows.reduce((sum, r) => sum + (r.denda || 0), 0),
     }
 
-    res.json({ ringkasan, data: rows })
+    const [infoPerpus] = await db.select().from(pengaturanPerpustakaan).limit(1)
+    const infoPerpustakaan = {
+      namaSekolah: infoPerpus?.namaSekolah || '',
+      namaPerpustakaan: infoPerpus?.namaPerpustakaan || '',
+      alamat: infoPerpus?.alamat || '',
+      kepalaPerpustakaan: infoPerpus?.detail?.perpustakaan?.kepalaPerpustakaan || '',
+      tahunAjaran: infoPerpus?.detail?.perpustakaan?.tahunAjaran || '',
+    }
+
+    res.json({ infoPerpustakaan, ringkasan, data: rows })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Gagal mengambil data laporan' })

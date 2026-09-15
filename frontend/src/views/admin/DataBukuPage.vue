@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const API_URL = 'http://localhost:3000/api/buku'
@@ -8,6 +8,8 @@ const KATEGORI_URL = 'http://localhost:3000/api/kategori'
 const searchQuery = ref('')
 const selectedKategori = ref('')
 const selectedStatus = ref('')
+const kategoriMenuOpen = ref(false)
+const statusMenuOpen = ref(false)
 const currentPage = ref(1)
 const perPage = ref(5)
 const route = useRoute()
@@ -189,14 +191,55 @@ function resetPage() {
   currentPage.value = 1
 }
 
+const statusOptions = [
+  { value: '', label: 'Semua Status' },
+  { value: 'Tersedia', label: 'Tersedia' },
+  { value: 'Stok Menipis', label: 'Stok Menipis' },
+  { value: 'Habis', label: 'Habis' },
+]
+
+function labelKategoriTerpilih() {
+  return selectedKategori.value || 'Semua Kategori'
+}
+
+function labelStatusTerpilih() {
+  return statusOptions.find((s) => s.value === selectedStatus.value)?.label || 'Semua Status'
+}
+
+function pilihKategori(nama) {
+  selectedKategori.value = nama
+  kategoriMenuOpen.value = false
+  statusMenuOpen.value = false
+  resetPage()
+}
+
+function pilihStatus(value) {
+  selectedStatus.value = value
+  statusMenuOpen.value = false
+  kategoriMenuOpen.value = false
+  resetPage()
+}
+
+function tutupFilterMenu(e) {
+  if (!e.target.closest?.('.filter-dropdown')) {
+    kategoriMenuOpen.value = false
+    statusMenuOpen.value = false
+  }
+}
+
 onMounted(() => {
   ambilDataBuku()
   ambilDaftarKategori()
+  document.addEventListener('click', tutupFilterMenu)
 
   const barcodeDariScan = route.query.barcode
   if (barcodeDariScan) {
     openTambah(String(barcodeDariScan))
   }
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', tutupFilterMenu)
 })
 </script>
 
@@ -233,17 +276,46 @@ onMounted(() => {
         />
       </div>
 
-<select v-model="selectedKategori" class="select" @change="resetPage">
-  <option value="">Semua Kategori</option>
-  <option v-for="k in daftarKategori" :key="k.id" :value="k.nama">{{ k.nama }}</option>
-</select>
+<div class="filter-dropdown">
+        <button
+          type="button"
+          class="filter-dropdown-btn"
+          @click.stop="kategoriMenuOpen = !kategoriMenuOpen; statusMenuOpen = false"
+        >
+          {{ labelKategoriTerpilih() }}
+        </button>
+        <ul v-if="kategoriMenuOpen" class="filter-dropdown-list">
+          <li :class="{ aktif: selectedKategori === '' }" @click="pilihKategori('')">Semua Kategori</li>
+          <li
+            v-for="k in daftarKategori"
+            :key="k.id"
+            :class="{ aktif: selectedKategori === k.nama }"
+            @click="pilihKategori(k.nama)"
+          >
+            {{ k.nama }}
+          </li>
+        </ul>
+      </div>
 
-      <select v-model="selectedStatus" class="select" @change="resetPage">
-        <option value="">Semua Status</option>
-        <option value="Tersedia">Tersedia</option>
-        <option value="Stok Menipis">Stok Menipis</option>
-        <option value="Habis">Habis</option>
-      </select>
+      <div class="filter-dropdown">
+        <button
+          type="button"
+          class="filter-dropdown-btn"
+          @click.stop="statusMenuOpen = !statusMenuOpen; kategoriMenuOpen = false"
+        >
+          {{ labelStatusTerpilih() }}
+        </button>
+        <ul v-if="statusMenuOpen" class="filter-dropdown-list">
+          <li
+            v-for="s in statusOptions"
+            :key="s.value || 'all'"
+            :class="{ aktif: selectedStatus === s.value }"
+            @click="pilihStatus(s.value)"
+          >
+            {{ s.label }}
+          </li>
+        </ul>
+      </div>
     </div>
 
     <div class="table-wrap">
@@ -573,6 +645,54 @@ table {
   background: #fff;
   color: #000000;
   min-width: 150px;
+}
+
+.filter-dropdown {
+  position: relative;
+  flex-shrink: 0;
+  min-width: 150px;
+}
+
+.filter-dropdown-btn {
+  width: 100%;
+  font-family: inherit;
+  font-size: 13px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 28px 8px 12px;
+  color: #000;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 8px center;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.filter-dropdown-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  z-index: 40;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.filter-dropdown-list li {
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.filter-dropdown-list li:hover,
+.filter-dropdown-list li.aktif {
+  background: #dbeafe;
 }
 
 th, td {
@@ -920,7 +1040,8 @@ tbody tr:hover { background: #f9fafb; }
     width: 100%;
   }
 
-  .select {
+  .select,
+  .filter-dropdown {
     width: 100%;
     min-width: 0;
   }
@@ -929,9 +1050,9 @@ tbody tr:hover { background: #f9fafb; }
     width: 100%;
   }
 
-  .select {
+  .filter-dropdown-list {
     width: 100%;
-    min-width: 0;
+    max-width: 100%;
   }
 
   .table-wrap {

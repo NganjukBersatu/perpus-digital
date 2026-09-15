@@ -42,6 +42,22 @@ const rangeOptions = [
 
 const selectedRange = ref('1minggu')
 
+const rangeMenuOpen = ref(false)
+
+function labelRangeTerpilih() {
+  return rangeOptions.find((r) => r.value === selectedRange.value)?.label || ''
+}
+
+function pilihRange(value) {
+  selectedRange.value = value
+  rangeMenuOpen.value = false
+}
+
+function tutupRangeMenu(e) {
+  const wrap = e.target.closest?.('.range-dropdown')
+  if (!wrap) rangeMenuOpen.value = false
+}
+
 const chartLabels = ref([])
 const dipinjamSeries = ref([])
 const dikembalikanSeries = ref([])
@@ -51,12 +67,19 @@ const totalDikembalikan = ref('0')
 const chartW = 380
 const chartH = 130
 
-const lebarKolomChart = 44
+const lebarKolomChart = computed(() => {
+  if (selectedRange.value === '3bulan') return 64
+  if (selectedRange.value === '6bulan') return 56
+  return 44
+})
 
 const chartInnerMinWidth = computed(() => {
   const n = chartLabels.value.length
-  if (selectedRange.value !== '1bulan') return '100%'
-  return `${n * lebarKolomChart}px`
+  if (n <= 1) return '100%'
+  const lebar = n * lebarKolomChart.value
+  // 3 bulan selalu lebih lebar dari kartu → muncul scrollbar
+  if (selectedRange.value === '3bulan') return `${lebar}px`
+  return `max(100%, ${lebar}px)`
 })
 
 function toPoints(series, max, w, h) {
@@ -294,6 +317,7 @@ onMounted(async () => {
   await fetchPengingat()
   await muatStatistikPeminjaman()
   await fetchTotalDenda()
+  document.addEventListener('click', tutupRangeMenu)
 })
 </script>
 
@@ -327,11 +351,25 @@ onMounted(async () => {
       <section class="card chart-card">
         <div class="card-title-row">
           <h2>Statistik Peminjaman</h2>
-          <select v-model="selectedRange" class="mini-select">
-            <option v-for="r in rangeOptions" :key="r.value" :value="r.value">
-              {{ r.label }}
-            </option>
-          </select>
+                    <div class="range-dropdown">
+            <button
+              type="button"
+              class="range-dropdown-btn"
+              @click.stop="rangeMenuOpen = !rangeMenuOpen"
+            >
+              {{ labelRangeTerpilih() }}
+            </button>
+            <ul v-if="rangeMenuOpen" class="range-dropdown-list">
+              <li
+                v-for="r in rangeOptions"
+                :key="r.value"
+                :class="{ aktif: r.value === selectedRange }"
+                @click="pilihRange(r.value)"
+              >
+                {{ r.label }}
+              </li>
+            </ul>
+          </div>
         </div>
 
         <div class="legend">
@@ -347,7 +385,11 @@ onMounted(async () => {
             </svg>
 
             <div class="chart-labels">
-              <span v-for="m in chartLabels" :key="m">{{ m }}</span>
+              <span
+                v-for="(m, i) in chartLabels"
+                :key="i"
+                :style="{ flex: `0 0 ${lebarKolomChart}px`, width: `${lebarKolomChart}px` }"
+              >{{ m }}</span>
             </div>
           </div>
         </div>
@@ -779,7 +821,7 @@ onMounted(async () => {
 
 .chart-card {
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .chart-scroll {
@@ -788,6 +830,20 @@ onMounted(async () => {
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
+}
+
+.chart-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+
+.chart-scroll::-webkit-scrollbar-thumb {
+  background: #c7c9d1;
+  border-radius: 999px;
+}
+
+.chart-scroll::-webkit-scrollbar-track {
+  background: #edf1f6;
+  border-radius: 999px;
 }
 
 .chart-inner {
@@ -810,8 +866,7 @@ onMounted(async () => {
 }
 
 .chart-labels span {
-  flex: 0 0 44px;
-  width: 44px;
+  box-sizing: border-box;
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
@@ -1189,6 +1244,50 @@ span.reminder-badge.badge-red {
   overflow-y: auto;
 }
 
+.range-dropdown {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.range-dropdown-btn {
+  font-family: inherit;
+  font-size: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 6px 28px 6px 8px;
+  color: #000;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 8px center;
+  cursor: pointer;
+}
+
+.range-dropdown-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: auto;
+  min-width: 100%;
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  z-index: 20;
+}
+
+.range-dropdown-list li {
+  padding: 8px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.range-dropdown-list li:hover,
+.range-dropdown-list li.aktif {
+  background: #dbeafe;
+}
+
 @media (max-width: 1100px) {
   .stat-cards { 
     grid-template-columns: 1fr 1fr; 
@@ -1220,45 +1319,46 @@ span.reminder-badge.badge-red {
   .top-row {
     grid-template-columns: 1fr;
   }
-  .calendar-card {
+    .calendar-card {
     min-width: 0;
-    flex-direction: row;
-    align-items: stretch;
+    flex-direction: column;
     border-radius: 12px;
     overflow: hidden;
   }
 
   .calendar-top {
-    writing-mode: horizontal-tb;
+    width: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 10px 12px;
-    font-size: 10px;
+    padding: 8px 12px;
+    font-size: 11px;
     font-weight: 700;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
     white-space: nowrap;
-    flex: 0 0 auto;
   }
 
   .calendar-body {
-    flex: 1;
+    width: 100%;
     flex-direction: row;
     align-items: baseline;
-    justify-content: flex-start;
-    gap: 8px;
-    padding: 8px 14px;
+    justify-content: center;
+    gap: 10px;
+    padding: 10px 14px 12px;
   }
 
   .calendar-date {
-    font-size: 22px;
+    font-size: 28px;
     line-height: 1;
+    font-weight: 700;
   }
 
   .calendar-day {
-    font-size: 12px;
+    font-size: 14px;
     margin-top: 0;
     text-transform: capitalize;
+    color: #6b7280;
   }
 
   .card {
@@ -1430,6 +1530,28 @@ span.reminder-badge.badge-red {
   .reminder-row {
     flex-wrap: wrap;
     gap: 6px;
+  }
+
+    .range-dropdown {
+    width: 100%;
+  }
+
+  .range-dropdown-btn {
+    width: 100%;
+    text-align: left;
+    padding: 8px 28px 8px 12px;
+  }
+
+  .range-dropdown-list {
+    left: 0;
+    right: 0;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .range-dropdown-list li {
+    white-space: normal;
   }
 }
 

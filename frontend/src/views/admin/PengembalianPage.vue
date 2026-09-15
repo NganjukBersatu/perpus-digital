@@ -13,6 +13,25 @@ const page = ref(1)
 const limit = ref(5)
 const search = ref('')
 const status = ref('Semua')
+const statusOptions = [
+  { value: 'Semua', label: 'Semua Status' },
+  { value: 'Tepat Waktu', label: 'Tepat Waktu' },
+  { value: 'Terlambat', label: 'Terlambat' },
+]
+const statusMenuOpen = ref(false)
+
+function labelStatusTerpilih() {
+  return statusOptions.find((s) => s.value === status.value)?.label || 'Semua Status'
+}
+
+function pilihStatus(value) {
+  status.value = value
+  statusMenuOpen.value = false
+}
+
+function tutupStatusMenu(e) {
+  if (!e.target.closest?.('.status-dropdown')) statusMenuOpen.value = false
+}
 const filterDari = ref('')
 const filterSampai = ref('')
 const showDateFilter = ref(false)
@@ -352,7 +371,11 @@ const resetFilterTanggal = () => {
   fetchData()
 }
 
-onMounted(() => { fetchSummary(); fetchData() })
+onMounted(() => {
+  fetchSummary()
+  fetchData()
+  document.addEventListener('click', tutupStatusMenu)
+})
 watch([search, status, limit], () => { page.value = 1; fetchData() })
 watch(page, fetchData)
 </script>
@@ -444,45 +467,66 @@ watch(page, fetchData)
 
     <div class="toolbar">
       <input v-model="search" placeholder="Cari nama peminjam, buku, atau ISBN..." class="search" />
-      <select v-model="status" class="select">
-        <option value="Semua">Semua Status</option>
-        <option value="Tepat Waktu">Tepat Waktu</option>
-        <option value="Terlambat">Terlambat</option>
-      </select>
-      <div class="date-filter-wrap">
-        <button class="btn-outline" type="button" @click="showDateFilter = !showDateFilter">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="4" width="18" height="18" rx="2"/>
-            <line x1="16" y1="2" x2="16" y2="6"/>
-            <line x1="8" y1="2" x2="8" y2="6"/>
-            <line x1="3" y1="10" x2="21" y2="10"/>
-          </svg>
-          {{ labelRentangFilter }}
+      <div class="status-dropdown">
+        <button
+          type="button"
+          class="status-dropdown-btn"
+          @click.stop="statusMenuOpen = !statusMenuOpen"
+        >
+          {{ labelStatusTerpilih() }}
         </button>
+        <ul v-if="statusMenuOpen" class="status-dropdown-list">
+          <li
+            v-for="s in statusOptions"
+            :key="s.value"
+            :class="{ aktif: s.value === status }"
+            @click="pilihStatus(s.value)"
+          >
+            {{ s.label }}
+          </li>
+        </ul>
+      </div>
+      <div class="toolbar-date-export">
+        <div class="date-filter-wrap">
+        <button
+          class="btn-outline date-filter-btn"
+          :class="{ 'has-range': filterDari || filterSampai }"
+          type="button"
+          @click="showDateFilter = !showDateFilter"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+            {{ labelRentangFilter }}
+          </button>
 
-        <div v-if="showDateFilter" class="date-popover">
-          <label>
-            Dari
-            <input v-model="filterDari" type="date" />
-          </label>
-          <label>
-            Sampai
-            <input v-model="filterSampai" type="date" />
-          </label>
-          <div class="date-popover-actions">
-            <button class="btn-outline" type="button" @click="resetFilterTanggal">Reset</button>
-            <button class="btn-primary" type="button" @click="terapkanFilterTanggal">Terapkan</button>
+          <div v-if="showDateFilter" class="date-popover">
+            <label>
+              Dari
+              <input v-model="filterDari" type="date" />
+            </label>
+            <label>
+              Sampai
+              <input v-model="filterSampai" type="date" />
+            </label>
+            <div class="date-popover-actions">
+              <button class="btn-outline" type="button" @click="resetFilterTanggal">Reset</button>
+              <button class="btn-primary" type="button" @click="terapkanFilterTanggal">Terapkan</button>
+            </div>
           </div>
         </div>
+        <button class="btn-primary" type="button" @click="bukaExportModal">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v12"/>
+            <path d="m8 11 4 4 4-4"/>
+            <path d="M5 19h14"/>
+          </svg>
+          Export
+        </button>
       </div>
-      <button class="btn-primary" type="button" @click="bukaExportModal">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 3v12"/>
-          <path d="m8 11 4 4 4-4"/>
-          <path d="M5 19h14"/>
-        </svg>
-        Export
-      </button>
     </div>
 
     <div class="table-wrap">
@@ -943,8 +987,37 @@ watch(page, fetchData)
     box-shadow: 0 1px 3px rgba(0,0,0,0.06); 
 }
 
+.toolbar-date-export {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
 .date-filter-wrap {
   position: relative;
+}
+
+.date-filter-btn,
+.toolbar-date-export > .btn-primary {
+  box-sizing: border-box;
+  height: 40px;
+  min-height: 40px;
+  padding: 0 12px;
+  font-size: 13px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.date-filter-btn {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.date-filter-btn.has-range {
+  justify-content: space-between;
+  white-space: nowrap;
 }
 
 .date-popover {
@@ -998,6 +1071,51 @@ watch(page, fetchData)
     border-radius: 8px; 
     padding: 8px 10px; 
     font-size: 13px; 
+}
+
+.status-dropdown {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.status-dropdown-btn {
+  font-family: inherit;
+  font-size: 13px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 28px 8px 10px;
+  color: #000;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 8px center;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.status-dropdown-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: auto;
+  min-width: 100%;
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  z-index: 40;
+}
+
+.status-dropdown-list li {
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.status-dropdown-list li:hover,
+.status-dropdown-list li.aktif {
+  background: #dbeafe;
 }
 
 .table-wrap {
@@ -1384,15 +1502,61 @@ thead th:nth-child(2) {
   }
 
   .search,
-  .toolbar > .select,
-  .date-filter-wrap,
-  .toolbar > .btn-primary {
+  .status-dropdown {
     width: 100%;
   }
 
-  .date-filter-wrap .btn-outline {
+    .toolbar-date-export {
     width: 100%;
+    align-items: stretch;
+  }
+
+  .toolbar-date-export .date-filter-wrap {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .toolbar-date-export .date-filter-btn {
+    width: 100%;
+    height: 40px;
+    justify-content: flex-start;
+  }
+
+  .toolbar-date-export .date-filter-btn.has-range {
     justify-content: space-between;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .toolbar-date-export > .btn-primary {
+    width: auto;
+    height: 40px;
+    min-height: 40px;
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 0 14px;
+  }
+
+  .status-dropdown {
+    width: 100%;
+  }
+
+  .status-dropdown-btn {
+    width: 100%;
+    text-align: left;
+  }
+
+  .status-dropdown-list {
+    left: 0;
+    right: 0;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .status-dropdown-list li {
+    white-space: normal;
   }
 
   .date-popover {

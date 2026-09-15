@@ -5,7 +5,7 @@ const { sql, desc, isNull, gte, lte, and, eq, lt, ilike } = require("drizzle-orm
 
 const { db } = require("./db/client")
 const { buku, eksemplarBuku, anggota, peminjaman } = require("./db/schema")
-const { ambilPengaturanDenda, hitungDenda, ambilPengaturanNotifikasi } = require("./utils/hitungDenda")
+const { ambilPengaturanDenda, hitungDenda, ambilPengaturanNotifikasi, ambilPengaturanPeminjaman } = require("./utils/hitungDenda")
 const { tanggalHariIniLokal } = require("./utils/tanggal")
 
 const { router: authRoutes, wajibLogin } = require("./routes/auth")
@@ -126,6 +126,40 @@ app.post("/api/peminjaman", async (req, res) => {
       }
     }
 
+    const peranPeminjam = tipePeminjam === "guru" ? "guru" : "siswa"
+    const pengaturanPinjam = await ambilPengaturanPeminjaman(db)
+
+    const durasi = peranPeminjam === "guru" ? pengaturanPinjam.durasiGuru : pengaturanPinjam.durasiSiswa
+    const tglMulai = new Date(tanggalPinjam)
+    const tglKembaliDihitung = new Date(tglMulai)
+    tglKembaliDihitung.setDate(tglKembaliDihitung.getDate() + durasi)
+    const tanggalKembaliFinal = tglKembaliDihitung.toISOString().slice(0, 10)
+
+    const [{ jumlahAktif }] = await db
+      .select({ jumlahAktif: sql`count(*)` })
+      .from(peminjaman)
+      .where(and(eq(peminjaman.anggotaId, anggotaIdFinal), isNull(peminjaman.tanggalDikembalikan)))
+
+    const maxBuku = peranPeminjam === "guru" ? pengaturanPinjam.maxBukuGuru : pengaturanPinjam.maxBukuSiswa
+    if (Number(jumlahAktif) >= maxBuku) {
+      return res.status(400).json({ message: `Batas pinjam tercapai (maks ${maxBuku} buku)` })
+    }
+
+    // Ambil bukuId dari eksemplar yang mau dipinjam, lalu hitung stok tersedia untuk buku itu
+    const [{ bukuId: bukuIdTerkait }] = await db
+      .select({ bukuId: eksemplarBuku.bukuId })
+      .from(eksemplarBuku)
+      .where(eq(eksemplarBuku.id, eksemplarId))
+
+    const [{ stokTersedia }] = await db
+      .select({ stokTersedia: sql`count(*)` })
+      .from(eksemplarBuku)
+      .where(and(eq(eksemplarBuku.bukuId, bukuIdTerkait), eq(eksemplarBuku.status, "tersedia")))
+
+    if (Number(stokTersedia) <= pengaturanPinjam.minStokPinjam) {
+      return res.status(400).json({ message: "Stok buku sudah mencapai batas minimal, tidak bisa dipinjamkan" })
+    }
+
     // ============================================================
     // [DIUBAH] Ambil pengaturan denda SAAT INI, lalu simpan nilainya
     // ke kolom snapshot di baris peminjaman. Ini yang membuat nominal
@@ -140,11 +174,17 @@ app.post("/api/peminjaman", async (req, res) => {
       eksemplarId,
       anggotaId: anggotaIdFinal,
       tanggalPinjam,
-      tanggalKembali,
+      tanggalKembali: tanggalKembaliFinal,
+      
 
-      nominalDendaPerHari: pengaturanDenda.aktif ? pengaturanDenda.nominalPerHari : 0,
-      dendaMaksimal: pengaturanDenda.aktif ? pengaturanDenda.dendaMaksimal : 0,
+      nominalDendaPerHari: pengaturanDenda.aktif
+        ? (peranPeminjam === "guru" ? pengaturanDenda.nominalPerHariGuru : pengaturanDenda.nominalPerHariSiswa)
+        : 0,
+      dendaMaksimal: pengaturanDenda.aktif
+        ? (peranPeminjam === "guru" ? pengaturanDenda.dendaMaksimalGuru : pengaturanDenda.dendaMaksimalSiswa)
+        : 0,
       dendaGuruAktif: pengaturanDenda.dendaGuruAktif ?? false,
+      masaTenggang: pengaturanDenda.masaTenggang ?? 0, 
     })
 
     await db
@@ -229,6 +269,42 @@ app.patch("/api/peminjaman/:id/kembalikan", async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ message: "Gagal memproses pengembalian" })
+  }
+})
+
+app.patch("/api/peminjaman/:id/perpanjang", async (req, res) => {
+  try {
+    const { id } = req.params
+    const pengaturanPinjam = await ambilPengaturanPeminjaman(db)
+
+    if (!pengaturanPinjam.bolehPerpanjang) {
+      return res.status(400).json({ message: "Perpanjangan peminjaman tidak diizinkan" })
+    }
+
+    const [pinjam] = await db.select().from(peminjaman).where(eq(peminjaman.id, Number(id)))
+    if (!pinjam) return res.status(404).json({ message: "Data peminjaman tidak ditemukan" })
+    if (pinjam.tanggalDikembalikan) {
+      return res.status(400).json({ message: "Buku ini sudah dikembalikan, tidak bisa diperpanjang" })
+    }
+    if ((pinjam.jumlahPerpanjangan || 0) >= pengaturanPinjam.maxPerpanjang) {
+      return res.status(400).json({ message: `Sudah mencapai batas maksimal ${pengaturanPinjam.maxPerpanjang}x perpanjangan` })
+    }
+
+    const tglBaru = new Date(pinjam.tanggalKembali)
+    tglBaru.setDate(tglBaru.getDate() + pengaturanPinjam.durasiPerpanjang)
+
+    const [updated] = await db.update(peminjaman)
+      .set({
+        tanggalKembali: tglBaru.toISOString().slice(0, 10),
+        jumlahPerpanjangan: (pinjam.jumlahPerpanjangan || 0) + 1,
+      })
+      .where(eq(peminjaman.id, Number(id)))
+      .returning()
+
+    res.json(updated)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ message: "Gagal memperpanjang peminjaman" })
   }
 })
 
@@ -727,15 +803,15 @@ function getRangeConfig(range) {
     start.setDate(start.getDate() - 6)
   } else if (range === "1bulan") {
     start.setDate(start.getDate() - 29)
-  } else if (range === "3bulan") {
+    } else if (range === "3bulan") {
     start.setMonth(start.getMonth() - 3)
-    groupBy = "week"
+    groupBy = "day"
   } else if (range === "1tahun") {
     start.setFullYear(start.getFullYear() - 1)
     groupBy = "month"
   } else {
     start.setMonth(start.getMonth() - 6)
-    groupBy = "month"
+    groupBy = "week"
   }
 
   return { start, now, groupBy }
@@ -786,16 +862,35 @@ app.get("/api/dashboard/statistik-peminjaman", async (req, res) => {
       order by periode
     `)
 
-    function mapToBuckets(rows) {
-      const map = {}
-      for (const row of rows.rows) {
-        const raw = row.periode
-        const key = typeof raw === "string"
-          ? String(raw).slice(0, 10)
-          : formatTanggalISO(new Date(raw))
-        map[key] = Number(row.jumlah)
+        function tanggalDariPeriode(raw) {
+      if (typeof raw === "string") {
+        return new Date(String(raw).slice(0, 10) + "T00:00:00")
       }
-      return buckets.map((b) => map[b.key] || 0)
+      const d = new Date(raw)
+      d.setHours(0, 0, 0, 0)
+      return d
+    }
+
+    function mapToBuckets(rows) {
+      const values = buckets.map(() => 0)
+      const bucketDates = buckets.map((b) => new Date(b.key + "T00:00:00"))
+
+      for (const row of rows.rows) {
+        const d = tanggalDariPeriode(row.periode)
+        if (Number.isNaN(d.getTime())) continue
+
+        // ember terakhir yang kuncinya <= tanggal data
+        let idx = -1
+        for (let i = 0; i < bucketDates.length; i++) {
+          if (bucketDates[i] <= d) idx = i
+          else break
+        }
+        if (idx >= 0) {
+          values[idx] += Number(row.jumlah)
+        }
+      }
+
+      return values
     }
 
     const dipinjam = mapToBuckets(dipinjamRows)

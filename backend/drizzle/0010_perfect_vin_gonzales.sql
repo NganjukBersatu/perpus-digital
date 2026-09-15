@@ -1,0 +1,1 @@
+ALTER TABLE "peminjaman" ADD COLUMN "jumlah_perpanjangan" integer DEFAULT 0;

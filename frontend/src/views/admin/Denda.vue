@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 
 const daftar = ref([])
 const isLoading = ref(true)
@@ -7,6 +7,7 @@ const errorMessage = ref('')
 
 const searchQuery = ref('')
 const statusFilter = ref('Semua')
+const statusMenuOpen = ref(false)
 const totalBelumDibayar = ref(0)
 const totalSudahDibayar = ref(0)
 
@@ -106,8 +107,35 @@ async function konfirmasiTandaiDibayar() {
   }
 }
 
+const statusOptions = [
+  { value: 'Semua', label: 'Semua Status' },
+  { value: 'Belum Dibayar', label: 'Belum Dibayar' },
+  { value: 'Sudah Dibayar', label: 'Sudah Dibayar' },
+]
+
+function labelStatusTerpilih() {
+  return statusOptions.find((s) => s.value === statusFilter.value)?.label || 'Semua Status'
+}
+
+function pilihStatus(value) {
+  statusFilter.value = value
+  statusMenuOpen.value = false
+}
+
+function tutupFilterMenu(e) {
+  if (!e.target.closest?.('.filter-dropdown')) statusMenuOpen.value = false
+}
+
 watch(statusFilter, muatData)
-onMounted(muatData)
+
+onMounted(() => {
+  muatData()
+  document.addEventListener('click', tutupFilterMenu)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', tutupFilterMenu)
+})
 </script>
 
 <template>
@@ -184,22 +212,25 @@ onMounted(muatData)
 
       </div>
 
-      <select
-        v-model="statusFilter"
-        class="select"
-      >
-        <option value="Semua">
-          Semua Status
-        </option>
-
-        <option value="Belum Dibayar">
-          Belum Dibayar
-        </option>
-
-        <option value="Sudah Dibayar">
-          Sudah Dibayar
-        </option>
-      </select>
+      <div class="filter-dropdown">
+        <button
+          type="button"
+          class="filter-dropdown-btn"
+          @click.stop="statusMenuOpen = !statusMenuOpen"
+        >
+          {{ labelStatusTerpilih() }}
+        </button>
+        <ul v-if="statusMenuOpen" class="filter-dropdown-list">
+          <li
+            v-for="s in statusOptions"
+            :key="s.value"
+            :class="{ aktif: statusFilter === s.value }"
+            @click="pilihStatus(s.value)"
+          >
+            {{ s.label }}
+          </li>
+        </ul>
+      </div>
 
     </div>
 
@@ -495,6 +526,52 @@ onMounted(muatData)
   outline: none;
 }
 
+.filter-dropdown {
+  position: relative;
+  flex-shrink: 0;
+  min-width: 150px;
+}
+
+.filter-dropdown-btn {
+  width: 100%;
+  font-family: inherit;
+  font-size: 13px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 28px 8px 12px;
+  color: #000;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 8px center;
+}
+
+.filter-dropdown-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  z-index: 40;
+}
+
+.filter-dropdown-list li {
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.filter-dropdown-list li:hover,
+.filter-dropdown-list li.aktif {
+  background: #dbeafe;
+}
+
 .table-wrap {
   background: #fff;
   border-radius: 12px;
@@ -685,6 +762,15 @@ tbody tr:hover {
 }
 
 @media (max-width: 640px) {
+  .filter-dropdown {
+    min-width: 0;
+  }
+
+  .filter-dropdown-list {
+    width: 100%;
+    max-width: 100%;
+  }
+
   th:nth-child(2),
   td:nth-child(2) {
     width: 120px;

@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref, onMounted } from 'vue'
+import { reactive, ref, onMounted, nextTick } from 'vue'
 import { authHeaders } from '@/utils/auth'
 
 const STORAGE_KEY = 'perpus_pengaturan'
@@ -13,8 +13,22 @@ const tabs = [
 ]
 
 const activeTab = ref('perpustakaan')
+const tabsEl = ref(null)
 const savedAt = ref('')
 const toast = ref('')
+
+function pilihTab(id) {
+  activeTab.value = id
+  nextTick(() => {
+    const scroller = tabsEl.value
+    const tabBtn = scroller?.querySelector('.tab.active')
+    if (!scroller || !tabBtn) return
+    const scrollerRect = scroller.getBoundingClientRect()
+    const tabRect = tabBtn.getBoundingClientRect()
+    const delta = tabRect.left - scrollerRect.left - scroller.clientWidth / 2 + tabRect.width / 2
+    scroller.scrollTo({ left: scroller.scrollLeft + delta, behavior: 'smooth' })
+  })
+}
 
 const form = reactive({
   perpustakaan: {
@@ -205,14 +219,6 @@ onMounted(loadSettings)
         </div>
       </div>
       <div class="head-actions">
-        <button class="btn ghost" type="button" @click="exportSettings">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-          Unduh JSON
-        </button>
         <button class="btn primary" type="button" @click="saveSettings">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;">
             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
@@ -225,14 +231,14 @@ onMounted(loadSettings)
     </header>
 
     <!-- Tabs -->
-    <nav class="tabs">
+    <nav class="tabs" ref="tabsEl">
       <button
         v-for="tab in tabs"
         :key="tab.id"
         type="button"
         class="tab"
         :class="{ active: activeTab === tab.id }"
-        @click="activeTab = tab.id"
+        @click="pilihTab(tab.id)"
       >
         <span class="tab-icon">
           <!-- Icon: building -->
@@ -377,7 +383,7 @@ onMounted(loadSettings)
                   <circle cx="12" cy="10" r="3"></circle>
                 </svg>
               </span>
-              <input v-model="form.perpustakaan.alamat" type="text" />
+              <input v-model="form.perpustakaan.alamat" type="text" placeholder = 'Jl. xxxx No. xx'/>
             </div>
           </label>
           <label class="full">
@@ -468,7 +474,7 @@ onMounted(loadSettings)
               <input v-model.number="form.peminjaman.maxBukuGuru" type="number" min="1" />
             </div>
           </label>
-          <label>
+                    <label :class="{ 'field-disabled': !form.peminjaman.bolehPerpanjang }">
             Maksimal perpanjangan
             <div class="input-wrapper">
               <span class="input-icon">
@@ -477,10 +483,15 @@ onMounted(loadSettings)
                   <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
                 </svg>
               </span>
-              <input v-model.number="form.peminjaman.maxPerpanjang" type="number" min="0" />
+              <input
+                v-model.number="form.peminjaman.maxPerpanjang"
+                type="number"
+                min="0"
+                :disabled="!form.peminjaman.bolehPerpanjang"
+              />
             </div>
           </label>
-          <label>
+          <label :class="{ 'field-disabled': !form.peminjaman.bolehPerpanjang }">
             Durasi perpanjangan (hari)
             <div class="input-wrapper">
               <span class="input-icon">
@@ -489,7 +500,12 @@ onMounted(loadSettings)
                   <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
                 </svg>
               </span>
-              <input v-model.number="form.peminjaman.durasiPerpanjang" type="number" min="1" />
+              <input
+                v-model.number="form.peminjaman.durasiPerpanjang"
+                type="number"
+                min="1"
+                :disabled="!form.peminjaman.bolehPerpanjang"
+              />
             </div>
           </label>
           <label>
@@ -848,6 +864,7 @@ onMounted(loadSettings)
   gap: 8px;
   flex-wrap: wrap;
   margin-bottom: 20px;
+  scroll-behavior: smooth;
 }
 
 .tab {

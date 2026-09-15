@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 
 const API_URL = 'http://localhost:3000/api/riwayat'
@@ -8,6 +8,7 @@ const riwayatList = ref([])
 const isLoading = ref(false)
 const searchQuery = ref('')
 const filterTipe = ref('semua')
+const tipeMenuOpen = ref(false)
 const errorMessage = ref('')
 
 const filteredRiwayat = computed(() => {
@@ -47,7 +48,35 @@ async function ambilData() {
   }
 }
 
-onMounted(ambilData)
+const tipeOptions = [
+  { value: 'semua', label: 'Semua Aktivitas' },
+  { value: 'pinjam', label: 'Pinjam' },
+  { value: 'kembali', label: 'Kembali' },
+  { value: 'telat', label: 'Telat' },
+  { value: 'denda', label: 'Bayar Denda' },
+]
+
+function labelTipeTerpilih() {
+  return tipeOptions.find((t) => t.value === filterTipe.value)?.label || 'Semua Aktivitas'
+}
+
+function pilihTipe(value) {
+  filterTipe.value = value
+  tipeMenuOpen.value = false
+}
+
+function tutupFilterMenu(e) {
+  if (!e.target.closest?.('.filter-dropdown')) tipeMenuOpen.value = false
+}
+
+onMounted(() => {
+  ambilData()
+  document.addEventListener('click', tutupFilterMenu)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', tutupFilterMenu)
+})
 </script>
 
 <template>
@@ -72,13 +101,25 @@ onMounted(ambilData)
         <input v-model="searchQuery" class="search" placeholder="Cari nama siswa/guru atau judul buku..." />
       </div>
 
-      <select v-model="filterTipe" class="filter-select">
-        <option value="semua">Semua Aktivitas</option>
-        <option value="pinjam">Pinjam</option>
-        <option value="kembali">Kembali</option>
-        <option value="telat">Telat</option>
-        <option value="denda">Bayar Denda</option>
-      </select>
+      <div class="filter-dropdown">
+        <button
+          type="button"
+          class="filter-dropdown-btn"
+          @click.stop="tipeMenuOpen = !tipeMenuOpen"
+        >
+          {{ labelTipeTerpilih() }}
+        </button>
+        <ul v-if="tipeMenuOpen" class="filter-dropdown-list">
+          <li
+            v-for="t in tipeOptions"
+            :key="t.value"
+            :class="{ aktif: filterTipe === t.value }"
+            @click="pilihTipe(t.value)"
+          >
+            {{ t.label }}
+          </li>
+        </ul>
+      </div>
     </div>
 
     <div class="table-wrap">
@@ -132,6 +173,27 @@ onMounted(ambilData)
 .search:focus { border-color: #5b4dff; }
 
 .filter-select { padding: 8px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 13px; background: #fff; }
+
+.filter-dropdown { position: relative; flex-shrink: 0; min-width: 150px; }
+.filter-dropdown-btn {
+  width: 100%; font-family: inherit; font-size: 13px;
+  border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 28px 8px 12px;
+  color: #000; text-align: left; cursor: pointer; white-space: nowrap;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 8px center;
+}
+.filter-dropdown-list {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; margin: 0; padding: 6px 0;
+  list-style: none; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12); z-index: 40;
+}
+.filter-dropdown-list li { padding: 8px 12px; font-size: 13px; cursor: pointer; }
+.filter-dropdown-list li:hover,
+.filter-dropdown-list li.aktif { background: #dbeafe; }
+
+@media (max-width: 640px) {
+  .filter-dropdown { min-width: 0; }
+  .filter-dropdown-list { width: 100%; max-width: 100%; }
+}
 
 .table-wrap { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }

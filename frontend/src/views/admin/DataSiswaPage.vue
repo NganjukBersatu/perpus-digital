@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import api from '@/utils/axios'
 
 const daftarSiswa = ref([])
@@ -9,6 +9,7 @@ const errorMessage = ref('')
 
 const searchQuery = ref('')
 const selectedKelas = ref('')
+const kelasMenuOpen = ref(false)
 
 const showModal = ref(false)
 const modalMode = ref('tambah')
@@ -37,15 +38,33 @@ const filteredSiswa = computed(() => {
   return hasilUnik
 })
 
+function labelKelasTerpilih() {
+  return selectedKelas.value || 'Semua Kelas'
+}
+
+function pilihKelas(kelas) {
+  selectedKelas.value = kelas
+  kelasMenuOpen.value = false
+}
+
+function tutupFilterMenu(e) {
+  if (!e.target.closest?.('.filter-dropdown')) kelasMenuOpen.value = false
+}
+
 onMounted(async () => {
+  document.addEventListener('click', tutupFilterMenu)
   try {
-const { data } = await api.get('/siswa')
+    const { data } = await api.get('/siswa')
     daftarSiswa.value = data
   } catch (err) {
     errorMessage.value = 'Gagal memuat data siswa'
   } finally {
     isLoading.value = false
   }
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', tutupFilterMenu)
 })
 
 function onSearchInput() {}
@@ -138,10 +157,26 @@ async function hapusSiswa(item) {
         />
       </div>
 
-      <select v-model="selectedKelas" class="select">
-        <option value="">Semua Kelas</option>
-        <option v-for="k in kelasOptions" :key="k" :value="k">{{ k }}</option>
-      </select>
+      <div class="filter-dropdown">
+        <button
+          type="button"
+          class="filter-dropdown-btn"
+          @click.stop="kelasMenuOpen = !kelasMenuOpen"
+        >
+          {{ labelKelasTerpilih() }}
+        </button>
+        <ul v-if="kelasMenuOpen" class="filter-dropdown-list">
+          <li :class="{ aktif: selectedKelas === '' }" @click="pilihKelas('')">Semua Kelas</li>
+          <li
+            v-for="k in kelasOptions"
+            :key="k"
+            :class="{ aktif: selectedKelas === k }"
+            @click="pilihKelas(k)"
+          >
+            {{ k }}
+          </li>
+        </ul>
+      </div>
     </div>
 
     <div class="table-wrap">
@@ -248,6 +283,22 @@ async function hapusSiswa(item) {
   font-size: 13px; background: #fff; color: #374151; min-width: 150px;
 }
 
+.filter-dropdown { position: relative; flex-shrink: 0; min-width: 150px; }
+.filter-dropdown-btn {
+  width: 100%; font-family: inherit; font-size: 13px;
+  border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 28px 8px 12px;
+  color: #000; text-align: left; cursor: pointer; white-space: nowrap;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 8px center;
+}
+.filter-dropdown-list {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; margin: 0; padding: 6px 0;
+  list-style: none; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12); z-index: 40; max-height: 240px; overflow-y: auto;
+}
+.filter-dropdown-list li { padding: 8px 12px; font-size: 13px; cursor: pointer; }
+.filter-dropdown-list li:hover,
+.filter-dropdown-list li.aktif { background: #dbeafe; }
+
 .table-wrap { background: #fff; border-radius: 12px; overflow-x: auto; overflow-y: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); -webkit-overflow-scrolling: touch; }
 
 table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 560px; }
@@ -322,6 +373,8 @@ tbody tr:hover { background: #f9fafb; }
   .header h1 { font-size: 18px; }
   .subtitle { font-size: 12px; }
   .btn-tambah { width: 100%; justify-content: center; }
+  .filter-dropdown { min-width: 0; }
+  .filter-dropdown-list { width: 100%; max-width: 100%; }
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table { min-width: 620px; }
   th, td { padding: 10px 12px; }

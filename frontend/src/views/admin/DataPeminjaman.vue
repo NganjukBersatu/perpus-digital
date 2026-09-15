@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 
 const daftar = ref([])
 const isLoading = ref(true)
@@ -7,10 +7,33 @@ const errorMessage = ref('')
 
 const searchQuery = ref('')
 const statusFilter = ref('Semua')
+const statusMenuOpen = ref(false)
 const tanggalDari = ref('')
 const tanggalSampai = ref('')
 
 let searchTimeout = null
+
+const pengaturanPinjam = ref({
+  bolehPerpanjang: true,
+  maxPerpanjang: 1,
+  durasiPerpanjang: 7,
+})
+
+async function muatPengaturanPeminjaman() {
+  try {
+    const res = await fetch('http://localhost:3000/api/pengaturan')
+    const json = await res.json()
+    if (json.detail?.peminjaman) {
+      pengaturanPinjam.value = {
+        bolehPerpanjang: json.detail.peminjaman.bolehPerpanjang ?? true,
+        maxPerpanjang: json.detail.peminjaman.maxPerpanjang ?? 1,
+        durasiPerpanjang: json.detail.peminjaman.durasiPerpanjang ?? 7,
+      }
+    }
+  } catch (err) {
+    console.error(err)
+  }
+}
 
 async function muatData() {
   isLoading.value = true
@@ -147,6 +170,35 @@ async function tandaiDikembalikan(item) {
   }
 }
 
+async function perpanjangPeminjaman(item) {
+  if (!pengaturanPinjam.value.bolehPerpanjang) return  // jaga-jaga, tombol harusnya sudah disabled
+
+  if (
+    !confirm(
+      `Perpanjang peminjaman "${item.judulBuku}" selama ${pengaturanPinjam.value.durasiPerpanjang} hari?`
+    )
+  ) {
+    return
+  }
+
+  try {
+    const res = await fetch(
+      `http://localhost:3000/api/peminjaman/${item.id}/perpanjang`,
+      { method: 'PATCH' }
+    )
+
+    if (!res.ok) {
+      const err = await res.json()
+      throw new Error(err.message || 'Gagal memperpanjang')
+    }
+
+    await muatData()
+  } catch (err) {
+    console.error(err)
+    alert(err.message || 'Gagal memperpanjang peminjaman. Coba lagi.')
+  }
+}
+
 async function exportCsv() {
   try {
     const header = [
@@ -231,7 +283,35 @@ watch(
   muatData
 )
 
-onMounted(muatData)
+const statusOptions = [
+  { value: 'Semua', label: 'Semua Status' },
+  { value: 'Dipinjam', label: 'Dipinjam' },
+  { value: 'Tepat Waktu', label: 'Tepat Waktu' },
+  { value: 'Terlambat', label: 'Terlambat' },
+]
+
+function labelStatusTerpilih() {
+  return statusOptions.find((s) => s.value === statusFilter.value)?.label || 'Semua Status'
+}
+
+function pilihStatus(value) {
+  statusFilter.value = value
+  statusMenuOpen.value = false
+}
+
+function tutupFilterMenu(e) {
+  if (!e.target.closest?.('.filter-dropdown')) statusMenuOpen.value = false
+}
+
+onMounted(() => {
+  muatData()
+  muatPengaturanPeminjaman()
+  document.addEventListener('click', tutupFilterMenu)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', tutupFilterMenu)
+})
 </script>
 
 <template>
@@ -306,28 +386,25 @@ onMounted(muatData)
       </div>
 
       <!-- STATUS -->
-      <select
-        v-model="statusFilter"
-        class="select"
-      >
-
-        <option value="Semua">
-          Semua Status
-        </option>
-
-        <option value="Dipinjam">
-          Dipinjam
-        </option>
-
-        <option value="Tepat Waktu">
-          Tepat Waktu
-        </option>
-
-        <option value="Terlambat">
-          Terlambat
-        </option>
-
-      </select>
+      <div class="filter-dropdown">
+        <button
+          type="button"
+          class="filter-dropdown-btn"
+          @click.stop="statusMenuOpen = !statusMenuOpen"
+        >
+          {{ labelStatusTerpilih() }}
+        </button>
+        <ul v-if="statusMenuOpen" class="filter-dropdown-list">
+          <li
+            v-for="s in statusOptions"
+            :key="s.value"
+            :class="{ aktif: statusFilter === s.value }"
+            @click="pilihStatus(s.value)"
+          >
+            {{ s.label }}
+          </li>
+        </ul>
+      </div>
 
       <!-- TANGGAL (dibungkus supaya bisa turun ke bawah saat mobile) -->
       <div class="date-group">
@@ -468,17 +545,23 @@ onMounted(muatData)
               <button
                 v-if="!item.tanggalDikembalikan"
                 class="detail-btn"
+                :class="{ 'btn-disabled': !pengaturanPinjam.bolehPerpanjang }"
+                :disabled="!pengaturanPinjam.bolehPerpanjang"
+                :title="!pengaturanPinjam.bolehPerpanjang ? 'Perpanjangan dinonaktifkan di Pengaturan' : ''"
+                @click="perpanjangPeminjaman(item)"
+              >
+                Perpanjang
+              </button>
+
+              <button
+                v-if="!item.tanggalDikembalikan"
+                class="detail-btn"
                 @click="tandaiDikembalikan(item)"
               >
                 Tandai Kembali
               </button>
 
-              <span
-                v-else
-                class="sub-text"
-              >
-                -
-              </span>
+              <span v-else class="sub-text">-</span>
 
             </td>
 
@@ -607,6 +690,52 @@ onMounted(muatData)
   outline: none;
 }
 
+.filter-dropdown {
+  position: relative;
+  flex-shrink: 0;
+  min-width: 150px;
+}
+
+.filter-dropdown-btn {
+  width: 100%;
+  font-family: inherit;
+  font-size: 13px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 28px 8px 12px;
+  color: #000;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 8px center;
+}
+
+.filter-dropdown-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  z-index: 40;
+}
+
+.filter-dropdown-list li {
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.filter-dropdown-list li:hover,
+.filter-dropdown-list li.aktif {
+  background: #dbeafe;
+}
+
 .date-group {
   display: flex;
   align-items: center;
@@ -733,6 +862,15 @@ tbody tr:hover {
   color: #2864e8;
 }
 
+.detail-btn.btn-disabled,
+.detail-btn:disabled {
+  background: #e2e8f0;
+  color: #94a3b8;
+  cursor: not-allowed;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
 .empty {
   text-align: center;
   color: #9ca3af;
@@ -788,7 +926,8 @@ tbody tr:hover {
     order: 1;
   }
 
-  .select {
+  .select,
+  .filter-dropdown {
     flex: 1 1 100%;
     order: 2;
     min-width: 0;

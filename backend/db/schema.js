@@ -81,6 +81,7 @@ const peminjaman = pgTable("peminjaman", {
   dendaMaksimal: integer("denda_maksimal").default(0),
   dendaGuruAktif: boolean("denda_guru_aktif").default(false),
   masaTenggang: integer("masa_tenggang").default(0),
+  jumlahPerpanjangan: integer("jumlah_perpanjangan").default(0),
 })
 
 const kategori = pgTable("kategori", {

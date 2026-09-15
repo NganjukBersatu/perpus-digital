@@ -1,11 +1,12 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 
 const daftar = ref([])
 const isLoading = ref(true)
 const errorMessage = ref('')
 const searchQuery = ref('')
 const selectedMapel = ref('')
+const mapelMenuOpen = ref(false)
 
 const showModal = ref(false)
 const modalMode = ref('tambah')
@@ -115,7 +116,27 @@ async function hapus(item) {
   }
 }
 
-onMounted(muatData)
+function labelMapelTerpilih() {
+  return selectedMapel.value || 'Semua Mata Pelajaran'
+}
+
+function pilihMapel(mapel) {
+  selectedMapel.value = mapel
+  mapelMenuOpen.value = false
+}
+
+function tutupFilterMenu(e) {
+  if (!e.target.closest?.('.filter-dropdown')) mapelMenuOpen.value = false
+}
+
+onMounted(() => {
+  muatData()
+  document.addEventListener('click', tutupFilterMenu)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', tutupFilterMenu)
+})
 </script>
 
 <template>
@@ -151,10 +172,26 @@ onMounted(muatData)
         />
       </div>
 
-      <select v-model="selectedMapel" class="select">
-        <option value="">Semua Mata Pelajaran</option>
-        <option v-for="m in mapelOptions" :key="m" :value="m">{{ m }}</option>
-      </select>
+      <div class="filter-dropdown">
+        <button
+          type="button"
+          class="filter-dropdown-btn"
+          @click.stop="mapelMenuOpen = !mapelMenuOpen"
+        >
+          {{ labelMapelTerpilih() }}
+        </button>
+        <ul v-if="mapelMenuOpen" class="filter-dropdown-list">
+          <li :class="{ aktif: selectedMapel === '' }" @click="pilihMapel('')">Semua Mata Pelajaran</li>
+          <li
+            v-for="m in mapelOptions"
+            :key="m"
+            :class="{ aktif: selectedMapel === m }"
+            @click="pilihMapel(m)"
+          >
+            {{ m }}
+          </li>
+        </ul>
+      </div>
     </div>
 
     <div class="table-wrap">
@@ -256,6 +293,22 @@ onMounted(muatData)
   font-size: 13px; background: #fff; color: #374151; min-width: 150px;
 }
 
+.filter-dropdown { position: relative; flex-shrink: 0; min-width: 170px; }
+.filter-dropdown-btn {
+  width: 100%; font-family: inherit; font-size: 13px;
+  border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 28px 8px 12px;
+  color: #000; text-align: left; cursor: pointer; white-space: nowrap;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 8px center;
+}
+.filter-dropdown-list {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; margin: 0; padding: 6px 0;
+  list-style: none; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12); z-index: 40; max-height: 240px; overflow-y: auto;
+}
+.filter-dropdown-list li { padding: 8px 12px; font-size: 13px; cursor: pointer; }
+.filter-dropdown-list li:hover,
+.filter-dropdown-list li.aktif { background: #dbeafe; }
+
 .table-wrap { background: #fff; border-radius: 12px; overflow-x: auto; overflow-y: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); -webkit-overflow-scrolling: touch; }
 
 table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 600px; }
@@ -351,6 +404,9 @@ tbody tr:hover { background: #f9fafb; }
     width: 100%;
     justify-content: center;
   }
+
+  .filter-dropdown { min-width: 0; }
+  .filter-dropdown-list { width: 100%; max-width: 100%; }
 
   /* Error */
   .error-banner {

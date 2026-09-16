@@ -52,14 +52,15 @@ pasangRouteNotifikasiSiswa(app, wajibLoginSiswa)
 pasangRouteNotifikasiGuru(app, wajibLogin)
 
 // GET data buku berdasarkan barcode
+// GET data buku berdasarkan barcode
 app.get("/api/eksemplar-buku/:barcode", async (req, res) => {
   try {
     const { barcode } = req.params
 
-    const result = await db
+    const cocok = await db
       .select({
         eksemplarId: eksemplarBuku.id,
-        barcode: eksemplarBuku.barcode,
+        bukuId: eksemplarBuku.bukuId,
         status: eksemplarBuku.status,
         judul: buku.judul,
         penulis: buku.penulis,
@@ -67,16 +68,38 @@ app.get("/api/eksemplar-buku/:barcode", async (req, res) => {
       })
       .from(eksemplarBuku)
       .innerJoin(buku, eq(buku.id, eksemplarBuku.bukuId))
-      .where(eq(eksemplarBuku.barcode, barcode))
+      .where(ilike(eksemplarBuku.barcode, `${barcode}%`))
 
-    if (result.length === 0) {
+    if (cocok.length === 0) {
       return res.status(404).json({ message: "Buku tidak ditemukan" })
     }
 
-    res.json(result[0])
+    const bukuId = cocok[0].bukuId
+
+    const semuaEksemplar = await db
+      .select({
+        id: eksemplarBuku.id,
+        barcode: eksemplarBuku.barcode,
+        status: eksemplarBuku.status,
+      })
+      .from(eksemplarBuku)
+      .where(eq(eksemplarBuku.bukuId, bukuId))
+      .orderBy(eksemplarBuku.id)
+
+    const dipilih = cocok.find((r) => r.status === "tersedia") || cocok[0]
+
+    res.json({
+      eksemplarId: dipilih.eksemplarId,
+      bukuId,
+      status: dipilih.status,
+      judul: dipilih.judul,
+      penulis: dipilih.penulis,
+      penerbit: dipilih.penerbit,
+      eksemplarList: semuaEksemplar,
+    })
   } catch (err) {
     console.error(err)
-    res.status(500).json({ message: "Terjadi kesalahan server" })
+    res.status(500).json({ message: "Terjadi kesalahan" })
   }
 })
 

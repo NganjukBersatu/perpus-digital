@@ -35,7 +35,9 @@ async function fetchRiwayat() {
 
     if (!res.ok) throw new Error('Gagal mengambil riwayat peminjaman')
 
-    riwayat.value = await res.json()
+    const data = await res.json()
+    console.log('=== DATA RIWAYAT ===', data)   // ← tambahkan baris ini
+    riwayat.value = data
   } catch (err) {
     console.error(err)
     errorMessage.value = 'Gagal memuat riwayat. Coba periksa koneksi kamu.'
@@ -211,12 +213,18 @@ function formatRupiah(angka) {
                     {{ item.status }}
                   </span>
                 </td>
-                <td data-label="Denda">
-                  <span v-if="item.denda > 0" class="denda-text">
-                    Rp{{ formatRupiah(item.denda) }}
-                  </span>
-                  <span v-else class="denda-kosong">—</span>
-                </td>
+<td data-label="Denda">
+  <template v-if="item.denda > 0">
+    <div class="denda-text">Rp{{ formatRupiah(item.denda) }}</div>
+    <div
+      class="denda-status"
+      :class="(item.statusDenda || item.status_denda) === 'sudah_dibayar' ? 'lunas' : 'belum'"
+    >
+      {{ (item.statusDenda || item.status_denda) === 'sudah_dibayar' ? 'Sudah Dibayar' : 'Belum Dibayar' }}
+    </div>
+  </template>
+  <span v-else class="denda-kosong">—</span>
+</td>
               </tr>
             </tbody>
           </table>
@@ -426,6 +434,21 @@ function formatRupiah(angka) {
 .denda-text {
   color: #b91c1c;
   font-weight: 600;
+  font-size: 13px;
+}
+
+.denda-status {
+  font-size: 11px;
+  margin-top: 2px;
+  font-weight: 500;
+}
+
+.denda-status.belum {
+  color: #b91c1c;
+}
+
+.denda-status.lunas {
+  color: #15803d;
 }
 
 .denda-kosong {

@@ -1,5 +1,9 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+
+const route = useRoute()
+const router = useRouter()
 
 const daftar = ref([])
 const isLoading = ref(true)
@@ -46,9 +50,9 @@ function onSearchInput() {
   searchTimeout = setTimeout(muatData, 350)
 }
 
-function bukaModalTambah() {
+function bukaModalTambah(namaAwal = '') {
   modalMode.value = 'tambah'
-  form.value = { id: null, nama: '', nip: '', mapel: '' }
+  form.value = { id: null, nama: namaAwal || '', nip: '', mapel: '' }
   showModal.value = true
 }
 
@@ -91,7 +95,24 @@ async function simpan() {
     })
 
     if (!res.ok) throw new Error('Gagal menyimpan')
+
+    const dataBaru = await res.json()
     showModal.value = false
+
+    // Kembali ke form peminjaman jika datang dari sana
+    if (route.query.from === 'pinjam') {
+      router.push({
+        path: '/admin/pinjam',
+        query: {
+          barcode: route.query.barcode || '',
+          lanjut: 'pinjam',
+          guruId: dataBaru.id,
+          guruNama: dataBaru.nama
+        }
+      })
+      return
+    }
+
     await muatData()
   } catch (err) {
     console.error(err)
@@ -132,6 +153,11 @@ function tutupFilterMenu(e) {
 onMounted(() => {
   muatData()
   document.addEventListener('click', tutupFilterMenu)
+
+  // Jika datang dari form pinjam → langsung buka modal tambah
+  if (route.query.from === 'pinjam' && route.query.nama) {
+    bukaModalTambah(route.query.nama)
+  }
 })
 
 onUnmounted(() => {

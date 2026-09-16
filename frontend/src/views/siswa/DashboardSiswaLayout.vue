@@ -129,6 +129,10 @@ function toggleSidebar() {
   sidebarOpen.value = !sidebarOpen.value
 }
 
+function bukaSidebarJikaTertutup() {
+  if (!sidebarOpen.value) sidebarOpen.value = true
+}
+
 const mobileMenuOpen = ref(false)
 
 function toggleMobileMenu() {
@@ -139,7 +143,18 @@ function closeMobileMenu() {
   mobileMenuOpen.value = false
 }
 
-function logout() {
+const showLogoutModal = ref(false)
+
+function mintaLogout() {
+  showLogoutModal.value = true
+}
+
+function batalLogout() {
+  showLogoutModal.value = false
+}
+
+function konfirmasiLogout() {
+  showLogoutModal.value = false
   router.push('/')
 }
 
@@ -162,20 +177,24 @@ onBeforeUnmount(() => {
 <template>
   <div class="layout">
     <aside class="sidebar" :class="{ 'sidebar-closed': !sidebarOpen, 'mobile-open': mobileMenuOpen }">
-      <div class="brand">
+      <div class="brand" @click="bukaSidebarJikaTertutup">
         <svg class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
           <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
         </svg>
         <div class="brand-text">
-          <div class="brand-title">MANAGEMENT PERPUS</div>
-          <div class="brand-sub">SMK NEGERI 1 KERTOSONO</div>
+          <div class="brand-title">MANAGEMENT PERPUSTAKAAN</div>
         </div>
-        <button class="sidebar-toggle-inside" @click="toggleSidebar">
+        <button class="sidebar-toggle-inside" @click.stop="toggleSidebar">
           <svg class="icon icon-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
+        <span class="sidebar-open-hint" aria-hidden="true">
+          <svg class="icon icon-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </span>
       </div>
 
       <nav class="nav" @click="closeMobileMenu">
@@ -242,7 +261,7 @@ onBeforeUnmount(() => {
         </div>
       </nav>
 
-      <button class="btn-logout" @click="logout">
+      <button class="btn-logout" @click="mintaLogout">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
           <polyline points="16 17 21 12 16 7" />
@@ -261,12 +280,6 @@ onBeforeUnmount(() => {
             <line x1="3" y1="6" x2="21" y2="6" />
             <line x1="3" y1="12" x2="21" y2="12" />
             <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-        </button>
-
-        <button class="hamburger hamburger-desktop" type="button" @click="toggleSidebar" v-if="!sidebarOpen">
-          <svg class="icon icon-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-            <polyline points="9 18 15 12 9 6" />
           </svg>
         </button>
 
@@ -358,6 +371,25 @@ onBeforeUnmount(() => {
       <div class="page-wrap">
         <router-view :siswa="siswa" />
       </div>
+      <div
+        v-if="showLogoutModal"
+        class="modal-overlay"
+        @click.self="batalLogout"
+      >
+        <div class="modal-box" role="dialog">
+          <div class="modal-header">
+            <h2>Keluar dari akun?</h2>
+            <button class="modal-close" type="button" @click="batalLogout">×</button>
+          </div>
+          <div class="modal-body">
+            <p>Anda akan keluar dari dashboard {{ 'siswa' }}. Simpan perubahan yang belum disimpan sebelum keluar.</p>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-modal ghost" type="button" @click="batalLogout">Batal</button>
+            <button class="btn-modal danger" type="button" @click="konfirmasiLogout">Ya, Keluar</button>
+          </div>
+        </div>
+      </div>
     </main>
   </div>
 </template>
@@ -395,14 +427,42 @@ onBeforeUnmount(() => {
   padding: 16px 10px;
   align-items: center;
 }
-.sidebar-closed .brand .icon-lg { display: none; }
-.sidebar-closed .brand {
-  flex-direction: column;
-  justify-content: center;
-  margin-bottom: 12px;
+.sidebar-closed .sidebar-toggle-inside {
+  display: none;
 }
-.sidebar-closed .sidebar-toggle-inside,
-.sidebar-closed .brand { display: none; }
+
+.sidebar-open-hint {
+  display: none;
+}
+
+.sidebar-closed .brand {
+  position: relative;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 12px;
+  border-radius: 12px;
+  background: #12235a;
+}
+
+.sidebar-closed .brand:hover {
+  background: #1d4ed8;
+}
+
+.sidebar-closed .brand:hover .icon-lg {
+  display: none;
+}
+
+.sidebar-closed .brand:hover .sidebar-open-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+
 .sidebar-closed .brand-text,
 .sidebar-closed .nav-label,
 .sidebar-closed .profile-text,
@@ -438,8 +498,11 @@ onBeforeUnmount(() => {
 }
 
 .icon-toggle { width: 16px; height: 16px; }
-.brand-title { font-weight: 700; font-size: 13px; }
-.brand-sub { font-size: 11px; opacity: 0.7; }
+.brand-title {
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.3px;
+}
 
 .nav {
   flex: 1;
@@ -671,6 +734,77 @@ onBeforeUnmount(() => {
 .user-role { font-size: 11px; color: #6b7280; }
 
 .sidebar-overlay { display: none; }
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 90;
+  padding: 16px;
+}
+
+.modal-box {
+  width: 100%;
+  max-width: 400px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16);
+  color: #0f172a;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h2 { margin: 0; font-size: 16px; }
+
+.modal-close {
+  border: none;
+  background: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 22px;
+  color: #9ca3af;
+  cursor: pointer;
+}
+
+.modal-close:hover { background: #f3f4f6; color: #111827; }
+
+.modal-body {
+  padding: 16px 20px;
+  font-size: 14px;
+  color: #475569;
+  line-height: 1.6;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.btn-modal {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-modal.ghost { background: #e2e8f0; color: #0f172a; }
+.btn-modal.ghost:hover { background: #cbd5e1; }
+.btn-modal.danger { background: #dc2626; color: #fff; }
+.btn-modal.danger:hover { background: #b91c1c; }
 
 @media (max-width: 768px) {
   .sidebar-toggle-inside {

@@ -388,7 +388,7 @@ onMounted(async () => {
               <span
                 v-for="(m, i) in chartLabels"
                 :key="i"
-                :style="{ flex: `0 0 ${lebarKolomChart}px`, width: `${lebarKolomChart}px` }"
+                :style="{ flex: '1 1 0%', minWidth: `${lebarKolomChart}px` }"
               >{{ m }}</span>
             </div>
           </div>
@@ -858,6 +858,7 @@ onMounted(async () => {
 
 .chart-labels {
   display: flex;
+  width: 100%;
   justify-content: flex-start;
   gap: 0;
   font-size: 10px;

@@ -1,10 +1,38 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL
 
 const keyword = ref('')
 const kategoriAktif = ref('Semua')
+
+const kategoriMenuOpen = ref(false)
+const sortMenuOpen = ref(false)
+
+const sortOptions = [
+  { value: 'terbaru', label: 'Terbaru ditambahkan' },
+  { value: 'judul', label: 'Judul A-Z' },
+  { value: 'penulis', label: 'Penulis A-Z' },
+]
+
+function labelSortTerpilih() {
+  return sortOptions.find(s => s.value === sortBy.value)?.label || 'Terbaru ditambahkan'
+}
+function pilihKategori(nama) {
+  kategoriAktif.value = nama
+  kategoriMenuOpen.value = false
+}
+function pilihSort(value) {
+  sortBy.value = value
+  sortMenuOpen.value = false
+}
+function tutupFilterMenu(e) {
+  if (!e.target.closest?.('.filter-dropdown')) {
+    kategoriMenuOpen.value = false
+    sortMenuOpen.value = false
+  }
+}
+
 const sortBy = ref('terbaru')
 const viewMode = ref('grid')
 const loading = ref(false)
@@ -98,6 +126,11 @@ const bukuFiltered = computed(() => {
 onMounted(async () => {
   await fetchBuku()
   await fetchKategori()
+  document.addEventListener('click', tutupFilterMenu)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', tutupFilterMenu)
 })
 
 watch(kategoriAktif, () => fetchBuku())
@@ -145,17 +178,29 @@ watch(keyword, () => {
         />
       </div>
 
-      <select v-model="kategoriAktif" class="filter-select">
-        <option v-for="k in kategoriList" :key="k" :value="k">
-          {{ k }}
-        </option>
-      </select>
+      <div class="filter-dropdown">
+  <button type="button" class="filter-dropdown-btn"
+    @click.stop="kategoriMenuOpen = !kategoriMenuOpen; sortMenuOpen = false">
+    {{ kategoriAktif }}
+  </button>
+  <ul v-if="kategoriMenuOpen" class="filter-dropdown-list">
+    <li v-for="k in kategoriList" :key="k"
+      :class="{ aktif: kategoriAktif === k }"
+      @click="pilihKategori(k)">{{ k }}</li>
+  </ul>
+</div>
 
-      <select v-model="sortBy" class="filter-select">
-        <option value="terbaru">Terbaru ditambahkan</option>
-        <option value="judul">Judul A-Z</option>
-        <option value="penulis">Penulis A-Z</option>
-      </select>
+<div class="filter-dropdown">
+  <button type="button" class="filter-dropdown-btn"
+    @click.stop="sortMenuOpen = !sortMenuOpen; kategoriMenuOpen = false">
+    {{ labelSortTerpilih() }}
+  </button>
+  <ul v-if="sortMenuOpen" class="filter-dropdown-list">
+    <li v-for="s in sortOptions" :key="s.value"
+      :class="{ aktif: sortBy === s.value }"
+      @click="pilihSort(s.value)">{{ s.label }}</li>
+  </ul>
+</div>
     </div>
 
     <div v-if="loading" class="empty-state">Memuat katalog...</div>
@@ -293,15 +338,52 @@ watch(keyword, () => {
   background: transparent;
 }
 
-.filter-select {
-  border: 1px solid #e5e7eb;
-  border-radius: 999px;
-  padding: 10px 16px;
-  font-size: 13px;
-  background: #fff;
-  color: #374151;
-  cursor: pointer;
+.filter-dropdown {
+  position: relative;
+  flex-shrink: 0;
   min-width: 150px;
+}
+
+.filter-dropdown-btn {
+  width: 100%;
+  font-family: inherit;
+  font-size: 13px;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;   /* dibuat pill supaya konsisten dgn gaya katalog siswa yang sebelumnya rounded-full */
+  padding: 10px 28px 10px 16px;
+  color: #374151;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 12px center;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.filter-dropdown-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  z-index: 40;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.filter-dropdown-list li {
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.filter-dropdown-list li:hover,
+.filter-dropdown-list li.aktif {
+  background: #dbeafe;
 }
 
 .buku-grid {

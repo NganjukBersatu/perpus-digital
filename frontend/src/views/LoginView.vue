@@ -127,7 +127,6 @@ async function handleLogin() {
           </svg>
           <div>
             <div class="brand-title">MANAGEMENT PERPUSTAKAAN</div>
-            <div class="brand-sub">SMK NEGERI 1 KERTOSONO</div>
           </div>
         </div>
 
@@ -365,12 +364,8 @@ async function handleLogin() {
 }
 .brand-title {
   font-weight: 700;
-  font-size: 13px;
+  font-size: 22px;
   letter-spacing: 0.3px;
-}
-.brand-sub {
-  font-size: 11px;
-  opacity: 0.6;
 }
 
 .shelf-illustration {
@@ -534,6 +529,11 @@ async function handleLogin() {
   }
   .form-panel {
     padding: 32px 28px 36px;
+  }
+  .brand-title {
+    font-weight: 600;
+    font-size: 16px;
+    letter-spacing: 0.3px;
   }
 }
 

@@ -776,9 +776,9 @@ onMounted(loadSettings)
         </div>
 
         <ul class="notes">
-          <li>Pengaturan tersimpan di database server, jadi tetap ada setelah halaman di-refresh.</li>
-          <li>Nanti bisa dipindah ke API Laravel/Express tanpa mengubah tampilan form.</li>
-          <li>Menu <em>Akun Admin</em> tetap terpisah untuk profil &amp; password.</li>
+          <li>Unduh cadangan sebelum melakukan perubahan besar, agar pengaturan bisa dipulihkan bila diperlukan.</li>
+          <li>"Kembalikan ke default" akan mengganti semua pengaturan di semua tab — pastikan Anda yakin sebelum menekan tombol ini.</li>
+          <li>Pengaturan profil dan kata sandi Anda ada di menu Akun Admin, terpisah dari halaman ini.</li>
         </ul>
       </section>
     </div>

@@ -278,8 +278,7 @@ function tutupSearchDelay() {
           <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
         </svg>
         <div class="brand-text">
-          <div class="brand-title">MANAGEMENT PERPUS</div>
-          <div class="brand-sub">SMK NEGERI 1 KERTOSONO</div>
+          <div class="brand-title">MANAGEMENT PERPUSTAKAAN</div>
         </div>
         <button class="sidebar-toggle-inside" type="button" @click.stop="toggleSidebar">
           <svg class="icon icon-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
@@ -459,16 +458,16 @@ function tutupSearchDelay() {
         <span class="nav-label">Keluar</span>
       </button>
     </aside>
-        <div v-if="mobileMenuOpen" class="sidebar-overlay" @click="closeMobileMenu"></div>
+    <div v-if="mobileMenuOpen" class="sidebar-overlay" @click="closeMobileMenu"></div>
     <main class="main" :class="{ 'main-expanded': !sidebarOpen }">
-<header class="topbar">
-  <button class="hamburger hamburger-mobile" @click="toggleMobileMenu">
-    <svg class="icon icon-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-      <line x1="3" y1="6" x2="21" y2="6" />
-      <line x1="3" y1="12" x2="21" y2="12" />
-      <line x1="3" y1="18" x2="21" y2="18" />
-    </svg>
-  </button>
+      <header class="topbar">
+        <button class="hamburger hamburger-mobile" @click="toggleMobileMenu">
+          <svg class="icon icon-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
 
         <div class="search-box search-box-wrap">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -543,38 +542,38 @@ function tutupSearchDelay() {
             </button>
 
             <div v-if="notifOpen" class="notif-dropdown">
-  <div class="notif-item" v-if="notifikasi.terlambat.aktif">
-    <div class="notif-item-title">
-      <svg class="icon notif-icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-      </svg>
-      Buku Terlambat
-    </div>
-    <div class="notif-item-body">
-      {{ notifikasi.terlambat.jumlah }} buku belum dikembalikan melebihi jatuh tempo
-    </div>
-    <div class="notif-item-time">{{ formatWaktu(notifikasi.terlambat.waktu) }}</div>
-  </div>
+              <div class="notif-item" v-if="notifikasi.terlambat.aktif">
+                <div class="notif-item-title">
+                  <svg class="icon notif-icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                  </svg>
+                  Buku Terlambat
+                </div>
+                <div class="notif-item-body">
+                  {{ notifikasi.terlambat.jumlah }} buku belum dikembalikan melebihi jatuh tempo
+                </div>
+                <div class="notif-item-time">{{ formatWaktu(notifikasi.terlambat.waktu) }}</div>
+              </div>
 
-  <div class="notif-item" v-if="notifikasi.jatuhTempoHariIni.aktif">
-    <div class="notif-item-title">
-      <svg class="icon notif-icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10" />
-        <polyline points="12 6 12 12 16 14" />
-      </svg>
-      Jatuh Tempo Hari Ini
-    </div>
-    <div class="notif-item-body">
-      {{ notifikasi.jatuhTempoHariIni.jumlah }} buku harus dikembalikan hari ini
-    </div>
-    <div class="notif-item-time">{{ formatWaktu(notifikasi.jatuhTempoHariIni.waktu) }}</div>
-  </div>
+              <div class="notif-item" v-if="notifikasi.jatuhTempoHariIni.aktif">
+                <div class="notif-item-title">
+                  <svg class="icon notif-icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  Jatuh Tempo Hari Ini
+                </div>
+                <div class="notif-item-body">
+                  {{ notifikasi.jatuhTempoHariIni.jumlah }} buku harus dikembalikan hari ini
+                </div>
+                <div class="notif-item-time">{{ formatWaktu(notifikasi.jatuhTempoHariIni.waktu) }}</div>
+              </div>
 
-  <p v-if="!notifikasi.terlambat.aktif && !notifikasi.jatuhTempoHariIni.aktif" class="notif-item-body">
-    Tidak ada notifikasi aktif.
-  </p>
-</div>
+              <p v-if="!notifikasi.terlambat.aktif && !notifikasi.jatuhTempoHariIni.aktif" class="notif-item-body">
+                Tidak ada notifikasi aktif.
+              </p>
+            </div>
           </div>
           <div class="avatar-sm avatar-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -792,8 +791,11 @@ function tutupSearchDelay() {
   box-shadow: 0 2px 6px rgba(37, 99, 235, 0.5);
 }
 .icon-toggle { width: 16px; height: 16px; }
-.brand-title { font-weight: 700; font-size: 13px; }
-.brand-sub { font-size: 11px; opacity: 0.7; }
+.brand-title {
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.3px;
+}
 
 .nav {
   flex: 1; display: flex; flex-direction: column; gap: 4px;

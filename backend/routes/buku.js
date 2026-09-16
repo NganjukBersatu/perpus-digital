@@ -42,7 +42,7 @@ router.get('/', async (req, res) => {
 })
 
 // POST tambah buku baru
-// [BARU] Kalau body request menyertakan "barcode", setelah buku berhasil
+// Kalau body request menyertakan "barcode", setelah buku berhasil
 // dibuat, sekalian insert 1 baris eksemplar dengan barcode tersebut.
 // Kalau "barcode" tidak dikirim, perilaku tetap seperti semula (tidak
 // membuat eksemplar apa pun).
@@ -67,7 +67,7 @@ router.post('/', async (req, res) => {
       })
       .returning()
 
-    // [BARU] Buat eksemplar otomatis kalau barcode dikirim
+    // Buat eksemplar otomatis kalau barcode dikirim
     let eksemplarBaru = null
     if (barcode) {
       const [eksemplar] = await db
@@ -85,6 +85,50 @@ router.post('/', async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Gagal menambah buku' })
+  }
+})
+
+// POST tambah eksemplar baru ke buku yang SUDAH ADA (bukan bikin buku baru).
+// Dipakai saat hasil scan tidak ketemu, tapi judul bukunya sebenarnya
+// sudah terdaftar (kasus barcode bawaan penerbit yang sama untuk
+// beberapa kopi fisik dari judul yang sama).
+router.post('/:id/eksemplar', async (req, res) => {
+  try {
+    const bukuId = Number(req.params.id)
+    const { barcode } = req.body
+
+    if (!barcode) {
+      return res.status(400).json({ error: 'Barcode wajib diisi' })
+    }
+
+    const [bukuAda] = await db.select().from(buku).where(eq(buku.id, bukuId))
+    if (!bukuAda) {
+      return res.status(404).json({ error: 'Buku tidak ditemukan' })
+    }
+
+    // Insert dulu pakai barcode SEMENTARA yang sudah pasti unik
+    // (ditempeli timestamp), supaya tidak bentrok dengan barcode
+    // eksemplar lain dari buku yang sama. Setelah dapat id-nya,
+    // baru diganti ke format final "barcode-id".
+    const barcodeSementara = `${barcode}-tmp-${Date.now()}`
+
+    const [eksemplar] = await db
+      .insert(eksemplarBuku)
+      .values({ bukuId, barcode: barcodeSementara, status: 'tersedia' })
+      .returning()
+
+    const barcodeUnik = `${barcode}-${eksemplar.id}`
+
+    const [updated] = await db
+      .update(eksemplarBuku)
+      .set({ barcode: barcodeUnik })
+      .where(eq(eksemplarBuku.id, eksemplar.id))
+      .returning()
+
+    res.status(201).json(updated)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Gagal menambah eksemplar' })
   }
 })
 

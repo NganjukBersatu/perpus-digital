@@ -50,6 +50,113 @@ function tambahBukuBaru() {
   })
 }
 
+// ===== TAMBAH KOPI BARU DARI BUKU YANG SEDANG DITAMPILKAN (Step 2) =====
+const showKonfirmasiKopiBaru = ref(false)
+const isAddingKopiBaru = ref(false)
+
+function bukaKonfirmasiKopiBaru() {
+  showKonfirmasiKopiBaru.value = true
+}
+
+function batalKonfirmasiKopiBaru() {
+  showKonfirmasiKopiBaru.value = false
+}
+
+async function konfirmasiTambahKopiBaru() {
+  if (!bookData.value?.bukuId) {
+    console.log('DEBUG: fungsi berhenti di sini karena bukuId kosong')
+    return
+  }
+
+  isAddingKopiBaru.value = true
+  scanError.value = ""
+  try {
+    const res = await fetch(`/api/buku/${bookData.value.bukuId}/eksemplar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ barcode: barcode.value }),
+    })
+    if (!res.ok) throw new Error("Gagal menambah eksemplar")
+
+    showKonfirmasiKopiBaru.value = false
+    await cariBuku(barcode.value)
+  } catch (err) {
+    console.error(err)
+    scanError.value = "Gagal menambahkan kopi baru. Coba lagi."
+  } finally {
+    isAddingKopiBaru.value = false
+  }
+}
+
+// ===== TAMBAH EKSEMPLAR KE BUKU YANG SUDAH ADA =====
+const showPilihBukuLama = ref(false)
+const queryJudulLama = ref("")
+const hasilPencarianBuku = ref([])
+const isSearchingBuku = ref(false)
+const isAddingEksemplar = ref(false)
+let debounceTimer = null
+
+function bukaPilihBukuLama() {
+  showPilihBukuLama.value = true
+  queryJudulLama.value = ""
+  hasilPencarianBuku.value = []
+}
+
+function tutupPilihBukuLama() {
+  showPilihBukuLama.value = false
+}
+
+function onQueryJudulLamaInput() {
+  clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(cariBukuLama, 300)
+}
+
+async function cariBukuLama() {
+  const q = queryJudulLama.value.trim()
+  if (!q) {
+    hasilPencarianBuku.value = []
+    return
+  }
+  isSearchingBuku.value = true
+  try {
+    const res = await fetch(`/api/buku?q=${encodeURIComponent(q)}`)
+    if (res.ok) hasilPencarianBuku.value = await res.json()
+  } catch (err) {
+    console.error(err)
+  } finally {
+    isSearchingBuku.value = false
+  }
+}
+
+async function pilihBukuLamaDanSimpan(bukuTerpilih) {
+  isAddingEksemplar.value = true
+  scanError.value = ""
+  try {
+    const res = await fetch(`/api/buku/${bukuTerpilih.id}/eksemplar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ barcode: barcode.value }),
+    })
+    if (!res.ok) throw new Error("Gagal menambah eksemplar")
+
+    showPilihBukuLama.value = false
+    bookNotFound.value = false
+
+    router.push({
+      path: '/admin/pinjam',
+      query: {
+        barcode: barcode.value,
+        lanjut: 'pinjam'
+      }
+    })
+  } catch (err) {
+    console.error(err)
+    scanError.value = "Gagal menambahkan eksemplar baru. Coba lagi."
+  } finally {
+    isAddingEksemplar.value = false
+  }
+}
+
 async function lanjutDariQuery() {
   const kode = String(route.query.barcode || '').trim()
   const lanjutPinjam = route.query.lanjut === 'pinjam'
@@ -79,7 +186,7 @@ let scanner = null
 const currentStep = ref(1)
 
 // ===== PEMINJAM =====
-const tipePeminjam = ref("siswa") // 'siswa' | 'guru'
+const tipePeminjam = ref("siswa")
 const peminjam = ref({
   nama: "",
   kelas: "",
@@ -150,6 +257,7 @@ function gantiTipePeminjam(tipe) {
 // ===== COMBOBOX GURU =====
 const guruQuery = ref("")
 const showGuruDropdown = ref(false)
+const isAddingGuru = ref(false)
 
 const filteredGuru = computed(() => {
   const q = guruQuery.value.trim().toLowerCase()
@@ -157,7 +265,6 @@ const filteredGuru = computed(() => {
   return daftarGuru.value.filter((g) => g.nama.toLowerCase().includes(q))
 })
 
-// true kalau nama yang diketik tidak cocok dengan guru manapun di daftar
 const isGuruBaru = computed(() => {
   const q = guruQuery.value.trim().toLowerCase()
   if (!q) return false
@@ -172,7 +279,6 @@ function pilihGuru(guru) {
 }
 
 function onGuruInput() {
-  // ketikan berubah -> anggap belum memilih guru manapun sampai dipilih lagi dari daftar/ditambah baru
   peminjam.value.anggotaId = null
   peminjam.value.nama = guruQuery.value
   showGuruDropdown.value = true
@@ -188,6 +294,9 @@ async function tambahGuruBaru() {
   const namaBaru = guruQuery.value.trim()
   if (!namaBaru) return
 
+  isAddingGuru.value = true
+  scanError.value = ""
+
   try {
     const res = await fetch("http://localhost:3000/api/guru", {
       method: "POST",
@@ -202,9 +311,10 @@ async function tambahGuruBaru() {
   } catch (err) {
     console.error(err)
     scanError.value = "Gagal menambahkan guru baru. Coba lagi."
+  } finally {
+    isAddingGuru.value = false
   }
 }
-
 
 // ===== RESET =====
 function resetHasilPindai() {
@@ -212,6 +322,10 @@ function resetHasilPindai() {
   bookNotFound.value = false
   bookData.value = null
   currentStep.value = 1
+  showPilihBukuLama.value = false
+  queryJudulLama.value = ""
+  hasilPencarianBuku.value = []
+  showKonfirmasiKopiBaru.value = false
 }
 
 async function siapkanDaftarKamera() {
@@ -317,7 +431,7 @@ async function simpanPeminjaman() {
     }
   } else {
     if (!peminjam.value.anggotaId || !peminjam.value.nama.trim()) {
-      scanError.value = "Pilih guru dari daftar."
+      scanError.value = "Pilih guru dari daftar atau tambahkan sebagai guru baru."
       return
     }
   }
@@ -512,14 +626,53 @@ onBeforeUnmount(() => {
 
           <div v-if="bookNotFound" ref="notFoundMessageRef" class="message message--warning">
             <div class="message__icon">!</div>
-            <div>
+            <div class="not-found-body">
               <strong>Buku tidak ditemukan</strong>
               <p>
                 Barcode <span class="mono">{{ barcode }}</span> belum terdaftar di katalog.
               </p>
-              <button type="button" class="btn-tambah-buku" @click="tambahBukuBaru">
-                + Tambah Buku
-              </button>
+
+              <div v-if="!showPilihBukuLama" class="not-found-actions">
+                <button type="button" class="btn-tambah-buku" @click="tambahBukuBaru">
+                  + Ini buku baru
+                </button>
+                <button type="button" class="btn-tambah-eksemplar" @click="bukaPilihBukuLama">
+                  Tambah eksemplar dari judul yang sudah ada
+                </button>
+              </div>
+
+              <div v-else class="pilih-buku-lama">
+                <input
+                  v-model="queryJudulLama"
+                  type="text"
+                  placeholder="Ketik judul buku..."
+                  class="pilih-buku-lama__input"
+                  @input="onQueryJudulLamaInput"
+                />
+
+                <p v-if="isSearchingBuku" class="pilih-buku-lama__status">Mencari...</p>
+
+                <ul v-if="hasilPencarianBuku.length" class="pilih-buku-lama__list">
+                  <li
+                    v-for="b in hasilPencarianBuku"
+                    :key="b.id"
+                    class="pilih-buku-lama__item"
+                    :class="{ 'pilih-buku-lama__item--disabled': isAddingEksemplar }"
+                    @click="!isAddingEksemplar && pilihBukuLamaDanSimpan(b)"
+                  >
+                    <strong>{{ b.judul }}</strong> — {{ b.penulis }}
+                    <span class="pilih-buku-lama__meta">({{ b.tersedia }}/{{ b.totalEksemplar }} tersedia)</span>
+                  </li>
+                </ul>
+
+                <p v-else-if="queryJudulLama && !isSearchingBuku" class="pilih-buku-lama__status">
+                  Tidak ada judul yang cocok.
+                </p>
+
+                <button type="button" class="secondary-light-button pilih-buku-lama__batal" @click="tutupPilihBukuLama">
+                  Batal
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -568,6 +721,28 @@ onBeforeUnmount(() => {
                 <strong class="mono">{{ barcode }}</strong>
               </div>
             </div>
+
+            <div v-if="bookData.eksemplarList && bookData.eksemplarList.length" class="eksemplar-list">
+              <span class="eksemplar-list__title">
+                Eksemplar buku ini ({{ bookData.eksemplarList.length }})
+              </span>
+              <ul>
+                <li
+                  v-for="ek in bookData.eksemplarList"
+                  :key="ek.id"
+                  class="eksemplar-list__item"
+                  :class="{ 'eksemplar-list__item--active': ek.id === bookData.eksemplarId }"
+                >
+                  <span
+                    class="eksemplar-list__dot"
+                    :class="ek.status === 'tersedia' ? 'eksemplar-list__dot--ok' : 'eksemplar-list__dot--warn'"
+                  ></span>
+                  <span class="eksemplar-list__label">Eksemplar #{{ ek.id }}</span>
+                  <span class="eksemplar-list__status">{{ ek.status }}</span>
+                  <span class="eksemplar-list__barcode mono">{{ ek.barcode }}</span>
+                </li>
+              </ul>
+            </div>
           </div>
 
           <div v-if="bookData.status !== 'tersedia'" class="message message--warning">
@@ -578,8 +753,11 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div class="result-actions">
+          <div v-if="!showKonfirmasiKopiBaru" class="result-actions">
             <button class="secondary-light-button" @click="mulaiScanLagi">Scan buku lain</button>
+            <button class="secondary-light-button" @click="bukaKonfirmasiKopiBaru">
+              + Ini kopi baru
+            </button>
             <button
               v-if="bookData.status === 'tersedia'"
               class="primary-button primary-button--large"
@@ -587,6 +765,35 @@ onBeforeUnmount(() => {
             >
               Mulai peminjaman
             </button>
+          </div>
+
+          <div v-else class="message message--warning kopi-baru-confirm">
+            <div class="message__icon">!</div>
+            <div>
+              <strong>Yakin ini kopi fisik baru?</strong>
+              <p>
+                Eksemplar baru akan ditambahkan untuk <strong>{{ bookData.judul }}</strong>
+                dengan barcode <span class="mono">{{ barcode }}</span>.
+              </p>
+              <div class="kopi-baru-confirm__actions">
+                <button
+                  type="button"
+                  class="secondary-light-button"
+                  :disabled="isAddingKopiBaru"
+                  @click="batalKonfirmasiKopiBaru"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  class="btn-tambah-buku"
+                  :disabled="isAddingKopiBaru"
+                  @click="konfirmasiTambahKopiBaru"
+                >
+                  {{ isAddingKopiBaru ? "Menyimpan..." : "Ya, tambahkan eksemplar" }}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -686,34 +893,54 @@ onBeforeUnmount(() => {
               </label>
             </template>
 
-<!-- MODE GURU -->
-<template v-else>
-  <label class="field field--full field--combobox">
-    <span>Nama guru</span>
-    <div class="input-wrapper">
-      <input
-        v-model="guruQuery"
-        type="text"
-        required
-        autocomplete="off"
-        placeholder="Ketik atau pilih nama guru"
-        @input="onGuruInput"
-        @focus="showGuruDropdown = true"
-        @blur="tutupGuruDropdown"
-      />
-    </div>
-    <ul v-if="showGuruDropdown && filteredGuru.length" class="kelas-dropdown">
-      <li v-for="g in filteredGuru" :key="g.id" @mousedown.prevent="pilihGuru(g)">
-        {{ g.nama }}{{ g.mapel ? ` — ${g.mapel}` : "" }}
-      </li>
-    </ul>
-    <ul v-else-if="showGuruDropdown && isGuruBaru" class="kelas-dropdown">
-      <li @mousedown.prevent="tambahGuruBaru">
-        + Tambahkan "{{ guruQuery.trim() }}" sebagai guru baru
-      </li>
-    </ul>
-  </label>
-</template>
+            <!-- MODE GURU -->
+            <template v-else>
+              <label class="field field--full field--combobox">
+                <span>Nama guru</span>
+                <div class="input-wrapper">
+                  <input
+                    v-model="guruQuery"
+                    type="text"
+                    required
+                    autocomplete="off"
+                    placeholder="Ketik atau pilih nama guru"
+                    @input="onGuruInput"
+                    @focus="showGuruDropdown = true"
+                    @blur="tutupGuruDropdown"
+                  />
+                </div>
+
+                <!-- Dropdown daftar guru -->
+                <ul v-if="showGuruDropdown && filteredGuru.length" class="kelas-dropdown">
+                  <li
+                    v-for="g in filteredGuru"
+                    :key="g.id"
+                    @mousedown.prevent="pilihGuru(g)"
+                  >
+                    {{ g.nama }}{{ g.mapel ? ` — ${g.mapel}` : "" }}
+                  </li>
+                </ul>
+
+                <!-- Opsi tambah guru baru di dropdown -->
+                <ul v-else-if="showGuruDropdown && isGuruBaru" class="kelas-dropdown">
+                  <li class="tambah-guru-option" @mousedown.prevent="tambahGuruBaru">
+                    + Tambahkan "{{ guruQuery.trim() }}" sebagai guru baru
+                  </li>
+                </ul>
+              </label>
+
+              <!-- Tombol cadangan yang selalu terlihat -->
+              <div v-if="isGuruBaru && !peminjam.anggotaId" class="tambah-guru-hint">
+                <button
+                  type="button"
+                  class="btn-tambah-guru"
+                  :disabled="isAddingGuru"
+                  @click="tambahGuruBaru"
+                >
+                  {{ isAddingGuru ? "Menambahkan..." : `+ Tambah guru "${guruQuery.trim()}"` }}
+                </button>
+              </div>
+            </template>
 
             <label class="field">
               <span>Tanggal pinjam</span>
@@ -1098,6 +1325,15 @@ button, input, select { font: inherit; }
 .message--warning { color: var(--orange); background: var(--orange-bg); border: 1px solid #ffe2b4; }
 .message--warning .message__icon { background: #ffe7c5; }
 
+.not-found-body { width: 100%; }
+
+.not-found-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .btn-tambah-buku {
   margin-top: 8px;
   padding: 6px 14px;
@@ -1111,6 +1347,82 @@ button, input, select { font: inherit; }
 }
 .btn-tambah-buku:hover {
   opacity: 0.9;
+}
+
+.btn-tambah-eksemplar {
+  margin-top: 8px;
+  padding: 6px 14px;
+  border: 1px solid #ffe2b4;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--orange);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-tambah-eksemplar:hover {
+  background: var(--orange-bg);
+}
+
+.pilih-buku-lama {
+  margin-top: 10px;
+}
+
+.pilih-buku-lama__input {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  outline: none;
+  background: #fff;
+}
+.pilih-buku-lama__input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(40, 100, 232, 0.1);
+}
+
+.pilih-buku-lama__status {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pilih-buku-lama__list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.pilih-buku-lama__item {
+  padding: 8px 10px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 12px;
+}
+.pilih-buku-lama__item:last-child { border-bottom: 0; }
+.pilih-buku-lama__item:hover {
+  background: var(--blue-light);
+}
+.pilih-buku-lama__item--disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pilih-buku-lama__meta {
+  color: var(--muted);
+}
+
+.pilih-buku-lama__batal {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 11px;
 }
 
 .book-result { padding: 24px; }
@@ -1197,6 +1509,69 @@ button, input, select { font: inherit; }
   justify-content: space-between;
   gap: 10px;
   margin-top: 18px;
+}
+
+.eksemplar-list {
+  padding: 14px 18px 16px;
+}
+.eksemplar-list__title {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.eksemplar-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.eksemplar-list__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfcfe;
+  font-size: 12px;
+}
+.eksemplar-list__item--active {
+  border-color: #bcd2fb;
+  background: var(--blue-light);
+}
+.eksemplar-list__dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+}
+.eksemplar-list__dot--ok { background: var(--green); }
+.eksemplar-list__dot--warn { background: var(--orange); }
+.eksemplar-list__label {
+  font-weight: 700;
+  color: var(--navy);
+}
+.eksemplar-list__status {
+  color: var(--muted);
+  text-transform: capitalize;
+}
+.eksemplar-list__barcode {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 10px !important;
+}
+
+.kopi-baru-confirm { margin-top: 12px; }
+.kopi-baru-confirm__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .borrow-form { padding: 24px; }
@@ -1323,6 +1698,41 @@ button, input, select { font: inherit; }
   font-size: 11px;
 }
 
+/* ===== TAMBAHAN UNTUK GURU BARU ===== */
+.tambah-guru-option {
+  color: #2864e8 !important;
+  font-weight: 700 !important;
+}
+
+.tambah-guru-hint {
+  grid-column: 1 / -1;
+  margin-top: -4px;
+  margin-bottom: 4px;
+}
+
+.btn-tambah-guru {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px dashed #2864e8;
+  border-radius: 8px;
+  background: #edf4ff;
+  color: #2864e8;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-tambah-guru:hover {
+  background: #dbeafe;
+}
+
+.btn-tambah-guru:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .success-message {
   display: flex;
   align-items: center;
@@ -1425,6 +1835,13 @@ button, input, select { font: inherit; }
 
   .result-actions, .form-actions {
     gap: 8px;
+  }
+
+  .not-found-actions {
+    flex-direction: column;
+  }
+  .not-found-actions > * {
+    width: 100%;
   }
 }
 </style>

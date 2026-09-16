@@ -1,23 +1,3 @@
-const { pengaturanPerpustakaan } = require('../db/schema')
-
-const DEFAULT_DENDA = {
-  aktif: true,
-  nominalPerHariSiswa: 1000,
-  nominalPerHariGuru: 1000,
-  dendaMaksimalSiswa: 50000,
-  dendaMaksimalGuru: 50000,
-  masaTenggang: 0,
-  dendaGuruAktif: false,
-}
-
-// Ambil pengaturan denda TERBARU langsung dari DB (bukan cache),
-// supaya begitu admin ganti nominal di halaman Pengaturan, langsung kepakai.
-async function ambilPengaturanDenda(db) {
-  const [row] = await db.select().from(pengaturanPerpustakaan).limit(1)
-  return { ...DEFAULT_DENDA, ...(row?.detail?.denda || {}) }
-}
-
-// peran: 'siswa' | 'guru' -> dipakai untuk cek toggle "Terapkan denda untuk guru"
 function hitungDenda({ tanggalKembali, tanggalDikembalikan, peran, pengaturanDenda }) {
   const batas = new Date(tanggalKembali)
   const kembali = new Date(tanggalDikembalikan)
@@ -31,48 +11,24 @@ function hitungDenda({ tanggalKembali, tanggalDikembalikan, peran, pengaturanDen
   const bolehDihitung =
     pengaturanDenda.aktif && (peran !== 'guru' || pengaturanDenda.dendaGuruAktif)
 
+  // Support kedua format (yang dari snapshot & yang dari pengaturan)
   const nominalPerHari =
-  peran === 'guru' ? pengaturanDenda.nominalPerHariGuru : pengaturanDenda.nominalPerHariSiswa
-const dendaMaksimal =
-  peran === 'guru' ? pengaturanDenda.dendaMaksimalGuru : pengaturanDenda.dendaMaksimalSiswa
+    peran === 'guru'
+      ? (pengaturanDenda.nominalPerHariGuru ?? pengaturanDenda.nominalPerHari ?? 0)
+      : (pengaturanDenda.nominalPerHariSiswa ?? pengaturanDenda.nominalPerHari ?? 0)
 
-let denda = 0
-if (bolehDihitung && hariKenaDenda > 0) {
-  denda = hariKenaDenda * (nominalPerHari || 0)
-  if (dendaMaksimal > 0) {
-    denda = Math.min(denda, dendaMaksimal)
+  const dendaMaksimal =
+    peran === 'guru'
+      ? (pengaturanDenda.dendaMaksimalGuru ?? pengaturanDenda.dendaMaksimal ?? 0)
+      : (pengaturanDenda.dendaMaksimalSiswa ?? pengaturanDenda.dendaMaksimal ?? 0)
+
+  let denda = 0
+  if (bolehDihitung && hariKenaDenda > 0) {
+    denda = hariKenaDenda * (nominalPerHari || 0)
+    if (dendaMaksimal > 0) {
+      denda = Math.min(denda, dendaMaksimal)
+    }
   }
-}
 
   return { denda, hariTerlambat }
 }
-
-const DEFAULT_NOTIFIKASI = {
-  pengingatJatuhTempo: true,
-  hariSebelumJatuhTempo: 1,
-  notifikasiTerlambat: true,
-  notifikasiJatuhTempoHariIni: true,
-}
-
-async function ambilPengaturanNotifikasi(db) {
-  const [row] = await db.select().from(pengaturanPerpustakaan).limit(1)
-  return { ...DEFAULT_NOTIFIKASI, ...(row?.detail?.notifikasi || {}) }
-}
-
-const DEFAULT_PEMINJAMAN = {
-  durasiSiswa: 7,
-  durasiGuru: 14,
-  maxBukuSiswa: 2,
-  maxBukuGuru: 5,
-  bolehPerpanjang: true,
-  maxPerpanjang: 1,
-  durasiPerpanjang: 7,
-  minStokPinjam: 1,
-}
-
-async function ambilPengaturanPeminjaman(db) {
-  const [row] = await db.select().from(pengaturanPerpustakaan).limit(1)
-  return { ...DEFAULT_PEMINJAMAN, ...(row?.detail?.peminjaman || {}) }
-}
-
-module.exports = { ambilPengaturanDenda, hitungDenda, ambilPengaturanNotifikasi, ambilPengaturanPeminjaman }

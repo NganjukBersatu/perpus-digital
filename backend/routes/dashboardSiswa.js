@@ -3,6 +3,7 @@ const { eq, isNull, and, sql, desc } = require('drizzle-orm')
 const { db } = require('../db/client')
 const { peminjaman, eksemplarBuku, buku, kategori, anggota } = require('../db/schema')
 const { wajibLoginSiswa } = require('./authSiswa')
+const { hitungDenda } = require('../utils/hitungDenda')
 
 const router = Router()
 
@@ -95,24 +96,79 @@ router.patch('/kembalikan/:id', wajibLoginSiswa, async (req, res) => {
   try {
     const anggotaId = req.siswa.id
     const { id } = req.params
+    const today = new Date().toISOString().slice(0, 10)
 
-    const result = await db.update(peminjaman)
-      .set({ tanggalDikembalikan: new Date().toISOString().slice(0, 10) })
-      .where(and(eq(peminjaman.id, Number(id)), eq(peminjaman.anggotaId, anggotaId)))
-      .returning()
+    // Ambil data peminjaman + snapshot denda + peran
+    const [row] = await db
+      .select({
+        id: peminjaman.id,
+        tanggalKembali: peminjaman.tanggalKembali,
+        eksemplarId: peminjaman.eksemplarId,
+        nominalDendaPerHari: peminjaman.nominalDendaPerHari,
+        dendaMaksimal: peminjaman.dendaMaksimal,
+        dendaGuruAktif: peminjaman.dendaGuruAktif,
+        masaTenggang: peminjaman.masaTenggang,
+        peran: anggota.peran,
+      })
+      .from(peminjaman)
+      .innerJoin(anggota, eq(peminjaman.anggotaId, anggota.id))
+      .where(and(
+        eq(peminjaman.id, Number(id)),
+        eq(peminjaman.anggotaId, anggotaId),
+        isNull(peminjaman.tanggalDikembalikan)
+      ))
 
-    if (result.length === 0) {
-      return res.status(404).json({ message: 'Data peminjaman tidak ditemukan atau bukan milik kamu' })
+    if (!row) {
+      return res.status(404).json({ 
+        message: 'Data peminjaman tidak ditemukan atau sudah dikembalikan' 
+      })
     }
 
-    res.json({ message: 'Buku berhasil dikembalikan', data: result[0] })
+    // Hitung denda pakai snapshot yang tersimpan saat pinjam
+    const pengaturanDenda = {
+      aktif: (row.nominalDendaPerHari || 0) > 0,
+      nominalPerHari: row.nominalDendaPerHari || 0,
+      dendaMaksimal: row.dendaMaksimal || 0,
+      dendaGuruAktif: row.dendaGuruAktif ?? false,
+      masaTenggang: row.masaTenggang ?? 0,
+    }
+
+    const { denda } = hitungDenda({
+      tanggalKembali: row.tanggalKembali,
+      tanggalDikembalikan: today,
+      peran: row.peran,
+      pengaturanDenda,
+    })
+
+    // Update peminjaman
+    const [updated] = await db
+      .update(peminjaman)
+      .set({ 
+        tanggalDikembalikan: today, 
+        denda 
+      })
+      .where(eq(peminjaman.id, row.id))
+      .returning()
+
+    // Kembalikan status eksemplar menjadi tersedia
+    await db
+      .update(eksemplarBuku)
+      .set({ status: 'tersedia' })
+      .where(eq(eksemplarBuku.id, row.eksemplarId))
+
+    res.json({ 
+      message: 'Buku berhasil dikembalikan', 
+      data: updated,
+      denda 
+    })
   } catch (err) {
     console.error(err)
     res.status(500).json({ message: 'Gagal mengembalikan buku' })
   }
 })
 
-// GET /dashboard-siswa/riwayat — semua riwayat peminjaman siswa (baik masih dipinjam maupun sudah dikembalikan)
+// GET /dashboard-siswa/riwayat — semua riwayat peminjaman siswa
+// GET /dashboard-siswa/riwayat — semua riwayat peminjaman siswa
 router.get('/riwayat', wajibLoginSiswa, async (req, res) => {
   try {
     const anggotaId = req.siswa.id
@@ -123,6 +179,7 @@ router.get('/riwayat', wajibLoginSiswa, async (req, res) => {
       tanggalKembali: peminjaman.tanggalKembali,
       tanggalDikembalikan: peminjaman.tanggalDikembalikan,
       denda: peminjaman.denda,
+      statusDenda: peminjaman.statusDenda,
       judul: buku.judul,
       penulis: buku.penulis,
       kategori: kategori.nama
@@ -155,6 +212,7 @@ router.get('/riwayat', wajibLoginSiswa, async (req, res) => {
   }
 })
 
+// GET /dashboard-siswa/profil
 router.get('/profil', wajibLoginSiswa, async (req, res) => {
   try {
     const [siswa] = await db

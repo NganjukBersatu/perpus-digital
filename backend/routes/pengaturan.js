@@ -52,4 +52,39 @@ router.put('/', wajibLogin, async (req, res) => {
   }
 })
 
+// GET info perpustakaan ringkas (untuk header aplikasi & kop laporan)
+router.get('/publik', async (req, res) => {
+  try {
+    const [row] = await db.select().from(pengaturanPerpustakaan).limit(1)
+
+    if (!row) {
+      return res.json({
+        namaPerpustakaan: 'Perpustakaan',
+        namaSekolah: '',
+        alamat: '',
+        telepon: '',
+        email: '',
+        kepalaPerpustakaan: '',
+        tahunAjaran: '',
+      })
+    }
+
+    const detail = row.detail?.perpustakaan || {}
+
+    res.json({
+      namaPerpustakaan: detail.namaPerpustakaan || row.namaPerpustakaan || 'Perpustakaan',
+      namaSekolah: detail.namaSekolah || row.namaSekolah || '',
+      alamat: detail.alamat || row.alamat || '',
+      telepon: detail.telepon || '',
+      email: detail.email || '',
+      kepalaPerpustakaan: detail.kepalaPerpustakaan || '',
+      tahunAjaran: detail.tahunAjaran || '',
+      deskripsi: detail.deskripsi || '',
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Gagal mengambil info perpustakaan' })
+  }
+})
+
 module.exports = router

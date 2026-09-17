@@ -3,7 +3,6 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { logoutUser, getAdmin, authHeaders } from '@/utils/auth'
 
-
 const router = useRouter()
 
 const dataLogin = getAdmin()
@@ -156,33 +155,12 @@ function closeNotifOnScroll() {
 
 let notifInterval = null
 
-onMounted(() => {
-  fetchNotifikasi()
-  window.addEventListener('click', closeNotifOutside)
-  window.addEventListener('scroll', closeNotifOnScroll, { capture: true })
-  sinkronkanDariServer()
-  window.addEventListener('admin-profil-updated', onProfilUpdated)
-
-  // Polling: cek notifikasi setiap 30 detik tanpa perlu refresh halaman
-  notifInterval = setInterval(fetchNotifikasi, 30000)
-
-  // Bonus: langsung refresh saat tab/browser kembali aktif (misal admin balik dari tab lain)
-  document.addEventListener('visibilitychange', handleVisibilityChange)
-})
 
 function handleVisibilityChange() {
   if (document.visibilityState === 'visible') {
     fetchNotifikasi()
   }
 }
-
-onBeforeUnmount(() => {
-  window.removeEventListener('click', closeNotifOutside)
-  window.removeEventListener('scroll', closeNotifOnScroll, { capture: true })
-  document.removeEventListener('visibilitychange', handleVisibilityChange)
-  if (notifInterval) clearInterval(notifInterval)
-  window.removeEventListener('admin-profil-updated', onProfilUpdated)
-})
 
 const sidebarOpen = ref(true)
 
@@ -267,16 +245,35 @@ function pilihHasilGuru(item) {
 function tutupSearchDelay() {
   setTimeout(() => { searchOpen.value = false }, 150)
 }
+
+onMounted(() => {
+  fetchNotifikasi()
+  window.addEventListener('click', closeNotifOutside)
+  window.addEventListener('scroll', closeNotifOnScroll, { capture: true })
+  sinkronkanDariServer()
+  window.addEventListener('admin-profil-updated', onProfilUpdated)
+
+  // Polling: cek notifikasi setiap 30 detik tanpa perlu refresh halaman
+  notifInterval = setInterval(fetchNotifikasi, 30000)
+
+  // Bonus: langsung refresh saat tab/browser kembali aktif (misal admin balik dari tab lain)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('click', closeNotifOutside)
+  window.removeEventListener('scroll', closeNotifOnScroll, { capture: true })
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  if (notifInterval) clearInterval(notifInterval)
+  window.removeEventListener('admin-profil-updated', onProfilUpdated)
+})
 </script>
 
 <template>
   <div class="layout">
     <aside class="sidebar" :class="{ 'sidebar-closed': !sidebarOpen, 'mobile-open': mobileMenuOpen }">
       <div class="brand" @click="bukaSidebarJikaTertutup">
-        <svg class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-        </svg>
+        <img src="/logo.png" alt="Logo" class="icon icon-lg" />
         <div class="brand-text">
           <div class="brand-title">MANAGEMENT PERPUSTAKAAN</div>
         </div>
@@ -623,7 +620,7 @@ function tutupSearchDelay() {
   background: #f4f6fb;
 }
 .icon { width: 18px; height: 18px; flex-shrink: 0; }
-.icon-lg { width: 26px; height: 26px; }
+.icon-lg { width: 26px; height: 26px; object-fit: contain; }
 
 .sidebar {
   width: 260px;
@@ -664,7 +661,7 @@ function tutupSearchDelay() {
 }
 
 .sidebar-closed .brand:hover {
-  background: #1d4ed8;
+  background: #3c70ff;
 }
 
 .sidebar-closed .brand:hover .icon-lg {
@@ -797,6 +794,17 @@ function tutupSearchDelay() {
   letter-spacing: 0.3px;
 }
 
+.brand-subtitle {
+  font-size: 11px;
+  opacity: 0.65;
+  margin-top: 3px;
+  line-height: 1.2;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .nav {
   flex: 1; display: flex; flex-direction: column; gap: 4px;
   overflow-y: auto; min-height: 0;
@@ -848,6 +856,7 @@ function tutupSearchDelay() {
   background: #fff; padding: 14px 24px; display: flex; align-items: center;
   gap: 16px; border-bottom: 1px solid #e5e7eb; position: sticky; top: 0; z-index: 40;
 }
+
 .hamburger {
   background: #2563eb; border: none; cursor: pointer; color: #fff;
   display: flex; align-items: center; justify-content: center;

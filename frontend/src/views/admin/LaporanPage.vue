@@ -1,5 +1,6 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useInfoPerpustakaan } from '@/composables/useInfoPerpustakaan'
 
 const API_URL = 'http://localhost:3000/api/laporan'
 
@@ -57,18 +58,45 @@ function escapeCsv(nilai) {
 function unduhCsv() {
   if (!ringkasan.value) return
 
+  // ---- Ambil info perpustakaan dari composable ----
+  const perpus = infoPerpus.value || {}
+
+  const namaPerpustakaan = perpus.namaPerpustakaan || 'Perpustakaan'
+  const namaSekolah = perpus.namaSekolah || ''
+  const alamat = perpus.alamat || ''
+  const kontak = [
+    perpus.telepon ? `Telp: ${perpus.telepon}` : '',
+    perpus.email ? `Email: ${perpus.email}` : ''
+  ].filter(Boolean).join(' | ')
+  const kepala = perpus.kepalaPerpustakaan || ''
+  const tahunAjaran = perpus.tahunAjaran || ''
+
+  // Baris kosong 7 kolom (agar konsisten dengan jumlah kolom tabel)
+  const KOSONG = ['', '', '', '', '', '', '']
+
   const baris = [
-    ['Periode', `${formatTanggal(dari.value)} - ${formatTanggal(sampai.value)}`],
-    [],
-    ['Total Peminjaman', 'Total Pengembalian', 'Total Terlambat', 'Total Denda'],
-    [
-      ringkasan.value.totalPeminjaman,
-      ringkasan.value.totalPengembalian,
-      ringkasan.value.totalTerlambat,
-      ringkasan.value.totalDenda
-    ],
-    [],
-    ['Nama', 'Kelas', 'Judul Buku', 'Tanggal Pinjam', 'Tanggal Kembali', 'Dikembalikan', 'Denda'],
+    // ===== KOP =====
+    [namaPerpustakaan, '', '', '', '', '', ''],
+    [namaSekolah, '', '', '', '', '', ''],
+    [alamat, '', '', '', '', '', ''],
+    [kontak, '', '', '', '', '', ''],
+    KOSONG,
+
+    // ===== JUDUL LAPORAN =====
+    ['LAPORAN PEMINJAMAN PERPUSTAKAAN', '', '', '', '', '', ''],
+    [`Periode: ${formatTanggal(dari.value)} — ${formatTanggal(sampai.value)}`, '', '', '', '', '', ''],
+    KOSONG,
+
+    // ===== RINGKASAN =====
+    ['RINGKASAN', '', '', '', '', '', ''],
+    ['Total Peminjaman', ringkasan.value.totalPeminjaman, '', '', '', '', ''],
+    ['Total Pengembalian', ringkasan.value.totalPengembalian, '', '', '', '', ''],
+    ['Total Terlambat', ringkasan.value.totalTerlambat, '', '', '', '', ''],
+    ['Total Denda (Rp)', ringkasan.value.totalDenda, '', '', '', '', ''],
+    KOSONG,
+
+    // ===== TABEL DETAIL =====
+    ['Nama', 'Kelas', 'Judul Buku', 'Tanggal Pinjam', 'Tanggal Kembali', 'Dikembalikan', 'Denda (Rp)'],
     ...dataLaporan.value.map((item) => [
       item.nama,
       item.kelas || '-',
@@ -77,7 +105,18 @@ function unduhCsv() {
       formatTanggal(item.tanggalKembali),
       formatTanggal(item.tanggalDikembalikan),
       item.denda || 0
-    ])
+    ]),
+
+    // ===== TANDA TANGAN =====
+    KOSONG,
+    KOSONG,
+    ['', '', '', '', '', '', `Kertosono, ${formatTanggal(sampai.value)}`],
+    ['', '', '', '', '', '', 'Kepala Perpustakaan'],
+    KOSONG,
+    KOSONG,
+    KOSONG,
+    ['', '', '', '', '', '', kepala || '......................'],
+    ['', '', '', '', '', '', tahunAjaran ? `T.A. ${tahunAjaran}` : '']
   ]
 
   const isi = baris
@@ -92,6 +131,12 @@ function unduhCsv() {
   a.click()
   URL.revokeObjectURL(url)
 }
+
+const { info: infoPerpus, muatInfo } = useInfoPerpustakaan()
+
+onMounted(() => {
+  muatInfo()
+})
 </script>
 
 <template>
@@ -123,6 +168,16 @@ function unduhCsv() {
     </div>
 
     <div v-if="sudahDicari" class="report-area">
+      <div class="kop-laporan">
+        <h2 class="kop-nama-perpus">{{ infoPerpus.namaPerpustakaan }}</h2>
+        <p v-if="infoPerpus.namaSekolah" class="kop-nama-sekolah">{{ infoPerpus.namaSekolah }}</p>
+        <p v-if="infoPerpus.alamat" class="kop-alamat">{{ infoPerpus.alamat }}</p>
+        <p class="kop-kontak">
+          <span v-if="infoPerpus.telepon">Telp: {{ infoPerpus.telepon }}</span>
+          <span v-if="infoPerpus.email"> • Email: {{ infoPerpus.email }}</span>
+        </p>
+        <hr class="kop-garis" />
+      </div>
       <div class="report-title">
         <h2>Laporan Perpustakaan</h2>
         <p>Periode: {{ formatTanggal(dari) }} — {{ formatTanggal(sampai) }}</p>
@@ -175,6 +230,16 @@ function unduhCsv() {
             </tr>
           </tbody>
         </table>
+      </div>
+      <div class="ttd-laporan">
+        <div class="ttd-kanan">
+          <p>{{ infoPerpus.alamat ? '' : '' }}</p>
+          <p>Kertosono, {{ formatTanggal(sampai) }}</p>
+          <p>Kepala Perpustakaan</p>
+          <div class="ttd-space"></div>
+          <p class="ttd-nama">{{ infoPerpus.kepalaPerpustakaan || '......................' }}</p>
+          <p v-if="infoPerpus.tahunAjaran" class="ttd-ta">T.A. {{ infoPerpus.tahunAjaran }}</p>
+        </div>
       </div>
     </div>
   </div>
@@ -229,6 +294,66 @@ table { width: 100%; border-collapse: collapse; font-size: 12px; }
 th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #f3f4f6; color: #374151; }
 thead th { font-size: 11px; font-weight: 600; color: #6b7280; background: #fafafa; }
 .empty { text-align: center; color: #9ca3af; padding: 24px; }
+
+.kop-laporan {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.kop-nama-perpus {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.kop-nama-sekolah {
+  margin: 2px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.kop-alamat,
+.kop-kontak {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.kop-garis {
+  margin: 14px 0 0;
+  border: none;
+  border-top: 2px solid #111827;
+}
+
+.ttd-laporan {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 36px;
+}
+
+.ttd-kanan {
+  text-align: center;
+  font-size: 13px;
+  color: #374151;
+}
+
+.ttd-space {
+  height: 60px;
+}
+
+.ttd-nama {
+  font-weight: 700;
+  text-decoration: underline;
+  margin: 0;
+}
+
+.ttd-ta {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 2px 0 0;
+}
 
 @media (max-width: 700px) {
   .page {

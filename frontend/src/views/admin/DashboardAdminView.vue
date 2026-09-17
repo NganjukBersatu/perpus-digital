@@ -53,9 +53,13 @@ function pilihRange(value) {
   rangeMenuOpen.value = false
 }
 
-function tutupRangeMenu(e) {
-  const wrap = e.target.closest?.('.range-dropdown')
-  if (!wrap) rangeMenuOpen.value = false
+function tutupSemuaDropdown(e) {
+  if (!e.target.closest?.('.range-dropdown')) {
+    rangeMenuOpen.value = false
+  }
+  if (!e.target.closest?.('.status-filter-dropdown')) {
+    filterStatusMenuOpen.value = false
+  }
 }
 
 const chartLabels = ref([])
@@ -193,6 +197,15 @@ watch(rangeBukuTerpopuler, fetchBukuTerpopulerLengkap)
 watch(kategoriFilterBuku, fetchBukuTerpopulerLengkap)
 
 const filterStatus = ref('Semua Status')
+const filterStatusMenuOpen = ref(false)
+
+const filterStatusOptions = ['Semua Status', 'Tepat Waktu', 'Terlambat']
+
+function pilihFilterStatus(value) {
+  filterStatus.value = value
+  filterStatusMenuOpen.value = false
+}
+
 const searchBelumKembali = ref('')
 
 const peminjamanBelumKembali = ref([])
@@ -317,7 +330,7 @@ onMounted(async () => {
   await fetchPengingat()
   await muatStatistikPeminjaman()
   await fetchTotalDenda()
-  document.addEventListener('click', tutupRangeMenu)
+  document.addEventListener('click', tutupSemuaDropdown)
 })
 </script>
 
@@ -409,7 +422,6 @@ onMounted(async () => {
       <section class="card list-card">
          <div class="card-title-row">
           <h2>Peminjaman Terbaru</h2>
-          <a href="#" class="link-small" @click.prevent="fetchPeminjamanTerbaru(2)">Lihat semua</a>
         </div>
 
         <div class="peminjam-row" v-for="p in peminjamanTerbaru" :key="p.id">
@@ -473,11 +485,25 @@ onMounted(async () => {
               placeholder="Cari peminjam atau buku..."
               class="search-input"
             />
-            <select v-model="filterStatus" class="mini-select">
-              <option>Semua Status</option>
-              <option>Tepat Waktu</option>
-              <option>Terlambat</option>
-            </select>
+            <div class="range-dropdown status-filter-dropdown">
+              <button
+                type="button"
+                class="range-dropdown-btn"
+                @click.stop="filterStatusMenuOpen = !filterStatusMenuOpen"
+              >
+                {{ filterStatus }}
+              </button>
+              <ul v-if="filterStatusMenuOpen" class="range-dropdown-list">
+                <li
+                  v-for="opt in filterStatusOptions"
+                  :key="opt"
+                  :class="{ aktif: opt === filterStatus }"
+                  @click="pilihFilterStatus(opt)"
+                >
+                  {{ opt }}
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
 
@@ -1320,7 +1346,8 @@ span.reminder-badge.badge-red {
   .top-row {
     grid-template-columns: 1fr;
   }
-    .calendar-card {
+  .calendar-card {
+    order: -1;
     min-width: 0;
     flex-direction: column;
     border-radius: 12px;
@@ -1373,7 +1400,7 @@ span.reminder-badge.badge-red {
     font-size: 14px;
   }
 
-    .stat-card {
+  .stat-card {
     padding: 12px 10px;
   }
 
@@ -1439,10 +1466,9 @@ span.reminder-badge.badge-red {
     flex-wrap: wrap;
   }
 
-    /* ===== Perbaikan Peminjaman Belum Kembali ===== */
+  /* ===== Perbaikan Peminjaman Belum Kembali ===== */
   .table-card {
     padding: 14px;
-    overflow: hidden;          /* penting: cegah card melebar */
   }
 
   .table-card .card-title-row {

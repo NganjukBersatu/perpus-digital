@@ -2,6 +2,8 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from "vue"
 import { Html5Qrcode } from "html5-qrcode"
 import { useRouter, useRoute } from "vue-router"
+import IsbnOcr from "../../utils/isbn-ocr.js" // sesuaikan path relatif ke folder utils/ kamu
+import Tesseract from "tesseract.js"
 
 const notFoundMessageRef = ref(null)
 const activeTab = ref("kamera")
@@ -169,6 +171,16 @@ async function lanjutDariQuery() {
 
   if (lanjutPinjam && bookData.value && bookData.value.status === 'tersedia') {
     currentStep.value = 3
+
+    // Balik dari halaman tambah guru: isi otomatis guru yang baru ditambahkan
+    const guruIdQuery = route.query.guruId
+    const guruNamaQuery = route.query.guruNama
+    if (guruIdQuery && guruNamaQuery) {
+      tipePeminjam.value = 'guru'
+      peminjam.value.anggotaId = Number(guruIdQuery)
+      peminjam.value.nama = String(guruNamaQuery)
+      guruQuery.value = String(guruNamaQuery)
+    }
   }
 }
 
@@ -257,7 +269,6 @@ function gantiTipePeminjam(tipe) {
 // ===== COMBOBOX GURU =====
 const guruQuery = ref("")
 const showGuruDropdown = ref(false)
-const isAddingGuru = ref(false)
 
 const filteredGuru = computed(() => {
   const q = guruQuery.value.trim().toLowerCase()
@@ -290,30 +301,21 @@ function tutupGuruDropdown() {
   }, 150)
 }
 
-async function tambahGuruBaru() {
+// Navigasi ke halaman Data Guru, langsung buka form tambah guru dengan nama terisi.
+// Setelah disimpan di sana, halaman Data Guru akan redirect balik ke sini dengan
+// guruId & guruNama sudah terisi (lihat lanjutDariQuery()).
+function bukaTambahGuru() {
   const namaBaru = guruQuery.value.trim()
   if (!namaBaru) return
 
-  isAddingGuru.value = true
-  scanError.value = ""
-
-  try {
-    const res = await fetch("http://localhost:3000/api/guru", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nama: namaBaru }),
-    })
-    if (!res.ok) throw new Error("Gagal menambah guru")
-    const guruBaru = await res.json()
-
-    daftarGuru.value.push(guruBaru)
-    pilihGuru(guruBaru)
-  } catch (err) {
-    console.error(err)
-    scanError.value = "Gagal menambahkan guru baru. Coba lagi."
-  } finally {
-    isAddingGuru.value = false
-  }
+  router.push({
+    path: '/admin/data-guru',
+    query: {
+      from: 'pinjam',
+      nama: namaBaru,
+      barcode: barcode.value,
+    }
+  })
 }
 
 // ===== RESET =====
@@ -410,6 +412,121 @@ async function handleFileUpload(e) {
   }
 }
 
+// ===== TAB OCR ISBN =====
+const ocrVideoRef = ref(null)
+const ocrReady = ref(false)
+const ocrButtonLabel = ref("Menyiapkan kamera...")
+const ocrResultText = ref("Arahkan kamera ke ISBN buku, lalu tekan tombol scan.")
+const showOcrManualFallback = ref(false)
+const ocrManualIsbn = ref("")
+
+let ocrWorker = null
+let ocrStream = null
+let ocrWorkerReady = false
+let ocrFailedAttempts = 0
+
+async function startOcrCamera() {
+  try {
+    ocrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+    if (ocrVideoRef.value) ocrVideoRef.value.srcObject = ocrStream
+  } catch (err) {
+    ocrResultText.value = "Tidak bisa akses kamera: " + err.message
+    showOcrManualFallback.value = true
+  }
+}
+
+async function initOcrWorker() {
+  if (ocrWorkerReady) {
+    ocrReady.value = true
+    return
+  }
+  ocrButtonLabel.value = "Menyiapkan mesin OCR..."
+  ocrWorker = await IsbnOcr.createTesseractWorker((status, progress) => {
+    if (status === "recognizing text") {
+      ocrButtonLabel.value = `Membaca... ${Math.round(progress * 100)}%`
+    }
+  }, Tesseract)
+  ocrWorkerReady = true
+  ocrButtonLabel.value = "Foto & Scan ISBN"
+  ocrReady.value = true
+}
+
+async function mulaiOcr() {
+  resetHasilPindai()
+  ocrResultText.value = "Arahkan kamera ke ISBN buku, lalu tekan tombol scan."
+  showOcrManualFallback.value = false
+  ocrFailedAttempts = 0
+  await startOcrCamera()
+  await initOcrWorker()
+}
+
+function hentikanOcr() {
+  if (ocrStream) {
+    ocrStream.getTracks().forEach((t) => t.stop())
+    ocrStream = null
+  }
+}
+
+async function handleOcrCapture() {
+  if (!ocrVideoRef.value || !ocrWorker) return
+  ocrReady.value = false
+  ocrResultText.value = "Membaca ISBN..."
+
+  const frame = IsbnOcr.captureFrameFromVideo(ocrVideoRef.value)
+  const { validCandidates, allCandidates } = await IsbnOcr.recognizeIsbnFromImage(ocrWorker, frame)
+
+  if (validCandidates.length > 0) {
+    const isbn = validCandidates[0]
+    ocrResultText.value = `Terdeteksi: ${isbn} — mencari di database...`
+    await cariBukuByIsbn(isbn)
+    ocrFailedAttempts = 0
+  } else {
+    ocrFailedAttempts++
+    ocrResultText.value =
+      allCandidates.length > 0
+        ? `Kemungkinan "${allCandidates[0]}" tapi checksum tidak cocok. Coba foto ulang lebih jelas.`
+        : "Tidak ada ISBN yang terbaca. Coba foto ulang."
+    if (ocrFailedAttempts >= 3) showOcrManualFallback.value = true
+  }
+
+  ocrButtonLabel.value = "Foto & Scan ISBN"
+  ocrReady.value = true
+}
+
+// Cocokkan ISBN ke data buku, isi bookData dengan cara yang sama seperti cariBuku().
+// Backend: GET /api/buku/isbn/:isbn (routes/bukuIsbn.js).
+async function cariBukuByIsbn(isbn) {
+  try {
+    const res = await fetch(`/api/buku/isbn/${isbn}`)
+    if (res.status === 404) {
+      ocrResultText.value = `ISBN ${isbn} terbaca, tapi belum ada di database katalog kamu.`
+      return
+    }
+    if (!res.ok) throw new Error("Gagal mengambil data buku")
+
+    bookData.value = await res.json()
+
+    // Backend sudah memilih eksemplar yang "tersedia" (fallback ke eksemplar
+    // pertama kalau semuanya dipinjam) — pakai eksemplarId & barcode itu.
+    const dipilih = bookData.value.eksemplarList?.find(
+      (ek) => ek.id === bookData.value.eksemplarId
+    )
+    barcode.value = dipilih?.barcode || isbn
+
+    ocrResultText.value = `ISBN ${isbn} terdeteksi — buku ditemukan.`
+    currentStep.value = 2
+  } catch (err) {
+    console.error(err)
+    ocrResultText.value = "Terjadi kesalahan saat mencari data buku."
+  }
+}
+
+async function cariBukuByIsbnManual() {
+  const isbn = ocrManualIsbn.value.trim()
+  if (!isbn) return
+  await cariBukuByIsbn(isbn)
+}
+
 // ===== PINJAMAN =====
 function mulaiPeminjaman() {
   if (!bookData.value) return
@@ -495,6 +612,8 @@ function mulaiScanLagi() {
 
 watch(activeTab, async (tab) => {
   if (tab !== "kamera" && isScanning.value) await hentikanPindai()
+  if (tab !== "ocr") hentikanOcr()
+  if (tab === "ocr") await mulaiOcr()
   if (currentStep.value === 1) {
     scanError.value = ""
     bookNotFound.value = false
@@ -503,6 +622,8 @@ watch(activeTab, async (tab) => {
 
 onBeforeUnmount(() => {
   if (scanner) hentikanPindai()
+  hentikanOcr()
+  if (ocrWorker) ocrWorker.terminate()
 })
 </script>
 
@@ -553,6 +674,13 @@ onBeforeUnmount(() => {
               @click="activeTab = 'manual'"
             >
               Manual
+            </button>
+            <button
+              class="scan-tab"
+              :class="{ 'scan-tab--active': activeTab === 'ocr' }"
+              @click="activeTab = 'ocr'"
+            >
+              OCR ISBN
             </button>
           </div>
 
@@ -611,6 +739,35 @@ onBeforeUnmount(() => {
                   <button type="button" class="btn-cari-manual" @click="cariBukuManual">
                     Cari
                   </button>
+                </div>
+              </div>
+            </template>
+
+            <template v-else-if="activeTab === 'ocr'">
+              <div class="ocr-box">
+                <video ref="ocrVideoRef" autoplay playsinline class="ocr-video"></video>
+                <button
+                  class="primary-button"
+                  :disabled="!ocrReady"
+                  @click="handleOcrCapture"
+                >
+                  {{ ocrButtonLabel }}
+                </button>
+                <p class="ocr-result">{{ ocrResultText }}</p>
+
+                <div v-if="showOcrManualFallback" class="manual-input manual-input--inline">
+                  <label>OCR gagal membaca? Masukkan ISBN manual:</label>
+                  <div class="manual-input-row">
+                    <input
+                      v-model="ocrManualIsbn"
+                      type="text"
+                      placeholder="978602XXXXXXX"
+                      @keyup.enter="cariBukuByIsbnManual"
+                    />
+                    <button type="button" class="btn-cari-manual" @click="cariBukuByIsbnManual">
+                      Cari
+                    </button>
+                  </div>
                 </div>
               </div>
             </template>
@@ -920,25 +1077,18 @@ onBeforeUnmount(() => {
                     {{ g.nama }}{{ g.mapel ? ` — ${g.mapel}` : "" }}
                   </li>
                 </ul>
-
-                <!-- Opsi tambah guru baru di dropdown -->
-                <ul v-else-if="showGuruDropdown && isGuruBaru" class="kelas-dropdown">
-                  <li class="tambah-guru-option" @mousedown.prevent="tambahGuruBaru">
-                    + Tambahkan "{{ guruQuery.trim() }}" sebagai guru baru
-                  </li>
-                </ul>
               </label>
 
-              <!-- Tombol cadangan yang selalu terlihat -->
-              <div v-if="isGuruBaru && !peminjam.anggotaId" class="tambah-guru-hint">
-                <button
-                  type="button"
-                  class="btn-tambah-guru"
-                  :disabled="isAddingGuru"
-                  @click="tambahGuruBaru"
-                >
-                  {{ isAddingGuru ? "Menambahkan..." : `+ Tambah guru "${guruQuery.trim()}"` }}
-                </button>
+              <!-- Warning jika nama guru belum terdaftar -->
+              <div v-if="isGuruBaru && !peminjam.anggotaId" class="message message--warning tambah-guru-warning">
+                <div class="message__icon">!</div>
+                <div>
+                  <strong>Guru belum ditambahkan</strong>
+                  <p>Nama "{{ guruQuery.trim() }}" belum ada di data guru.</p>
+                  <button type="button" class="btn-tambah-guru" @click="bukaTambahGuru">
+                    + Tambah Guru
+                  </button>
+                </div>
               </div>
             </template>
 
@@ -1091,8 +1241,8 @@ button, input, select { font: inherit; }
 
 .scan-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  max-width: 480px;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  max-width: 560px;
   margin: 0 auto 14px;
   padding: 3px;
   background: #f3f6fa;
@@ -1207,6 +1357,21 @@ button, input, select { font: inherit; }
   .btn-cari-manual {
     min-height: 42px;
   }
+}
+
+.ocr-box { padding: 12px 16px; text-align: center; }
+.ocr-video {
+  width: 100%;
+  max-height: 260px;
+  object-fit: cover;
+  border-radius: 12px;
+  background: #071426;
+  margin-bottom: 12px;
+}
+.ocr-result {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .primary-button {
@@ -1698,22 +1863,17 @@ button, input, select { font: inherit; }
   font-size: 11px;
 }
 
-/* ===== TAMBAHAN UNTUK GURU BARU ===== */
-.tambah-guru-option {
-  color: #2864e8 !important;
-  font-weight: 700 !important;
-}
-
-.tambah-guru-hint {
+/* ===== TAMBAHAN UNTUK GURU BARU (via halaman Data Guru) ===== */
+.tambah-guru-warning {
   grid-column: 1 / -1;
   margin-top: -4px;
-  margin-bottom: 4px;
 }
 
 .btn-tambah-guru {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  margin-top: 8px;
   padding: 8px 14px;
   border: 1px dashed #2864e8;
   border-radius: 8px;
@@ -1726,11 +1886,6 @@ button, input, select { font: inherit; }
 
 .btn-tambah-guru:hover {
   background: #dbeafe;
-}
-
-.btn-tambah-guru:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .success-message {

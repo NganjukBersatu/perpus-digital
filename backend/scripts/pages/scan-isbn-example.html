@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<title>Contoh: Scan Teks ISBN</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 480px; margin: 40px auto; padding: 0 16px; }
+  video { width: 100%; border-radius: 8px; background: #000; }
+  button { padding: 10px 16px; margin-top: 12px; font-size: 16px; cursor: pointer; }
+  #result { margin-top: 16px; padding: 12px; border-radius: 6px; background: #f4f4f4; min-height: 24px; }
+  #manualFallback { margin-top: 16px; display: none; }
+  #manualFallback input { padding: 8px; width: 60%; }
+</style>
+</head>
+<body>
+
+<h2>Scan Teks ISBN</h2>
+
+<!-- LANGKAH A: elemen video untuk preview kamera -->
+<video id="camera" autoplay playsinline></video>
+
+<button id="captureBtn" disabled>Menyiapkan kamera...</button>
+
+<div id="result">Arahkan kamera ke ISBN, lalu tekan tombol di atas.</div>
+
+<!-- LANGKAH F: fallback kalau OCR gagal terus -->
+<div id="manualFallback">
+  <p>OCR gagal membaca? Masukkan ISBN manual:</p>
+  <input type="text" id="manualInput" placeholder="978602XXXXXXX" />
+  <button id="manualSubmit">Cari</button>
+</div>
+
+<!-- LANGKAH B: load Tesseract.js dari CDN, lalu modul isbn-ocr.js kita -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="../utils/isbn-ocr.js"></script>
+
+<script>
+(async function () {
+  const videoEl = document.getElementById('camera');
+  const captureBtn = document.getElementById('captureBtn');
+  const resultEl = document.getElementById('result');
+  const manualFallback = document.getElementById('manualFallback');
+  const manualInput = document.getElementById('manualInput');
+  const manualSubmit = document.getElementById('manualSubmit');
+
+  let worker = null;
+  let failedAttempts = 0;
+
+  // -------------------------------------------------------------------
+  // LANGKAH C: minta izin kamera & tampilkan stream-nya
+  // -------------------------------------------------------------------
+  async function startCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }, // 'environment' = kamera belakang di HP
+      });
+      videoEl.srcObject = stream;
+    } catch (err) {
+      resultEl.textContent = 'Tidak bisa akses kamera: ' + err.message;
+      manualFallback.style.display = 'block'; // langsung kasih opsi manual kalau kamera gagal
+    }
+  }
+
+  // -------------------------------------------------------------------
+  // LANGKAH D: siapkan worker Tesseract SEKALI di awal
+  // (bukan setiap kali tombol ditekan — ini yang bikin proses lambat kalau salah)
+  // -------------------------------------------------------------------
+  async function initWorker() {
+    captureBtn.textContent = 'Menyiapkan mesin OCR...';
+    worker = await IsbnOcr.createTesseractWorker((status, progress) => {
+      if (status === 'recognizing text') {
+        captureBtn.textContent = `Membaca... ${Math.round(progress * 100)}%`;
+      }
+    });
+    captureBtn.textContent = 'Foto & Scan';
+    captureBtn.disabled = false;
+  }
+
+  // -------------------------------------------------------------------
+  // LANGKAH E: saat tombol ditekan → capture frame → OCR → tampilkan hasil
+  // -------------------------------------------------------------------
+  async function handleCapture() {
+    captureBtn.disabled = true;
+    resultEl.textContent = 'Membaca ISBN...';
+
+    const frame = IsbnOcr.captureFrameFromVideo(videoEl);
+    const { validCandidates, allCandidates } = await IsbnOcr.recognizeIsbnFromImage(worker, frame);
+
+    if (validCandidates.length > 0) {
+      const isbn = validCandidates[0];
+      resultEl.textContent = `Terdeteksi: ${isbn} — mencari di database...`;
+      await lookupBook(isbn);
+      failedAttempts = 0;
+    } else {
+      failedAttempts++;
+      if (allCandidates.length > 0) {
+        resultEl.textContent = `Kemungkinan "${allCandidates[0]}" tapi checksum tidak cocok. Coba foto ulang lebih jelas.`;
+      } else {
+        resultEl.textContent = 'Tidak ada ISBN yang terbaca. Coba foto ulang.';
+      }
+
+      // Setelah 3x gagal berturut-turut, tawarkan input manual
+      if (failedAttempts >= 3) {
+        manualFallback.style.display = 'block';
+      }
+    }
+
+    captureBtn.textContent = 'Foto & Scan';
+    captureBtn.disabled = false;
+  }
+
+  // -------------------------------------------------------------------
+  // LANGKAH G: kirim ISBN ke backend untuk dicocokkan ke database buku
+  // GANTI URL & struktur response ini sesuai API backend kamu sendiri
+  // -------------------------------------------------------------------
+  async function lookupBook(isbn) {
+    try {
+      const res = await fetch(`/api/buku?isbn=${isbn}`);
+      if (!res.ok) throw new Error('Buku tidak ditemukan di database');
+      const buku = await res.json();
+      resultEl.textContent = `Ditemukan: "${buku.judul}" oleh ${buku.penulis}`;
+      // TODO: lanjutkan ke alur peminjaman kamu di sini
+    } catch (err) {
+      resultEl.textContent = `ISBN ${isbn} terbaca, tapi tidak ada di database. ${err.message}`;
+    }
+  }
+
+  // Tombol submit untuk input manual
+  manualSubmit.addEventListener('click', () => {
+    const isbn = manualInput.value.trim();
+    if (isbn) lookupBook(isbn);
+  });
+
+  captureBtn.addEventListener('click', handleCapture);
+
+  // Jalankan setup di awal
+  await startCamera();
+  await initWorker();
+})();
+</script>
+
+</body>
+</html>

@@ -21,11 +21,11 @@ const kategoriRoutes = require("./routes/kategori")
 const riwayatRoutes = require("./routes/riwayat")
 const laporanRoutes = require("./routes/laporan")
 const bukuRoutes = require("./routes/buku")
+const bukuIsbnRoutes = require("./routes/bukuIsbn")
 const { router: authSiswaRoutes, wajibLoginSiswa } = require("./routes/authSiswa")
 const dashboardSiswaRoutes = require("./routes/dashboardSiswa")
 const { pasangRouteNotifikasiSiswa } = require('./routes/notifikasiSiswa')
 const { pasangRouteNotifikasiGuru } = require('./routes/notifikasiGuru')
-
 
 
 const app = express()
@@ -38,6 +38,7 @@ app.use("/api/admin", adminRoutes)
 app.use("/api/pengaturan", pengaturanRoutes)
 app.use("/api/pengembalian", pengembalianRoutes)
 app.use("/api/buku", bukuRoutes)
+app.use("/api/buku", bukuIsbnRoutes)
 app.use("/api/siswa", siswaRoutes)
 app.use("/api/guru", guruRoutes)
 app.use("/api", kelasRoutes)
@@ -179,7 +180,7 @@ app.post("/api/peminjaman", async (req, res) => {
       .from(eksemplarBuku)
       .where(and(eq(eksemplarBuku.bukuId, bukuIdTerkait), eq(eksemplarBuku.status, "tersedia")))
 
-    if (Number(stokTersedia) <= pengaturanPinjam.minStokPinjam) {
+    if (Number(stokTersedia) < pengaturanPinjam.minStokPinjam) {
       return res.status(400).json({ message: "Stok buku sudah mencapai batas minimal, tidak bisa dipinjamkan" })
     }
 

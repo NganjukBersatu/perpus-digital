@@ -121,10 +121,7 @@ async function handleLogin() {
         <div class="art-blob art-blob--2"></div>
 
         <div class="brand-mark">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-          </svg>
+          <img src="/logo.png" alt="Logo" />
           <div>
             <div class="brand-title">MANAGEMENT PERPUSTAKAAN</div>
           </div>
@@ -357,10 +354,11 @@ async function handleLogin() {
   gap: 10px;
   color: #0b1a3a;
 }
-.brand-mark svg {
+.brand-mark img {
   width: 26px;
   height: 26px;
   flex-shrink: 0;
+  object-fit: contain;
 }
 .brand-title {
   font-weight: 700;

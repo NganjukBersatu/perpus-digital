@@ -178,10 +178,7 @@ onBeforeUnmount(() => {
   <div class="layout">
     <aside class="sidebar" :class="{ 'sidebar-closed': !sidebarOpen, 'mobile-open': mobileMenuOpen }">
       <div class="brand" @click="bukaSidebarJikaTertutup">
-        <svg class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-        </svg>
+        <img src="/logo.png" alt="Logo" class="icon icon-lg" />
         <div class="brand-text">
           <div class="brand-title">MANAGEMENT PERPUSTAKAAN</div>
         </div>
@@ -404,7 +401,7 @@ onBeforeUnmount(() => {
 }
 
 .icon { width: 18px; height: 18px; flex-shrink: 0; }
-.icon-lg { width: 26px; height: 26px; }
+.icon-lg { width: 26px; height: 26px; object-fit: contain; }
 
 .sidebar {
   width: 260px;
@@ -449,7 +446,7 @@ onBeforeUnmount(() => {
 }
 
 .sidebar-closed .brand:hover {
-  background: #1d4ed8;
+  background: #3c70ff;
 }
 
 .sidebar-closed .brand:hover .icon-lg {

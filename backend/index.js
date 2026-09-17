@@ -585,8 +585,19 @@ app.get("/api/dashboard/pengingat", async (req, res) => {
     const pengaturanDenda = await ambilPengaturanDenda(db)
 
     const semuaBelumKembali = await db
-      .select()
+      .select({
+        id: peminjaman.id,
+        nama: peminjaman.nama,
+        kelas: peminjaman.kelas,
+        tanggalKembali: peminjaman.tanggalKembali,
+        nominalDendaPerHari: peminjaman.nominalDendaPerHari,
+        dendaMaksimal: peminjaman.dendaMaksimal,
+        dendaGuruAktif: peminjaman.dendaGuruAktif,
+        masaTenggang: peminjaman.masaTenggang,
+        peran: anggota.peran,   // ⬅️ TAMBAHKAN: ambil peran dari tabel anggota
+      })
       .from(peminjaman)
+      .innerJoin(anggota, eq(peminjaman.anggotaId, anggota.id))   // ⬅️ TAMBAHKAN: join
       .where(isNull(peminjaman.tanggalDikembalikan))
       .orderBy(peminjaman.tanggalKembali)
 
@@ -602,27 +613,34 @@ app.get("/api/dashboard/pengingat", async (req, res) => {
 
       if (selisihHari < 0) {
         // sudah lewat jatuh tempo -> ini "notifikasi buku terlambat"
-        if (!pengaturanNotif.notifikasiTerlambat) continue
+        if (selisihHari < 0) {
+          if (!pengaturanNotif.notifikasiTerlambat) continue
 
-        const hariTelat = Math.abs(selisihHari)
-        // ============================================================
-        // [DIUBAH] Pakai snapshot dari baris peminjaman, bukan pengaturan
-        // saat ini. Kalau snapshot kosong (data lama), fallback ke
-        // pengaturan saat ini.
-        // ============================================================
-        const tarif = row.nominalDendaPerHari ?? pengaturanDenda.nominalPerHari ?? 0
-        const maks = row.dendaMaksimal ?? pengaturanDenda.dendaMaksimal ?? 0
-        let denda = pengaturanDenda.aktif ? hariTelat * tarif : 0
-        if (maks > 0) denda = Math.min(denda, maks)
+          const hariTelat = Math.abs(selisihHari)
+          const masaTenggang = row.masaTenggang ?? pengaturanDenda.masaTenggang ?? 0
+          const hariKenaDenda = Math.max(0, hariTelat - masaTenggang)
 
-        daftar.push({
-          id: row.id,
-          nama: row.nama,
-          kelas: row.kelas,
-          badge: `Telat ${hariTelat} hari`,
-          color: "red",
-          denda,
-        })
+          // ⬅️ TAMBAHKAN: samakan aturan dengan hitungDenda.js
+          const peran = row.peran // pastikan kolom ini ada di tabel peminjaman/hasil select
+          const dendaGuruAktif = row.dendaGuruAktif ?? pengaturanDenda.dendaGuruAktif ?? false
+          const bolehDihitung = pengaturanDenda.aktif && (peran !== 'guru' || dendaGuruAktif)
+        
+          const tarif = row.nominalDendaPerHari ?? pengaturanDenda.nominalPerHari ?? 0
+          const maks = row.dendaMaksimal ?? pengaturanDenda.dendaMaksimal ?? 0
+          let denda = bolehDihitung ? hariKenaDenda * tarif : 0   // ⬅️ UBAH: pakai bolehDihitung, bukan pengaturanDenda.aktif saja
+          if (maks > 0) denda = Math.min(denda, maks)
+ 
+          daftar.push({
+            id: row.id,
+            nama: row.nama,
+            kelas: row.kelas,
+            badge: hariKenaDenda > 0
+              ? `Telat ${hariTelat} hari`
+              : `Masih masa tenggang (${hariTelat}/${masaTenggang} hari)`,   // ⬅️ TAMBAHKAN: badge beda saat masih dalam tenggang
+            color: hariKenaDenda > 0 ? "red" : "orange",
+            denda,
+          })
+        }
       } else if (selisihHari <= (pengaturanNotif.hariSebelumJatuhTempo || 0)) {
         // masih dalam rentang "mau jatuh tempo" -> ini "pengingat sebelum jatuh tempo"
         if (!pengaturanNotif.pengingatJatuhTempo) continue

@@ -1,6 +1,9 @@
 <script setup>
 import { reactive, ref, onMounted, nextTick } from 'vue'
 import { authHeaders } from '@/utils/auth'
+import { useInfoPerpustakaan } from '@/composables/useInfoPerpustakaan'
+
+const { setInfo } = useInfoPerpustakaan()
 
 const STORAGE_KEY = 'perpus_pengaturan'
 
@@ -124,6 +127,19 @@ async function saveSettings() {
 
     savedAt.value = new Date(data.updatedAt || Date.now()).toLocaleString('id-ID')
     showToast('Pengaturan berhasil disimpan')
+
+    // Update state global supaya semua halaman (laporan, header, dll)
+    // langsung lihat perubahan tanpa refresh.
+    setInfo({
+      namaPerpustakaan: form.perpustakaan.namaPerpustakaan,
+      namaSekolah: form.perpustakaan.namaSekolah,
+      alamat: form.perpustakaan.alamat,
+      telepon: form.perpustakaan.telepon,
+      email: form.perpustakaan.email,
+      kepalaPerpustakaan: form.perpustakaan.kepalaPerpustakaan,
+      tahunAjaran: form.perpustakaan.tahunAjaran,
+      deskripsi: form.perpustakaan.deskripsi,
+    })
   } catch (e) {
     console.error(e)
     showToast('Gagal terhubung ke server')

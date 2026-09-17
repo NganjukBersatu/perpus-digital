@@ -4,7 +4,28 @@ const db = require('../db')
 const { buku, kategori, eksemplarBuku } = require('../db/schema')
 const { eq, ilike, and, sql } = require('drizzle-orm')
 
-// GET semua buku (join ke kategori untuk dapat nama kategorinya)
+// Helper: hitung ulang stok & tersedia untuk 1 buku, lalu simpan ke tabel buku
+async function sinkronkanStokBuku(bukuId) {
+  const [hasil] = await db
+    .select({
+      stok: sql`count(*)`.mapWith(Number),
+      tersedia: sql`count(*) filter (where ${eksemplarBuku.status} = 'tersedia')`.mapWith(Number),
+    })
+    .from(eksemplarBuku)
+    .where(eq(eksemplarBuku.bukuId, bukuId))
+
+  await db
+    .update(buku)
+    .set({
+      stok: hasil?.stok ?? 0,
+      tersedia: hasil?.tersedia ?? 0,
+    })
+    .where(eq(buku.id, bukuId))
+}
+
+// GET semua buku
+// stok & tersedia dihitung LIVE dari tabel eksemplar_buku
+// supaya tidak pernah "bohong" walaupun kolom manual di tabel buku belum disinkronkan.
 router.get('/', async (req, res) => {
   try {
     const { q, kategoriNama, status } = req.query
@@ -18,12 +39,12 @@ router.get('/', async (req, res) => {
         judul: buku.judul,
         penulis: buku.penulis,
         penerbit: buku.penerbit,
+        kategoriId: buku.kategoriId,
         isbn: buku.isbn,
-        stok: buku.stok,
         lokasi: buku.lokasi,
         status: buku.status,
         kategori: kategori.nama,
-        totalEksemplar: sql`count(${eksemplarBuku.id})`.mapWith(Number),
+        stok: sql`count(${eksemplarBuku.id})`.mapWith(Number),
         tersedia: sql`count(${eksemplarBuku.id}) filter (where ${eksemplarBuku.status} = 'tersedia')`.mapWith(Number),
       })
       .from(buku)
@@ -79,6 +100,8 @@ router.post('/', async (req, res) => {
         })
         .returning()
       eksemplarBaru = eksemplar
+
+      await sinkronkanStokBuku(bukuId)
     }
 
     res.status(201).json({ ...baru, eksemplar: eksemplarBaru })
@@ -125,6 +148,8 @@ router.post('/:id/eksemplar', async (req, res) => {
       .where(eq(eksemplarBuku.id, eksemplar.id))
       .returning()
 
+    await sinkronkanStokBuku(bukuId)
+
     res.status(201).json(updated)
   } catch (err) {
     console.error(err)
@@ -162,24 +187,37 @@ router.put('/:id', async (req, res) => {
 })
 
 // DELETE buku
+// - Menolak hapus kalau masih ada eksemplar yang SEDANG DIPINJAM.
+// - Kalau eksemplar hanya "tersedia" (tidak sedang dipinjam), ikut terhapus
+//   otomatis karena FK onDelete: cascade di schema.
 router.delete('/:id', async (req, res) => {
   try {
     const id = Number(req.params.id)
 
-    const eksemplarTerkait = await db
-      .select({ id: eksemplarBuku.id })
-      .from(eksemplarBuku)
-      .where(eq(eksemplarBuku.bukuId, id))
+    const [bukuAda] = await db.select().from(buku).where(eq(buku.id, id))
+    if (!bukuAda) {
+      return res.status(404).json({ error: 'Buku tidak ditemukan' })
+    }
 
-    if (eksemplarTerkait.length > 0) {
+    // Cek eksemplar yang statusnya "dipinjam"
+    const eksemplarDipinjam = await db
+      .select({ id: eksemplarBuku.id, barcode: eksemplarBuku.barcode })
+      .from(eksemplarBuku)
+      .where(and(
+        eq(eksemplarBuku.bukuId, id),
+        eq(eksemplarBuku.status, 'dipinjam')
+      ))
+
+    if (eksemplarDipinjam.length > 0) {
       return res.status(400).json({
-        error: `Buku tidak bisa dihapus karena masih memiliki ${eksemplarTerkait.length} eksemplar terdaftar. Hapus dulu eksemplarnya, atau hubungi admin sistem.`
+        error: `Buku tidak bisa dihapus karena ada ${eksemplarDipinjam.length} eksemplar yang sedang dipinjam.`,
+        eksemplarDipinjam,
       })
     }
 
+    // FK cascade akan otomatis menghapus eksemplar yang tidak dipinjam
     const [deleted] = await db.delete(buku).where(eq(buku.id, id)).returning()
 
-    if (!deleted) return res.status(404).json({ error: 'Buku tidak ditemukan' })
     res.json({ success: true, deleted })
   } catch (err) {
     console.error(err)

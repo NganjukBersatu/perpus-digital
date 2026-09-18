@@ -62,7 +62,7 @@ const router = createRouter({
           name: 'siswa-katalog',
           component: KatalogSiswaPage,
         },
-         {
+        {
           path: 'peminjaman',
           name: 'siswa-peminjaman',
           component: PeminjamanSiswaPage,
@@ -70,7 +70,7 @@ const router = createRouter({
         {
           path: 'riwayat',
           name: 'siswa-riwayat',
-            component: RiwayatSiswaPage,
+          component: RiwayatSiswaPage,
         },
         {
           path: 'profil',
@@ -94,20 +94,20 @@ const router = createRouter({
           component: GuruKatalogView
         },
         {
-         path: 'peminjaman',
-         name: 'guru-peminjaman',
-         component: PeminjamanGuruPage,
+          path: 'peminjaman',
+          name: 'guru-peminjaman',
+          component: PeminjamanGuruPage,
         },
         {
-         path: 'riwayat',
-         name: 'guru-riwayat',
-         component: RiwayatGuruPage,
+          path: 'riwayat',
+          name: 'guru-riwayat',
+          component: RiwayatGuruPage,
         },
         {
-         path: 'profil',
-         name: 'guru-profil',
-         component: ProfilGuruPage,
-        }, 
+          path: 'profil',
+          name: 'guru-profil',
+          component: ProfilGuruPage,
+        },
       ]
     },
     {
@@ -138,12 +138,12 @@ const router = createRouter({
         {
           path: 'kategori-buku',
           name: 'admin-kategori-buku',
-            component: KategoriBukuPage
+          component: KategoriBukuPage
         },
         {
-         path: 'data-siswa',
-         name: 'admin-data-siswa',
-         component: DataSiswaPage
+          path: 'data-siswa',
+          name: 'admin-data-siswa',
+          component: DataSiswaPage
         },
         {
           path: 'data-guru',
@@ -196,6 +196,18 @@ router.beforeEach((to, from, next) => {
 
   if (to.path.startsWith('/admin') && user?.role && user.role !== 'admin') {
     next('/')
+    return
+  }
+
+  // Guru yang masih wajib ganti password dikunci di halaman profil,
+  // tidak bisa pindah ke menu lain (kecuali logout ke halaman login).
+  if (
+    user?.role === 'guru' &&
+    user?.harusGantiPassword &&
+    to.path !== '/guru/profil' &&
+    to.path !== '/'
+  ) {
+    next('/guru/profil')
     return
   }
 

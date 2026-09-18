@@ -194,6 +194,11 @@ const availableCameras = ref([])
 const selectedCameraId = ref(null)
 let scanner = null
 
+const scanVideoRef = ref(null)
+let scanStream = null
+let scanTimer = null
+let sedangMemprosesScan = false
+
 // 1 = scan, 2 = informasi buku, 3 = form peminjaman
 const currentStep = ref(1)
 
@@ -335,8 +340,8 @@ async function siapkanDaftarKamera() {
     const cams = await Html5Qrcode.getCameras()
     availableCameras.value = cams
     if (cams.length > 0 && !selectedCameraId.value) {
-      const belakang = cams.find((k) => /back|belakang|rear/i.test(k.label))
-      selectedCameraId.value = belakang ? belakang.id : cams[0].id
+      const logitech = cams.find((k) => /logitech|c270|c310|c920|webcam/i.test(k.label))
+      selectedCameraId.value = logitech ? logitech.id : cams[0].id
     }
   } catch (err) {
     console.error(err)
@@ -361,22 +366,32 @@ async function mulaiPindai() {
 
   isScanning.value = true
   await new Promise((resolve) => setTimeout(resolve, 0))
+
   scanner = new Html5Qrcode("reader")
 
-  try {
-    await scanner.start(
-      selectedCameraId.value,
-      { fps: 10, qrbox: { width: 250, height: 150 } },
-      onScanSuccess,
-      () => {}
-    )
-  } catch (err) {
-    console.error(err)
-    scanError.value =
-      "Kamera tidak bisa diakses. Pastikan izin kamera sudah diberikan dan kamera terhubung dengan baik."
-    isScanning.value = false
-  }
+try {
+  await scanner.start(
+    { deviceId: { exact: selectedCameraId.value } },
+    {
+      fps: 10,
+      disableFlip: false,
+      videoConstraints: {
+        deviceId: { exact: selectedCameraId.value },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+    },
+    onScanSuccess,
+    () => {}
+  )
+} catch (err) {
+  console.error(err)
+  scanError.value =
+    "Kamera tidak bisa diakses. Pilih kamera Logitech di dropdown, izinkan kamera di browser, lalu coba lagi."
+  isScanning.value = false
 }
+}
+
 
 async function hentikanPindai() {
   if (scanner) {
@@ -690,14 +705,14 @@ onBeforeUnmount(() => {
                 <h3>Siap memindai?</h3>
                 <p>Arahkan kamera ke barcode yang terdapat pada buku.</p>
 
-                <label v-if="availableCameras.length > 1" class="camera-select">
-                  <span>Pilih kamera</span>
-                  <select v-model="selectedCameraId">
-                    <option v-for="cam in availableCameras" :key="cam.id" :value="cam.id">
-                      {{ cam.label || cam.id }}
-                    </option>
-                  </select>
-                </label>
+                <label v-if="availableCameras.length > 0" class="camera-select">
+                 <span>Pilih kamera</span>
+                 <select v-model="selectedCameraId">
+                 <option v-for="cam in availableCameras" :key="cam.id" :value="cam.id">
+                 {{ cam.label || cam.id }}
+                </option>
+              </select>
+           </label>
 
                 <button class="primary-button" @click="mulaiPindai">Mulai scan</button>
               </div>
@@ -1426,8 +1441,10 @@ button, input, select { font: inherit; }
 :deep(#reader) { width: 100% !important; border: 0 !important; }
 :deep(#reader video) {
   width: 100% !important;
-  height: 260px !important;
-  object-fit: cover !important;
+  height: auto !important;
+  max-height: 360px !important;
+  object-fit: contain !important;
+  background: #071426;
   display: block;
 }
 .reader-hidden { display: none; }

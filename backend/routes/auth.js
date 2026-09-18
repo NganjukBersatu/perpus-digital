@@ -6,9 +6,16 @@ const { db } = require('../db/client')
 const { adminAkun, anggota } = require('../db/schema')
 const { eq, and } = require('drizzle-orm')
 
-const JWT_SECRET = process.env.JWT_SECRET || 'ganti_dengan_secret_yang_acak_dan_rahasia'
+// JWT_SECRET wajib di-set lewat file .env, tidak boleh diam-diam
+// pakai nilai bawaan yang keliatan di kode ini.
+const JWT_SECRET = process.env.JWT_SECRET
+if (!JWT_SECRET) {
+  throw new Error(
+    'JWT_SECRET belum di-set. Tambahkan JWT_SECRET=<string acak panjang> di file .env sebelum menjalankan server.'
+  )
+}
 
-// POST login
+// POST login admin
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body
@@ -26,22 +33,24 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Username atau password salah' })
     }
 
-    const token = jwt.sign({ id: akun.id, username: akun.username }, JWT_SECRET, { expiresIn: '8h' })
+    const token = jwt.sign({ id: akun.id, username: akun.username, role: 'admin' }, JWT_SECRET, {
+      expiresIn: '8h',
+    })
 
     res.json({
-  token,
-  role: 'admin',
-  nama: akun.namaLengkap,
-  admin: {
-    id: akun.id,
-    username: akun.username,
-    namaLengkap: akun.namaLengkap,
-    email: akun.email,
-    telepon: akun.telepon,
-    jabatan: akun.jabatan,
-    nipNik: akun.nipNik,
-  },
-})
+      token,
+      role: 'admin',
+      nama: akun.namaLengkap,
+      admin: {
+        id: akun.id,
+        username: akun.username,
+        namaLengkap: akun.namaLengkap,
+        email: akun.email,
+        telepon: akun.telepon,
+        jabatan: akun.jabatan,
+        nipNik: akun.nipNik,
+      },
+    })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Gagal login' })
@@ -49,6 +58,9 @@ router.post('/login', async (req, res) => {
 })
 
 // POST login guru
+// Password awal guru = NIP mereka sendiri (di-hash saat guru dibuat di routes/guru.js).
+// Response menyertakan harusGantiPassword supaya frontend tahu harus
+// mengarahkan guru ke halaman ganti password dulu atau tidak.
 router.post('/guru/login', async (req, res) => {
   try {
     const { nip, password } = req.body
@@ -74,7 +86,9 @@ router.post('/guru/login', async (req, res) => {
       return res.status(401).json({ error: 'NIP atau password salah' })
     }
 
-    const token = jwt.sign({ id: guru.id, nip: guru.nip, role: 'guru' }, JWT_SECRET, { expiresIn: '8h' })
+    const token = jwt.sign({ id: guru.id, nip: guru.nip, role: 'guru' }, JWT_SECRET, {
+      expiresIn: '8h',
+    })
 
     res.json({
       token,
@@ -85,6 +99,7 @@ router.post('/guru/login', async (req, res) => {
         nip: guru.nip,
         nama: guru.nama,
         mapel: guru.mapel,
+        harusGantiPassword: guru.harusGantiPassword,
       },
     })
   } catch (err) {
@@ -93,7 +108,11 @@ router.post('/guru/login', async (req, res) => {
   }
 })
 
-// Middleware untuk lindungi endpoint yang butuh login
+// Middleware untuk lindungi endpoint yang butuh login.
+// Menyimpan hasil verifikasi token ke DUA tempat:
+// - req.user  : nama yang lebih jelas, dipakai kode baru (guru/ganti-password, dll)
+// - req.admin : dipertahankan supaya route lain yang sudah ada (notifikasiGuru.js,
+//               dan kemungkinan route lain) yang masih memanggil req.admin tetap jalan
 function wajibLogin(req, res, next) {
   const authHeader = req.headers.authorization
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -101,11 +120,49 @@ function wajibLogin(req, res, next) {
   }
   const token = authHeader.split(' ')[1]
   try {
-    req.admin = jwt.verify(token, JWT_SECRET)
+    const payload = jwt.verify(token, JWT_SECRET)
+    req.user = payload
+    req.admin = payload
     next()
   } catch {
     res.status(401).json({ error: 'Sesi tidak valid, silakan login ulang' })
   }
 }
 
-module.exports = { router, wajibLogin }
+// Khusus melindungi endpoint yang hanya boleh diakses guru yang sedang login
+function wajibLoginGuru(req, res, next) {
+  wajibLogin(req, res, () => {
+    if (req.user.role !== 'guru') {
+      return res.status(403).json({ error: 'Endpoint ini khusus untuk guru' })
+    }
+    next()
+  })
+}
+
+// POST ganti password guru
+// Guru yang sedang login mengganti passwordnya sendiri.
+// Dipanggil baik saat wajib ganti password pertama kali, maupun ganti
+// password biasa di kemudian hari.
+router.post('/guru/ganti-password', wajibLoginGuru, async (req, res) => {
+  try {
+    const { passwordBaru } = req.body
+
+    if (!passwordBaru || String(passwordBaru).length < 8) {
+      return res.status(400).json({ error: 'Password baru minimal 8 karakter' })
+    }
+
+    const hash = await bcrypt.hash(String(passwordBaru), 10)
+
+    await db
+      .update(anggota)
+      .set({ password: hash, harusGantiPassword: false })
+      .where(eq(anggota.id, req.user.id))
+
+    res.json({ success: true })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Gagal mengganti password' })
+  }
+})
+
+module.exports = { router, wajibLogin, wajibLoginGuru }

@@ -6,6 +6,7 @@ const { sql, desc, isNull, gte, lte, and, eq, lt, ilike } = require("drizzle-orm
 const { db } = require("./db/client")
 const { buku, eksemplarBuku, anggota, peminjaman } = require("./db/schema")
 const { ambilPengaturanDenda, hitungDenda, ambilPengaturanNotifikasi, ambilPengaturanPeminjaman } = require("./utils/hitungDenda")
+const { sinkronkanStokBuku } = require("./routes/buku")
 const { tanggalHariIniLokal } = require("./utils/tanggal")
 
 const { router: authRoutes, wajibLogin } = require("./routes/auth")
@@ -216,6 +217,9 @@ app.post("/api/peminjaman", async (req, res) => {
       .set({ status: "dipinjam" })
       .where(eq(eksemplarBuku.id, eksemplarId))
 
+    // Sinkronkan stok, tersedia, DAN status buku (Tersedia/Stok Menipis/Habis)
+    await sinkronkanStokBuku(bukuIdTerkait)
+
     res.status(201).json({ message: "Peminjaman berhasil disimpan" })
   } catch (err) {
     console.error(err)
@@ -288,6 +292,13 @@ app.patch("/api/peminjaman/:id/kembalikan", async (req, res) => {
       .update(eksemplarBuku)
       .set({ status: "tersedia" })
       .where(eq(eksemplarBuku.id, pinjam.eksemplarId))
+
+    // Ambil bukuId dari eksemplar ini, lalu sinkronkan stok/tersedia/status
+    const [{ bukuId: bukuIdDikembalikan }] = await db
+      .select({ bukuId: eksemplarBuku.bukuId })
+      .from(eksemplarBuku)
+      .where(eq(eksemplarBuku.id, pinjam.eksemplarId))
+    await sinkronkanStokBuku(bukuIdDikembalikan)
 
     res.json(updated[0])
   } catch (err) {

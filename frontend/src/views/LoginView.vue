@@ -21,6 +21,7 @@ const form = ref({
 })
 
 const errorMessage = ref('')
+const showPassword = ref(false)
 const isLoading = ref(false)
 
 const roleLabel = computed(() => {
@@ -92,8 +93,19 @@ async function handleLogin() {
       kelas: data.siswa?.kelas || data.guru?.kelas,
       nis: data.siswa?.nis,
       nip: data.guru?.nip,
-      mapel: data.guru?.mapel
+      mapel: data.guru?.mapel,
+      // Dipakai supaya kalau guru refresh halaman sebelum sempat ganti
+      // password, sistem masih ingat bahwa dia harus diarahkan ke sana.
+      harusGantiPassword: data.guru?.harusGantiPassword ?? false
     }))
+
+    // Guru yang masih pakai password awal (NIP) diarahkan ke halaman
+    // profil, di mana ada form "Ganti Password" yang langsung terlihat
+    // (dengan notifikasi wajib ganti) alih-alih halaman terpisah.
+    if (data.role === 'guru' && data.guru?.harusGantiPassword) {
+      router.push('/guru/profil')
+      return
+    }
 
     const tujuan = {
       admin: '/admin',
@@ -232,15 +244,25 @@ async function handleLogin() {
                 </div>
               </div>
               <div class="field">
-                <label>Password</label>
-                <div class="input-wrap">
-                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="11" width="18" height="10" rx="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  <input v-model="form.password" type="password" placeholder="Masukkan password" required />
-                </div>
-              </div>
+  <label>Password</label>
+  <div class="input-wrap">
+    <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="3" y="11" width="18" height="10" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+    <input v-model="form.password" :type="showPassword ? 'text' : 'password'" placeholder="Masukkan password" required />
+    <button type="button" class="toggle-eye" tabindex="-1" @click="showPassword = !showPassword">
+      <svg v-if="!showPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+      <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a18.5 18.5 0 0 1 4.22-5.06M9.9 4.24A10.94 10.94 0 0 1 12 5c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+        <line x1="1" y1="1" x2="23" y2="23" />
+      </svg>
+    </button>
+  </div>
+</div>
             </template>
 
             <template v-else>
@@ -254,32 +276,42 @@ async function handleLogin() {
                   <input v-model="form.username" type="text" placeholder="Masukkan username" required />
                 </div>
               </div>
+
               <div class="field">
-                <label>Password</label>
-                <div class="input-wrap">
-                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="11" width="18" height="10" rx="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  <input v-model="form.password" type="password" placeholder="Masukkan password" required />
-                </div>
-              </div>
-            </template>
+  <label>Password</label>
+  <div class="input-wrap">
+    <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="3" y="11" width="18" height="10" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+    <input v-model="form.password" :type="showPassword ? 'text' : 'password'" placeholder="Masukkan password" required />
+    <button type="button" class="toggle-eye" tabindex="-1" @click="showPassword = !showPassword">
+      <svg v-if="!showPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+      <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a18.5 18.5 0 0 1 4.22-5.06M9.9 4.24A10.94 10.94 0 0 1 12 5c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+        <line x1="1" y1="1" x2="23" y2="23" />
+      </svg>
+    </button>
+  </div>
+</div>
+</template>
 
-            <!-- TAMBAHKAN INI: tampilkan error -->
-  <p v-if="errorMessage" style="color: #f87171; font-size: 13px; margin: 8px 0 4px; text-align: center;">
-    {{ errorMessage }}
-  </p>
+            <p v-if="errorMessage" class="error-text">
+              {{ errorMessage }}
+            </p>
 
-  <button 
-    type="submit" 
-    class="btn-login"
-    :disabled="isLoading"
-    :style="{ opacity: isLoading ? 0.7 : 1, cursor: isLoading ? 'not-allowed' : 'pointer' }"
-  >
-    {{ isLoading ? 'Memproses...' : `Masuk sebagai ${roleLabel}` }}
-  </button>
-</form>
+            <button
+              type="submit"
+              class="btn-login"
+              :disabled="isLoading"
+              :style="{ opacity: isLoading ? 0.7 : 1, cursor: isLoading ? 'not-allowed' : 'pointer' }"
+            >
+              {{ isLoading ? 'Memproses...' : `Masuk sebagai ${roleLabel}` }}
+            </button>
+          </form>
 
           <p class="form-footer">
             Ada kendala saat masuk? Hubungi admin perpustakaan.
@@ -446,6 +478,11 @@ async function handleLogin() {
   font-weight: 600;
   color: #c7d2e5;
 }
+.field-hint {
+  margin: -10px 0 16px;
+  font-size: 11px;
+  color: #9fb0d1;
+}
 
 .input-wrap {
   position: relative;
@@ -463,6 +500,7 @@ async function handleLogin() {
 .input-wrap input {
   width: 100%;
   padding: 11px 12px 11px 36px;
+   padding-right: 38px;
   border-radius: 9px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.05);
@@ -470,6 +508,25 @@ async function handleLogin() {
   font-size: 13px;
   outline: none;
   transition: border-color 0.15s ease, background 0.15s ease;
+}
+.toggle-eye {
+  position: absolute;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #6b7fa3;
+  cursor: pointer;
+  padding: 4px;
+}
+.toggle-eye svg {
+  width: 16px;
+  height: 16px;
+}
+.toggle-eye:hover {
+  color: #9fb0d1;
 }
 .input-wrap input::placeholder {
   color: #6b7fa3;
@@ -509,6 +566,13 @@ async function handleLogin() {
   color: #6b7fa3;
   text-align: center;
   line-height: 1.5;
+}
+
+.error-text {
+  color: #f87171;
+  font-size: 13px;
+  margin: 8px 0 4px;
+  text-align: center;
 }
 
 /* ===== RESPONSIVE ===== */
@@ -551,12 +615,5 @@ async function handleLogin() {
   .art-caption {
     display: none;
   }
-}
-
-.error-text {
-  color: #dc2626;
-  font-size: 0.85rem;
-  margin: -10px 0 14px;
-  text-align: center;
 }
 </style>

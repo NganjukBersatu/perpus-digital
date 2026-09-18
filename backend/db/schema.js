@@ -63,6 +63,7 @@ const anggota = pgTable("anggota", {
 
   mapel: varchar("mapel", { length: 100 }),
   peran: varchar("peran", { length: 20 }).notNull().default("siswa"), // siswa | guru | admin
+  harusGantiPassword: boolean('harus_ganti_password').notNull().default(true),
 }, (table) => ({
   peranIdx: index("anggota_peran_idx").on(table.peran),
   namaIdx: index("anggota_nama_idx").on(table.nama),

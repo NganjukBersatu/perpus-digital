@@ -1,6 +1,8 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from "vue"
-import { Html5Qrcode } from "html5-qrcode"
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode"
+import { BrowserMultiFormatReader } from "@zxing/browser"
+import { DecodeHintType, BarcodeFormat } from "@zxing/library"
 import { useRouter, useRoute } from "vue-router"
 import IsbnOcr from "../../utils/isbn-ocr.js" // sesuaikan path relatif ke folder utils/ kamu
 import Tesseract from "tesseract.js"
@@ -356,8 +358,32 @@ onMounted(async () => {
 })
 
 // ===== SCAN =====
+// ===== SCAN BARCODE (ZXing) + FALLBACK OCR OTOMATIS =====
+const statusScan = ref("Kamera aktif — arahkan ke barcode")
+let zxingControls = null
+let ocrFallbackTimer = null
+let riwayatDeteksi = []
+
+const FALLBACK_OCR_SETELAH_MS = 6000
+
+const zxingHints = new Map()
+zxingHints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.EAN_13])
+zxingHints.set(DecodeHintType.TRY_HARDER, true)
+const zxingReader = new BrowserMultiFormatReader(zxingHints, {
+  delayBetweenScanAttempts: 100,
+})
+
+function validasiChecksumEan13(kode) {
+  if (!/^\d{13}$/.test(kode)) return false
+  const digits = kode.split("").map(Number)
+  const checksum = digits.slice(0, 12).reduce((sum, d, i) => sum + d * (i % 2 === 0 ? 1 : 3), 0)
+  const cekDigit = (10 - (checksum % 10)) % 10
+  return cekDigit === digits[12]
+}
+
 async function mulaiPindai() {
   resetHasilPindai()
+  riwayatDeteksi = []
   if (!selectedCameraId.value) await siapkanDaftarKamera()
   if (!selectedCameraId.value) {
     scanError.value = "Tidak ada kamera terdeteksi di perangkat ini."
@@ -365,41 +391,198 @@ async function mulaiPindai() {
   }
 
   isScanning.value = true
+  statusScan.value = "Kamera aktif — arahkan ke barcode"
   await new Promise((resolve) => setTimeout(resolve, 0))
 
-  scanner = new Html5Qrcode("reader")
-
-try {
-  await scanner.start(
-    { deviceId: { exact: selectedCameraId.value } },
-    {
-      fps: 10,
-      disableFlip: false,
-      videoConstraints: {
-        deviceId: { exact: selectedCameraId.value },
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
+  try {
+    zxingControls = await zxingReader.decodeFromConstraints(
+      {
+        video: {
+         deviceId: { exact: selectedCameraId.value },
+         width: { ideal: 1280 },
+         height: { ideal: 720 },
+        },
       },
-    },
-    onScanSuccess,
-    () => {}
-  )
-} catch (err) {
-  console.error(err)
-  scanError.value =
-    "Kamera tidak bisa diakses. Pilih kamera Logitech di dropdown, izinkan kamera di browser, lalu coba lagi."
-  isScanning.value = false
-}
+      scanVideoRef.value,
+      (result) => {
+        // error "tidak ada barcode di frame ini" dilewati, itu normal
+        if (result) handleKodeTerbaca(result.getText())
+      }
+    )
+    mulaiFallbackOcr()
+  } catch (err) {
+    console.error(err)
+    scanError.value =
+      "Kamera tidak bisa diakses. Pilih kamera Logitech di dropdown, izinkan kamera di browser, lalu coba lagi."
+    isScanning.value = false
+  }
 }
 
+function handleKodeTerbaca(kode) {
+  if (!validasiChecksumEan13(kode)) {
+    riwayatDeteksi = []
+    return
+  }
+  riwayatDeteksi.push(kode)
+  if (riwayatDeteksi.length > 2) riwayatDeteksi.shift()
+
+  if (riwayatDeteksi.length === 2 && riwayatDeteksi[0] === riwayatDeteksi[1]) {
+    riwayatDeteksi = []
+    onScanSuccess(kode)
+  }
+}
+
+// --- Fallback: kalau barcode tidak terbaca beberapa detik, baca angka ISBN pakai OCR ---
+// --- Fallback: kalau barcode tidak terbaca, tampilkan tombol baca angka ISBN (OCR) ---
+const tampilkanTombolOcr = ref(false)
+const sedangBacaIsbn = ref(false)
+
+function mulaiFallbackOcr() {
+  hentikanFallbackOcr()
+  tampilkanTombolOcr.value = false
+  ocrFallbackTimer = setTimeout(() => {
+    if (!isScanning.value) return
+    tampilkanTombolOcr.value = true
+    statusScan.value = "Barcode sulit dibaca — tekan “Baca angka ISBN”"
+  }, FALLBACK_OCR_SETELAH_MS)
+}
+
+function hentikanFallbackOcr() {
+  if (ocrFallbackTimer) {
+    clearTimeout(ocrFallbackTimer)
+    ocrFallbackTimer = null
+  }
+  tampilkanTombolOcr.value = false
+  sedangBacaIsbn.value = false
+}
+
+// Buang digit sisipan (dari batang pengaman barcode yang terbaca sebagai angka)
+function pulihkanIsbn(teks, maksHapus = 4) {
+  const raw = String(teks).replace(/\D/g, "")
+  const hasil = new Set()
+  if (raw.length < 13) return []
+
+  const n = raw.length
+  const banyakHapus = Math.min(maksHapus, n - 13)
+
+  function cobaHapus(mulai, sisa, dipilih) {
+    if (sisa === 0) {
+      const kandidat = raw
+        .split("")
+        .filter((_, i) => !dipilih.includes(i))
+        .join("")
+      if (/^(978|979)/.test(kandidat) && validasiChecksumEan13(kandidat)) {
+        hasil.add(kandidat)
+      }
+      return
+    }
+    for (let i = mulai; i < n; i++) cobaHapus(i + 1, sisa - 1, [...dipilih, i])
+  }
+
+  for (let k = 0; k <= banyakHapus; k++) cobaHapus(0, k, [])
+  return [...hasil]
+}
+
+async function isbnAdaDiKatalog(isbn) {
+  try {
+    const res = await fetch(`/api/buku/isbn/${isbn}`)
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+// Baca baris "ISBN 978-xxx-xxxx-xx-x": bersih dari gangguan batang barcode
+async function bacaBarisIsbnBerstrip(frame) {
+  await ocrWorker.setParameters({
+    tessedit_char_whitelist: "0123456789-ISBN ",
+    tessedit_pageseg_mode: "11", // teks tersebar, cari baris di mana saja
+  })
+  const { data } = await ocrWorker.recognize(frame)
+  const baris = data.lines?.length ? data.lines.map((l) => l.text) : data.text.split("\n")
+
+  const hasil = []
+  for (const teks of baris) {
+    if ((teks.match(/-/g) || []).length < 2) continue   // hanya baris ber-strip
+    const digit = teks.replace(/\D/g, "")
+    if (digit.length === 13 && /^(978|979)/.test(digit) && validasiChecksumEan13(digit)) {
+      hasil.push(digit)
+    }
+  }
+  console.log("Baris ber-strip:", baris, "->", hasil)
+  return hasil
+}
+
+async function bacaIsbnDariKamera() {
+  const videoEl = scanVideoRef.value
+  if (!videoEl || !videoEl.videoWidth || sedangBacaIsbn.value) return
+
+  sedangBacaIsbn.value = true
+  try {
+    if (!ocrWorkerReady) {
+      statusScan.value = "Menyiapkan mesin OCR..."
+      await initOcrWorker()
+    }
+    statusScan.value = "Membaca ISBN..."
+
+    const frame = IsbnOcr.captureFrameFromVideo(videoEl)
+    
+        // 1) coba baris ISBN ber-strip dulu (paling bersih)
+    const dariBaris = await bacaBarisIsbnBerstrip(frame).catch((e) => {
+      console.log("baris ber-strip gagal:", e)
+      return []
+    })
+    if (dariBaris.length > 0) {
+      statusScan.value = `Terdeteksi: ${dariBaris[0]}`
+      await onScanSuccess(dariBaris[0])
+      return
+    }
+
+    // 2) kalau tidak ketemu, lanjut ke alur lama di bawah
+    const { validCandidates, allCandidates } =
+      await IsbnOcr.recognizeIsbnFromImage(ocrWorker, frame)
+    console.log("OCR di tab kamera:", { allCandidates, validCandidates })
+
+    if (!isScanning.value) return
+
+        // Kumpulkan kandidat: yang sudah valid, lalu hasil pemulihan dari teks mentah
+    const kandidat = new Set(validCandidates)
+    for (const raw of allCandidates) pulihkanIsbn(raw).forEach((k) => kandidat.add(k))
+    const daftar = [...kandidat]
+    console.log("Kandidat ISBN setelah pemulihan:", daftar)
+
+    if (daftar.length === 0) {
+      statusScan.value = allCandidates.length
+        ? `Terbaca "${allCandidates[0]}" tapi tidak cocok. Pastikan semua angka masuk frame.`
+        : "Angka ISBN belum terbaca. Dekatkan buku dan coba lagi."
+    } else {
+      // Utamakan yang ada di katalog; kalau hanya satu kandidat, tetap dipakai
+      let pilihan = null
+      for (const k of daftar) {
+        if (await isbnAdaDiKatalog(k)) { pilihan = k; break }
+      }
+      if (!pilihan && daftar.length === 1) pilihan = daftar[0]
+
+      if (pilihan) {
+        statusScan.value = `Terdeteksi: ${pilihan}`
+        await onScanSuccess(pilihan)
+      } else {
+        statusScan.value = "Ada beberapa kemungkinan ISBN, tapi tidak ada di katalog. Coba lagi."
+      }
+    }
+  } catch (err) {
+    console.error(err)
+    statusScan.value = "Gagal membaca ISBN. Coba lagi."
+  } finally {
+    sedangBacaIsbn.value = false
+  }
+}
 
 async function hentikanPindai() {
-  if (scanner) {
-    try {
-      await scanner.stop()
-      scanner.clear()
-    } catch (e) {}
-    scanner = null
+  hentikanFallbackOcr()
+  if (zxingControls) {
+    zxingControls.stop()
+    zxingControls = null
   }
   isScanning.value = false
 }
@@ -407,7 +590,14 @@ async function hentikanPindai() {
 async function onScanSuccess(decodedText) {
   barcode.value = decodedText
   await hentikanPindai()
-  await cariBuku(decodedText)
+
+  // 13 digit polos = ISBN dari barcode penerbit, bukan barcode eksemplar ("ISBN-002")
+  if (/^\d{13}$/.test(decodedText)) {
+    await cariBukuByIsbn(decodedText)
+    if (!bookData.value) bookNotFound.value = true
+  } else {
+    await cariBuku(decodedText)
+  }
 }
 
 async function handleFileUpload(e) {
@@ -636,7 +826,7 @@ watch(activeTab, async (tab) => {
 })
 
 onBeforeUnmount(() => {
-  if (scanner) hentikanPindai()
+  hentikanPindai()
   hentikanOcr()
   if (ocrWorker) ocrWorker.terminate()
 })
@@ -717,12 +907,20 @@ onBeforeUnmount(() => {
                 <button class="primary-button" @click="mulaiPindai">Mulai scan</button>
               </div>
 
-              <div v-show="isScanning" class="viewfinder">
-                <div id="reader"></div>
-                <div class="viewfinder__info">Kamera aktif — arahkan ke barcode</div>
-                <button class="secondary-button" @click="hentikanPindai">Batalkan</button>
-              </div>
-            </template>
+<div v-show="isScanning" class="viewfinder">
+  <video ref="scanVideoRef" class="viewfinder-video" playsinline muted></video>
+  <div class="viewfinder__info">{{ statusScan }}</div>
+  <button
+    v-if="tampilkanTombolOcr"
+    class="secondary-button"
+    :disabled="sedangBacaIsbn"
+    @click="bacaIsbnDariKamera"
+  >
+    {{ sedangBacaIsbn ? "Membaca..." : "Baca angka ISBN" }}
+  </button>
+  <button class="secondary-button" @click="hentikanPindai">Batalkan</button>
+</div>
+</template>
 
             <template v-else-if="activeTab === 'unggah'">
               <div class="upload-zone" @click="fileInput.click()">
@@ -1449,11 +1647,32 @@ button, input, select { font: inherit; }
 }
 .reader-hidden { display: none; }
 
+.viewfinder-video {
+  position: relative;
+  width: 100%;
+  max-height: 360px;
+  overflow: hidden;
+  background: #071426;
+  display: block;
+  object-fit: contain;
+}
+.viewfinder-video :deep(video),
+.viewfinder-video :deep(canvas) {
+  width: 100% !important;
+  height: auto !important;
+  max-height: 360px;
+  object-fit: contain;
+  display: block;
+}
+
 .viewfinder__info {
   position: absolute;
   left: 50%;
-  bottom: 48px;
+  top: 12px;
   transform: translateX(-50%);
+  width: max-content;
+  max-width: 90%;
+  text-align: center;
   padding: 6px 10px;
   color: white;
   background: rgba(7, 20, 38, 0.72);

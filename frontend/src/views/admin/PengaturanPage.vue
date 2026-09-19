@@ -46,13 +46,14 @@ const form = reactive({
   },
   peminjaman: {
     durasiSiswa: 7,
-    durasiGuru: 14,
-    maxBukuSiswa: 2,
-    maxBukuGuru: 5,
+    durasiGuru: 7,
+    maxBukuSiswa: 15,
+    maxBukuGuru: 7,
     bolehPerpanjang: true,
     maxPerpanjang: 1,
     durasiPerpanjang: 7,
-    minStokPinjam: 1
+    minStokPinjam: 1,
+    durasiOtomatis: true
   },
   denda: {
     aktif: true,
@@ -102,7 +103,40 @@ async function loadSettings() {
   }
 }
 
+function validasiForm() {
+  const p = form.peminjaman
+  if (!p.minStokPinjam || p.minStokPinjam < 1) return 'Stok minimum minimal 1'
+  if (!p.durasiSiswa || p.durasiSiswa < 1) return 'Durasi pinjam siswa minimal 1 hari'
+  if (!p.durasiGuru || p.durasiGuru < 1) return 'Durasi pinjam guru minimal 1 hari'
+  if (!p.maxBukuSiswa || p.maxBukuSiswa < 1) return 'Maksimal buku siswa minimal 1'
+  if (!p.maxBukuGuru || p.maxBukuGuru < 1) return 'Maksimal buku guru minimal 1'
+  if (p.maxPerpanjang == null || p.maxPerpanjang < 0) return 'Maksimal perpanjangan tidak boleh negatif'
+  if (!p.durasiPerpanjang || p.durasiPerpanjang < 1) return 'Durasi perpanjangan minimal 1 hari'
+
+  const d = form.denda
+  if (d.aktif) {
+    if (d.nominalPerHariSiswa < 0) return 'Nominal denda siswa tidak boleh negatif'
+    if (d.nominalPerHariGuru < 0) return 'Nominal denda guru tidak boleh negatif'
+    if (d.dendaMaksimalSiswa < 0) return 'Denda maksimal siswa tidak boleh negatif'
+    if (d.dendaMaksimalGuru < 0) return 'Denda maksimal guru tidak boleh negatif'
+    if (d.masaTenggang < 0) return 'Masa tenggang tidak boleh negatif'
+  }
+
+  const n = form.notifikasi
+  if (n.hariSebelumJatuhTempo < 1) return 'Hari sebelum jatuh tempo minimal 1'
+
+  if (!form.perpustakaan.namaPerpustakaan?.trim()) return 'Nama perpustakaan wajib diisi'
+  if (!form.perpustakaan.namaSekolah?.trim()) return 'Nama sekolah wajib diisi'
+
+  return null
+}
+
 async function saveSettings() {
+  const pesanError = validasiForm()
+  if (pesanError) {
+    showToast(pesanError)
+    return
+  }
   try {
     const res = await fetch('http://localhost:3000/api/pengaturan', {
       method: 'PUT',
@@ -163,13 +197,14 @@ async function resetSection() {
   }
   form.peminjaman = {
     durasiSiswa: 7,
-    durasiGuru: 14,
-    maxBukuSiswa: 2,
-    maxBukuGuru: 5,
+    durasiGuru: 7,
+    maxBukuSiswa: 15,
+    maxBukuGuru: 7,
     bolehPerpanjang: true,
     maxPerpanjang: 1,
     durasiPerpanjang: 7,
-    minStokPinjam: 1
+    minStokPinjam: 1,
+    durasiOtomatis: true
   }
   form.denda = {
     aktif: true,
@@ -449,7 +484,12 @@ onMounted(loadSettings)
                   <line x1="3" y1="10" x2="21" y2="10"></line>
                 </svg>
               </span>
-              <input v-model.number="form.peminjaman.durasiSiswa" type="number" min="1" />
+              <input
+                v-model.number="form.peminjaman.durasiSiswa"
+                type="number"
+                min="1"
+                :disabled="!form.peminjaman.durasiOtomatis"
+              />
             </div>
           </label>
           <label>
@@ -463,7 +503,12 @@ onMounted(loadSettings)
                   <line x1="3" y1="10" x2="21" y2="10"></line>
                 </svg>
               </span>
-              <input v-model.number="form.peminjaman.durasiGuru" type="number" min="1" />
+              <input
+                v-model.number="form.peminjaman.durasiGuru"
+                type="number"
+                min="1"
+                :disabled="!form.peminjaman.durasiOtomatis"
+              />
             </div>
           </label>
           <label>
@@ -490,7 +535,7 @@ onMounted(loadSettings)
               <input v-model.number="form.peminjaman.maxBukuGuru" type="number" min="1" />
             </div>
           </label>
-                    <label :class="{ 'field-disabled': !form.peminjaman.bolehPerpanjang }">
+          <label :class="{ 'field-disabled': !form.peminjaman.bolehPerpanjang }">
             Maksimal perpanjangan
             <div class="input-wrapper">
               <span class="input-icon">
@@ -535,6 +580,24 @@ onMounted(loadSettings)
                 </svg>
               </span>
               <input v-model.number="form.peminjaman.minStokPinjam" type="number" min="0" />
+            </div>
+          </label>
+                    <label class="switch-row">
+            <span>
+              Aktifkan durasi otomatis
+              <small class="field-hint">
+                {{ form.peminjaman.durasiOtomatis
+                    ? 'Tanggal kembali dihitung dari durasi pinjam.'
+                    : 'Admin mengisi tanggal kembali manual saat meminjam.' }}
+              </small>
+            </span>
+            <div class="toggle-switch">
+              <input
+                v-model="form.peminjaman.durasiOtomatis"
+                type="checkbox"
+                id="durasi-otomatis-toggle"
+              />
+              <label for="durasi-otomatis-toggle" class="toggle-label"></label>
             </div>
           </label>
           <label class="switch-row">
@@ -1044,6 +1107,15 @@ label.full {
   font-size: 14px;
   font-weight: 600;
   color: #334155;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b;
+  line-height: 1.4;
 }
 
 /* Toggle Switch */

@@ -70,6 +70,21 @@ router.patch('/:id/bayar', async (req, res) => {
     const { id } = req.params
     const today = new Date().toISOString().slice(0, 10)
 
+    const [cek] = await db
+      .select({ denda: peminjaman.denda, statusDenda: peminjaman.statusDenda })
+      .from(peminjaman)
+      .where(eq(peminjaman.id, Number(id)))
+
+    if (!cek) {
+      return res.status(404).json({ message: 'Data peminjaman tidak ditemukan' })
+    }
+    if (!cek.denda || cek.denda <= 0) {
+      return res.status(400).json({ message: 'Peminjaman ini tidak memiliki denda' })
+    }
+    if (cek.statusDenda === 'sudah_dibayar') {
+      return res.status(400).json({ message: 'Denda ini sudah ditandai dibayar' })
+    }
+
     await db
       .update(peminjaman)
       .set({ statusDenda: 'sudah_dibayar', tanggalBayarDenda: today })

@@ -56,13 +56,14 @@ async function ambilPengaturanPeminjaman(db) {
 
   return {
     durasiSiswa: p.durasiSiswa ?? 7,
-    durasiGuru: p.durasiGuru ?? 14,
-    maxBukuSiswa: p.maxBukuSiswa ?? 2,
-    maxBukuGuru: p.maxBukuGuru ?? 5,
+    durasiGuru: p.durasiGuru ?? 7,
+    maxBukuSiswa: p.maxBukuSiswa ?? 15,
+    maxBukuGuru: p.maxBukuGuru ?? 7,
     bolehPerpanjang: p.bolehPerpanjang ?? true,
     maxPerpanjang: p.maxPerpanjang ?? 1,
     durasiPerpanjang: p.durasiPerpanjang ?? 7,
-    minStokPinjam: p.minStokPinjam ?? 1,
+    minStokPinjam: Math.max(1, Number(p.minStokPinjam) || 1),
+    durasiOtomatis: p.durasiOtomatis ?? true,
   }
 }
 

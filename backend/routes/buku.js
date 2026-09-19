@@ -71,8 +71,8 @@ async function buatBarcodeOtomatis(runner, bukuId, isbn, jumlah) {
   return Array.from({ length: jumlah }, (_, i) => {
     const nomorUrut = jumlahSekarang + i + 1
 
-    // Format: <prefix>+00<i>  →  contoh: 9786020633478+001
-    const barcode = `${prefix}+${String(nomorUrut).padStart(3, '0')}`
+    // Format: <prefix>-00<i>  →  contoh: 9786020633478-001
+    const barcode = `${prefix}-${String(nomorUrut).padStart(3, '0')}`
 
     return { bukuId, barcode, status: 'tersedia' }
   })
@@ -321,7 +321,7 @@ router.post('/:id/eksemplar', async (req, res) => {
       .values({ bukuId, barcode: barcodeSementara, status: 'tersedia' })
       .returning()
 
-    const barcodeUnik = `${barcodeBersih}-${eksemplar.id}`
+    const barcodeUnik = `${barcodeBersih}-${String(eksemplar.id).padStart(3, '0')}`
 
     const [updated] = await db
       .update(eksemplarBuku)

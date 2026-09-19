@@ -1,7 +1,7 @@
 require("dotenv").config()
 const express = require("express")
 const cors = require("cors")
-const { sql, desc, isNull, gte, lte, and, eq, lt, ilike } = require("drizzle-orm")
+const { sql, desc, isNull, gte, lte, and, eq, lt, ilike, inArray } = require("drizzle-orm")
 
 const { db } = require("./db/client")
 const { buku, eksemplarBuku, anggota, peminjaman } = require("./db/schema")
@@ -53,7 +53,6 @@ app.use('/api/dashboard-siswa', require('./routes/dashboardSiswa'))
 pasangRouteNotifikasiSiswa(app, wajibLoginSiswa)
 pasangRouteNotifikasiGuru(app, wajibLogin)
 
-// GET data buku berdasarkan barcode
 // GET data buku berdasarkan barcode
 app.get("/api/eksemplar-buku/:barcode", async (req, res) => {
   try {
@@ -119,58 +118,64 @@ app.post("/api/peminjaman", async (req, res) => {
     } = req.body
 
     let anggotaIdFinal
+    let semuaAnggotaId = []
 
     if (tipePeminjam === "guru") {
-      // Guru dipilih langsung dari dropdown daftar guru yang sudah ada,
-      // jadi anggotaId sudah pasti valid — tidak perlu cari/insert baru.
       if (!anggotaId) {
         return res.status(400).json({ message: "Guru wajib dipilih dari daftar" })
       }
       anggotaIdFinal = anggotaId
+      semuaAnggotaId = [anggotaId]
     } else {
-      // Mode siswa: cari siswa lama berdasarkan nama, kalau belum ada baru dibuat
+      // Mode siswa: cari SEMUA anggota yang namanya sama di kelas yang sama.
       const anggotaLama = await db
         .select({ id: anggota.id })
         .from(anggota)
         .where(
           and(
             ilike(anggota.nama, nama),
+            eq(anggota.kelas, kelas),
             eq(anggota.peran, "siswa")
           )
         )
-        .limit(1)
 
       if (anggotaLama.length > 0) {
         anggotaIdFinal = anggotaLama[0].id
+        semuaAnggotaId = anggotaLama.map((a) => a.id)
       } else {
         const anggotaBaru = await db
           .insert(anggota)
           .values({ nama, kelas, peran: "siswa" })
           .returning({ id: anggota.id })
         anggotaIdFinal = anggotaBaru[0].id
+        semuaAnggotaId = [anggotaIdFinal]
       }
     }
 
     const peranPeminjam = tipePeminjam === "guru" ? "guru" : "siswa"
     const pengaturanPinjam = await ambilPengaturanPeminjaman(db)
 
-    const durasi = peranPeminjam === "guru" ? pengaturanPinjam.durasiGuru : pengaturanPinjam.durasiSiswa
-    const tglMulai = new Date(tanggalPinjam)
-    const tglKembaliDihitung = new Date(tglMulai)
-    tglKembaliDihitung.setDate(tglKembaliDihitung.getDate() + durasi)
-    const tanggalKembaliFinal = tglKembaliDihitung.toISOString().slice(0, 10)
+    let tanggalKembaliFinal
 
-    const [{ jumlahAktif }] = await db
-      .select({ jumlahAktif: sql`count(*)` })
-      .from(peminjaman)
-      .where(and(eq(peminjaman.anggotaId, anggotaIdFinal), isNull(peminjaman.tanggalDikembalikan)))
-
-    const maxBuku = peranPeminjam === "guru" ? pengaturanPinjam.maxBukuGuru : pengaturanPinjam.maxBukuSiswa
-    if (Number(jumlahAktif) >= maxBuku) {
-      return res.status(400).json({ message: `Batas pinjam tercapai (maks ${maxBuku} buku)` })
+    if (tanggalKembali && String(tanggalKembali).trim()) {
+      const tglManual = new Date(tanggalKembali)
+      const tglMulaiCek = new Date(tanggalPinjam)
+      if (tglManual < tglMulaiCek) {
+        return res.status(400).json({ message: "Tanggal kembali tidak boleh sebelum tanggal pinjam" })
+      }
+      tanggalKembaliFinal = String(tanggalKembali).slice(0, 10)
+    } else {
+      const durasi = peranPeminjam === "guru" ? pengaturanPinjam.durasiGuru : pengaturanPinjam.durasiSiswa
+      const tglMulai = new Date(tanggalPinjam)
+      const tglKembaliDihitung = new Date(tglMulai)
+      tglKembaliDihitung.setDate(tglKembaliDihitung.getDate() + durasi)
+      tanggalKembaliFinal = tglKembaliDihitung.toISOString().slice(0, 10)
     }
 
-    // Ambil bukuId dari eksemplar yang mau dipinjam, lalu hitung stok tersedia untuk buku itu
+    if (!semuaAnggotaId.length) {
+      return res.status(500).json({ message: "Gagal memproses data peminjam" })
+    }
+
     const [{ bukuId: bukuIdTerkait }] = await db
       .select({ bukuId: eksemplarBuku.bukuId })
       .from(eksemplarBuku)
@@ -181,16 +186,27 @@ app.post("/api/peminjaman", async (req, res) => {
       .from(eksemplarBuku)
       .where(and(eq(eksemplarBuku.bukuId, bukuIdTerkait), eq(eksemplarBuku.status, "tersedia")))
 
-    if (Number(stokTersedia) < pengaturanPinjam.minStokPinjam) {
-      return res.status(400).json({ message: "Stok buku sudah mencapai batas minimal, tidak bisa dipinjamkan" })
+    if (Number(stokTersedia) <= pengaturanPinjam.minStokPinjam) {
+      return res.status(400).json({
+        message: `Stok tersedia (${stokTersedia}) sudah mencapai batas minimal (${pengaturanPinjam.minStokPinjam}), tidak bisa dipinjamkan`
+      })
     }
 
-    // ============================================================
-    // [DIUBAH] Ambil pengaturan denda SAAT INI, lalu simpan nilainya
-    // ke kolom snapshot di baris peminjaman. Ini yang membuat nominal
-    // denda "terkunci" pada saat peminjaman, sehingga kalau admin
-    // mengubah nominal nanti, peminjaman lama tetap pakai nominal lama.
-    // ============================================================
+    const [{ jumlahAktif }] = await db
+      .select({ jumlahAktif: sql`count(*)` })
+      .from(peminjaman)
+      .where(
+        and(
+          inArray(peminjaman.anggotaId, semuaAnggotaId),
+          isNull(peminjaman.tanggalDikembalikan)
+        )
+      )
+
+    const maxBuku = peranPeminjam === "guru" ? pengaturanPinjam.maxBukuGuru : pengaturanPinjam.maxBukuSiswa
+    if (Number(jumlahAktif) >= maxBuku) {
+      return res.status(400).json({ message: `Batas pinjam tercapai (maks ${maxBuku} buku)` })
+    }
+
     const pengaturanDenda = await ambilPengaturanDenda(db)
 
     await db.insert(peminjaman).values({
@@ -200,7 +216,6 @@ app.post("/api/peminjaman", async (req, res) => {
       anggotaId: anggotaIdFinal,
       tanggalPinjam,
       tanggalKembali: tanggalKembaliFinal,
-      
 
       nominalDendaPerHari: pengaturanDenda.aktif
         ? (peranPeminjam === "guru" ? pengaturanDenda.nominalPerHariGuru : pengaturanDenda.nominalPerHariSiswa)
@@ -209,7 +224,7 @@ app.post("/api/peminjaman", async (req, res) => {
         ? (peranPeminjam === "guru" ? pengaturanDenda.dendaMaksimalGuru : pengaturanDenda.dendaMaksimalSiswa)
         : 0,
       dendaGuruAktif: pengaturanDenda.dendaGuruAktif ?? false,
-      masaTenggang: pengaturanDenda.masaTenggang ?? 0, 
+      masaTenggang: pengaturanDenda.masaTenggang ?? 0,
     })
 
     await db
@@ -217,7 +232,6 @@ app.post("/api/peminjaman", async (req, res) => {
       .set({ status: "dipinjam" })
       .where(eq(eksemplarBuku.id, eksemplarId))
 
-    // Sinkronkan stok, tersedia, DAN status buku (Tersedia/Stok Menipis/Habis)
     await sinkronkanStokBuku(bukuIdTerkait)
 
     res.status(201).json({ message: "Peminjaman berhasil disimpan" })
@@ -232,22 +246,27 @@ app.patch("/api/peminjaman/:id/kembalikan", async (req, res) => {
   try {
     const { id } = req.params
 
-    // join ke anggota supaya tahu peran (siswa/guru) — dipakai untuk cek toggle "denda untuk guru"
     const rows = await db
       .select({
         id: peminjaman.id,
+        nama: peminjaman.nama,
+        kelas: peminjaman.kelas,
+        eksemplarId: peminjaman.eksemplarId,
+        tanggalPinjam: peminjaman.tanggalPinjam,
         tanggalKembali: peminjaman.tanggalKembali,
         tanggalDikembalikan: peminjaman.tanggalDikembalikan,
-        eksemplarId: peminjaman.eksemplarId,
-        peran: anggota.peran,
-        // [BARU] ambil snapshot yang tersimpan di baris peminjaman
+        denda: peminjaman.denda,
+        judulBuku: buku.judul,
         nominalDendaPerHari: peminjaman.nominalDendaPerHari,
         dendaMaksimal: peminjaman.dendaMaksimal,
         dendaGuruAktif: peminjaman.dendaGuruAktif,
         masaTenggang: peminjaman.masaTenggang,
+        peran: anggota.peran,
       })
       .from(peminjaman)
       .innerJoin(anggota, eq(peminjaman.anggotaId, anggota.id))
+      .innerJoin(eksemplarBuku, eq(peminjaman.eksemplarId, eksemplarBuku.id))   // ⬅️ TAMBAHAN
+      .innerJoin(buku, eq(eksemplarBuku.bukuId, buku.id))                        // ⬅️ TAMBAHAN
       .where(eq(peminjaman.id, Number(id)))
 
     if (rows.length === 0) {
@@ -262,16 +281,11 @@ app.patch("/api/peminjaman/:id/kembalikan", async (req, res) => {
 
     const tanggalDikembalikan = tanggalHariIniLokal()
 
-    // ============================================================
-    // [DIUBAH] Sebelumnya ambil dari pengaturan saat ini (real-time).
-    // Sekarang pakai snapshot yang tersimpan di baris peminjaman,
-    // sehingga nominal yang dipakai = nominal saat buku dipinjam.
-    // ============================================================
     const pengaturanDenda = {
       aktif: pinjam.nominalDendaPerHari > 0,
       nominalPerHari: pinjam.nominalDendaPerHari,
       dendaMaksimal: pinjam.dendaMaksimal,
-      dendaGuruAktif: pinjam.dendaGuruAktif ?? false,  
+      dendaGuruAktif: pinjam.dendaGuruAktif ?? false,
       masaTenggang: pinjam.masaTenggang ?? 0,
     }
 
@@ -293,7 +307,6 @@ app.patch("/api/peminjaman/:id/kembalikan", async (req, res) => {
       .set({ status: "tersedia" })
       .where(eq(eksemplarBuku.id, pinjam.eksemplarId))
 
-    // Ambil bukuId dari eksemplar ini, lalu sinkronkan stok/tersedia/status
     const [{ bukuId: bukuIdDikembalikan }] = await db
       .select({ bukuId: eksemplarBuku.bukuId })
       .from(eksemplarBuku)
@@ -348,7 +361,7 @@ app.get("/api/dashboard/stats", async (req, res) => {
     const today = new Date().toISOString().split("T")[0]
 
     const totalBuku = await db.select({ count: sql`count(*)` }).from(buku)
-        const totalAnggota = await db
+    const totalAnggota = await db
       .select({
         count: sql`count(distinct lower(btrim(${anggota.nama})))`.mapWith(Number)
       })
@@ -439,9 +452,9 @@ app.get("/api/dashboard/peminjaman-belum-kembali", async (req, res) => {
         tanggalDikembalikan: peminjaman.tanggalDikembalikan,
         denda: peminjaman.denda,
         judulBuku: buku.judul,
-        // [BARU] ambil snapshot dari peminjaman
         nominalDendaPerHari: peminjaman.nominalDendaPerHari,
         dendaMaksimal: peminjaman.dendaMaksimal,
+        masaTenggang: peminjaman.masaTenggang,
       })
       .from(peminjaman)
       .innerJoin(eksemplarBuku, eq(eksemplarBuku.id, peminjaman.eksemplarId))
@@ -462,17 +475,20 @@ app.get("/api/dashboard/peminjaman-belum-kembali", async (req, res) => {
 
       if (selisihHari < 0) {
         status = "Terlambat"
-        // ============================================================
-        // [DIUBAH] Sebelumnya hardcode Rp2.000 (`* 2000`).
-        // Sekarang pakai nominalDendaPerHari dari baris peminjaman,
-        // dan hormati dendaMaksimal.
-        // ============================================================
+
+        const hariTelat = Math.abs(selisihHari)
+        const masaTenggang = row.masaTenggang || 0
+        const hariKenaDenda = Math.max(0, hariTelat - masaTenggang)
+
         const tarif = row.nominalDendaPerHari || 0
-        denda = Math.abs(selisihHari) * tarif
+        denda = hariKenaDenda * tarif
         if (row.dendaMaksimal > 0) {
           denda = Math.min(denda, row.dendaMaksimal)
         }
-        sisaHari = `Telat ${Math.abs(selisihHari)} hari`
+
+        sisaHari = hariKenaDenda > 0
+          ? `Telat ${hariTelat} hari`
+          : `Masih masa tenggang (${hariTelat}/${masaTenggang} hari)`
       } else if (selisihHari === 0) {
         status = "Dipinjam"
         sisaHari = "Jatuh tempo hari ini"
@@ -553,7 +569,6 @@ app.get("/api/dashboard/buku-terpopuler-lengkap", async (req, res) => {
     } else if (range === "tahunini") {
       startDate = new Date(now.getFullYear(), 0, 1)
     }
-    // range === "semua" -> startDate tetap null, artinya tanpa batas waktu
 
     let query = sql`
       select b.judul as judul, b.kategori as kategori, count(p.id) as dipinjam
@@ -606,10 +621,10 @@ app.get("/api/dashboard/pengingat", async (req, res) => {
         dendaMaksimal: peminjaman.dendaMaksimal,
         dendaGuruAktif: peminjaman.dendaGuruAktif,
         masaTenggang: peminjaman.masaTenggang,
-        peran: anggota.peran,   // ⬅️ TAMBAHKAN: ambil peran dari tabel anggota
+        peran: anggota.peran,
       })
       .from(peminjaman)
-      .innerJoin(anggota, eq(peminjaman.anggotaId, anggota.id))   // ⬅️ TAMBAHKAN: join
+      .innerJoin(anggota, eq(peminjaman.anggotaId, anggota.id))
       .where(isNull(peminjaman.tanggalDikembalikan))
       .orderBy(peminjaman.tanggalKembali)
 
@@ -624,37 +639,32 @@ app.get("/api/dashboard/pengingat", async (req, res) => {
       const selisihHari = Math.round((batas - today) / 86400000)
 
       if (selisihHari < 0) {
-        // sudah lewat jatuh tempo -> ini "notifikasi buku terlambat"
-        if (selisihHari < 0) {
-          if (!pengaturanNotif.notifikasiTerlambat) continue
+        if (!pengaturanNotif.notifikasiTerlambat) continue
 
-          const hariTelat = Math.abs(selisihHari)
-          const masaTenggang = row.masaTenggang ?? pengaturanDenda.masaTenggang ?? 0
-          const hariKenaDenda = Math.max(0, hariTelat - masaTenggang)
+        const hariTelat = Math.abs(selisihHari)
+        const masaTenggang = row.masaTenggang ?? pengaturanDenda.masaTenggang ?? 0
+        const hariKenaDenda = Math.max(0, hariTelat - masaTenggang)
 
-          // ⬅️ TAMBAHKAN: samakan aturan dengan hitungDenda.js
-          const peran = row.peran // pastikan kolom ini ada di tabel peminjaman/hasil select
-          const dendaGuruAktif = row.dendaGuruAktif ?? pengaturanDenda.dendaGuruAktif ?? false
-          const bolehDihitung = pengaturanDenda.aktif && (peran !== 'guru' || dendaGuruAktif)
-        
-          const tarif = row.nominalDendaPerHari ?? pengaturanDenda.nominalPerHari ?? 0
-          const maks = row.dendaMaksimal ?? pengaturanDenda.dendaMaksimal ?? 0
-          let denda = bolehDihitung ? hariKenaDenda * tarif : 0   // ⬅️ UBAH: pakai bolehDihitung, bukan pengaturanDenda.aktif saja
-          if (maks > 0) denda = Math.min(denda, maks)
- 
-          daftar.push({
-            id: row.id,
-            nama: row.nama,
-            kelas: row.kelas,
-            badge: hariKenaDenda > 0
-              ? `Telat ${hariTelat} hari`
-              : `Masih masa tenggang (${hariTelat}/${masaTenggang} hari)`,   // ⬅️ TAMBAHKAN: badge beda saat masih dalam tenggang
-            color: hariKenaDenda > 0 ? "red" : "orange",
-            denda,
-          })
-        }
+        const peran = row.peran
+        const dendaGuruAktif = row.dendaGuruAktif ?? pengaturanDenda.dendaGuruAktif ?? false
+        const bolehDihitung = pengaturanDenda.aktif && (peran !== 'guru' || dendaGuruAktif)
+
+        const tarif = row.nominalDendaPerHari ?? pengaturanDenda.nominalPerHari ?? 0
+        const maks = row.dendaMaksimal ?? pengaturanDenda.dendaMaksimal ?? 0
+        let denda = bolehDihitung ? hariKenaDenda * tarif : 0
+        if (maks > 0) denda = Math.min(denda, maks)
+
+        daftar.push({
+          id: row.id,
+          nama: row.nama,
+          kelas: row.kelas,
+          badge: hariKenaDenda > 0
+            ? `Telat ${hariTelat} hari`
+            : `Masih masa tenggang (${hariTelat}/${masaTenggang} hari)`,
+          color: hariKenaDenda > 0 ? "red" : "orange",
+          denda,
+        })
       } else if (selisihHari <= (pengaturanNotif.hariSebelumJatuhTempo || 0)) {
-        // masih dalam rentang "mau jatuh tempo" -> ini "pengingat sebelum jatuh tempo"
         if (!pengaturanNotif.pengingatJatuhTempo) continue
 
         daftar.push({
@@ -666,7 +676,6 @@ app.get("/api/dashboard/pengingat", async (req, res) => {
           denda: 0,
         })
       }
-      // di luar rentang hariSebelumJatuhTempo dan belum terlambat -> tidak relevan, dilewati
     }
 
     const jatuhTempoHariIni = semuaBelumKembali.filter((row) => {
@@ -802,8 +811,6 @@ app.get("/api/search", async (req, res) => {
       limit 5
     `)
 
-    // fix: klasifikasi siswa/guru sekarang pakai kolom "peran",
-    // bukan menebak dari kosong-tidaknya kolom "kelas"
     const siswaRows = await db.execute(sql`
       select id, nama, kelas
       from anggota
@@ -856,7 +863,7 @@ function getRangeConfig(range) {
     start.setDate(start.getDate() - 6)
   } else if (range === "1bulan") {
     start.setDate(start.getDate() - 29)
-    } else if (range === "3bulan") {
+  } else if (range === "3bulan") {
     start.setMonth(start.getMonth() - 3)
     groupBy = "day"
   } else if (range === "1tahun") {
@@ -915,7 +922,7 @@ app.get("/api/dashboard/statistik-peminjaman", async (req, res) => {
       order by periode
     `)
 
-        function tanggalDariPeriode(raw) {
+    function tanggalDariPeriode(raw) {
       if (typeof raw === "string") {
         return new Date(String(raw).slice(0, 10) + "T00:00:00")
       }
@@ -932,7 +939,6 @@ app.get("/api/dashboard/statistik-peminjaman", async (req, res) => {
         const d = tanggalDariPeriode(row.periode)
         if (Number.isNaN(d.getTime())) continue
 
-        // ember terakhir yang kuncinya <= tanggal data
         let idx = -1
         for (let i = 0; i < bucketDates.length; i++) {
           if (bucketDates[i] <= d) idx = i

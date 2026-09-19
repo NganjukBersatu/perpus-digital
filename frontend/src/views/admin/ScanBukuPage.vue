@@ -214,6 +214,32 @@ const peminjam = ref({
 
 const daftarGuru = ref([])
 
+// ⬇️ TAMBAHAN: state pengaturan peminjaman (durasiSiswa & durasiGuru)
+const pengaturanPinjam = ref(null)
+
+async function ambilPengaturanPinjam() {
+  try {
+    const res = await fetch("/api/pengaturan")
+    if (!res.ok) return
+    const data = await res.json()
+    pengaturanPinjam.value = data?.detail?.peminjaman || null
+  } catch (err) {
+    console.error(err)
+  }
+}
+
+// hitung otomatis tanggal kembali
+const tanggalKembaliOtomatis = computed(() => {
+  if (!peminjam.value.tanggalPinjam) return ""
+  const durasi =
+    tipePeminjam.value === "guru"
+      ? (pengaturanPinjam.value?.durasiGuru ?? 14)
+      : (pengaturanPinjam.value?.durasiSiswa ?? 7)
+  const tgl = new Date(peminjam.value.tanggalPinjam)
+  tgl.setDate(tgl.getDate() + durasi)
+  return tgl.toISOString().slice(0, 10)
+})
+
 // ===== COMBOBOX KELAS =====
 const daftarKelas = ref([])
 const kelasQuery = ref("")
@@ -352,6 +378,7 @@ onMounted(async () => {
   siapkanDaftarKamera()
   ambilDaftarKelas()
   ambilDaftarGuru()
+  ambilPengaturanPinjam() 
   await lanjutDariQuery()
 })
 
@@ -568,8 +595,8 @@ async function simpanPeminjaman() {
     }
   }
 
-  if (!peminjam.value.tanggalPinjam || !peminjam.value.tanggalKembali) {
-    scanError.value = "Tanggal pinjam dan tanggal kembali wajib diisi."
+  if (!peminjam.value.tanggalPinjam) {
+    scanError.value = "Tanggal pinjam wajib diisi."
     return
   }
 
@@ -586,18 +613,27 @@ async function simpanPeminjaman() {
         nama: peminjam.value.nama,
         kelas: tipePeminjam.value === "siswa" ? peminjam.value.kelas : null,
         tanggalPinjam: peminjam.value.tanggalPinjam,
-        tanggalKembali: peminjam.value.tanggalKembali,
+        tanggalKembali: peminjam.value.tanggalKembali || undefined,
         tipePeminjam: tipePeminjam.value,
         anggotaId: tipePeminjam.value === "guru" ? peminjam.value.anggotaId : null,
       }),
     })
 
-    if (!res.ok) throw new Error("Gagal menyimpan peminjaman")
+    if (!res.ok) {
+      // Ambil pesan asli dari backend
+      let pesanBackend = "Gagal menyimpan peminjaman"
+      try {
+        const errBody = await res.json()
+        pesanBackend = errBody.message || errBody.error || pesanBackend
+      } catch { /* biarkan pakai pesan default */ }
+      throw new Error(pesanBackend)
+    }
+
     saveSuccess.value = true
     resetForm()
   } catch (err) {
     console.error(err)
-    scanError.value = "Gagal menyimpan data peminjaman. Coba lagi."
+    scanError.value = err.message || "Gagal menyimpan data peminjaman. Coba lagi."
   } finally {
     isSaving.value = false
   }
@@ -1115,10 +1151,23 @@ onBeforeUnmount(() => {
             </label>
 
             <label class="field">
-              <span>Tanggal kembali</span>
+              <span>
+                Tanggal kembali
+                <small class="field-note">(kosongkan untuk pakai durasi otomatis)</small>
+              </span>
               <div class="input-wrapper">
-                <input v-model="peminjam.tanggalKembali" type="date" required />
+                <input
+                  v-model="peminjam.tanggalKembali"
+                  type="date"
+                  :min="peminjam.tanggalPinjam"
+                />
               </div>
+              <small
+                v-if="!peminjam.tanggalKembali && tanggalKembaliOtomatis"
+                class="field-hint"
+              >
+                Otomatis: {{ tanggalKembaliOtomatis }} ({{ tipePeminjam === 'guru' ? pengaturanPinjam?.durasiGuru ?? 14 : pengaturanPinjam?.durasiSiswa ?? 7 }} hari)
+              </small>
             </label>
           </div>
 
@@ -1837,6 +1886,26 @@ button, input, select { font: inherit; }
   background: white;
   border-color: var(--blue);
   box-shadow: 0 0 0 3px rgba(40, 100, 232, 0.1);
+}
+
+.input-readonly {
+  background: #eef2f7 !important;
+  color: #718096 !important;
+  cursor: not-allowed;
+}
+
+.field-note {
+  font-weight: 400;
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #718096;
+  line-height: 1.4;
 }
 
 .kelas-dropdown {

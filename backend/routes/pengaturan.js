@@ -3,7 +3,7 @@ const router = express.Router()
 const { db } = require('../db/client')
 const { pengaturanPerpustakaan } = require('../db/schema')
 const { eq } = require('drizzle-orm')
-const { wajibLogin } = require('./auth')
+const { wajibAdmin } = require('./auth')
 
 // GET pengaturan (tidak perlu login — dipakai juga untuk tampil di sidebar sebelum login)
 router.get('/', async (req, res) => {
@@ -21,7 +21,7 @@ router.get('/', async (req, res) => {
   }
 })
 
-router.put('/', wajibLogin, async (req, res) => {
+router.put('/', wajibAdmin, async (req, res) => {
   try {
     const { namaSekolah, namaPerpustakaan, alamat, detail } = req.body
 

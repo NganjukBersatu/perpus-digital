@@ -3,13 +3,13 @@ const express = require("express")
 const cors = require("cors")
 const { sql, desc, isNull, gte, lte, and, eq, lt, ilike, inArray } = require("drizzle-orm")
 
-const { db } = require("./db/client")
+const { db, closeDb } = require("./db/client")
 const { buku, eksemplarBuku, anggota, peminjaman } = require("./db/schema")
 const { ambilPengaturanDenda, hitungDenda, ambilPengaturanNotifikasi, ambilPengaturanPeminjaman } = require("./utils/hitungDenda")
 const { sinkronkanStokBuku } = require("./routes/buku")
 const { tanggalHariIniLokal } = require("./utils/tanggal")
 
-const { router: authRoutes, wajibLogin } = require("./routes/auth")
+const { router: authRoutes, wajibLogin, wajibAdmin } = require("./routes/auth")
 const adminRoutes = require("./routes/admin")
 const pengaturanRoutes = require("./routes/pengaturan")
 const pengembalianRoutes = require("./routes/pengembalian")
@@ -52,6 +52,12 @@ app.use('/api/dashboard-siswa', require('./routes/dashboardSiswa'))
 // app.use('/api/katalog-siswa', require('./routes/katalogSiswa'))
 pasangRouteNotifikasiSiswa(app, wajibLoginSiswa)
 pasangRouteNotifikasiGuru(app, wajibLogin)
+
+// route admin di index.js: wajib login sebagai admin
+app.use("/api/peminjaman", wajibAdmin)
+app.use("/api/dashboard", wajibAdmin)
+app.use("/api/eksemplar-buku", wajibAdmin)
+app.use("/api/search", wajibAdmin)
 
 // GET data buku berdasarkan barcode
 app.get("/api/eksemplar-buku/:barcode", async (req, res) => {
@@ -968,4 +974,28 @@ app.get("/api/dashboard/statistik-peminjaman", async (req, res) => {
   }
 })
 
-app.listen(3000, () => console.log("Backend jalan di http://localhost:3000"))
+const PORT = process.env.PORT || 3000
+const server = app.listen(PORT, () => console.log(`Backend jalan di http://localhost:${PORT}`))
+
+let shuttingDown = false
+function shutdown(signal) {
+  if (shuttingDown) return
+  shuttingDown = true
+  console.log(`Menerima ${signal}, mematikan server...`)
+
+  const timer = setTimeout(() => process.exit(1), 10000)
+  timer.unref()
+
+  server.close(async () => {
+    try {
+      await closeDb()
+      process.exit(0)
+    } catch (err) {
+      console.error('Gagal menutup database:', err)
+      process.exit(1)
+    }
+  })
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT', () => shutdown('SIGINT'))

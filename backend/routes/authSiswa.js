@@ -5,7 +5,12 @@ const { db } = require('../db/client')
 const { anggota } = require('../db/schema')
 const { eq, and } = require('drizzle-orm')
 
-const JWT_SECRET = process.env.JWT_SECRET || 'ganti_dengan_secret_yang_acak_dan_rahasia'
+const JWT_SECRET = process.env.JWT_SECRET
+if (!JWT_SECRET) {
+  throw new Error(
+    'JWT_SECRET belum di-set. Tambahkan JWT_SECRET=<string acak panjang> di file .env sebelum menjalankan server.'
+  )
+}
 
 // POST login siswa (pakai NIS + tanggal lahir)
 router.post('/login', async (req, res) => {
@@ -28,7 +33,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'NIS atau tanggal lahir salah' })
     }
 
-    const token = jwt.sign({ id: siswa.id, peran: 'siswa' }, JWT_SECRET, { expiresIn: '8h' })
+    const token = jwt.sign({ id: siswa.id, role: 'siswa' }, JWT_SECRET, { expiresIn: '8h' })
 
     res.json({
       token,
@@ -41,7 +46,9 @@ router.post('/login', async (req, res) => {
       },
     })
   } catch (err) {
-    console.error(err)
+    console.error('[LOGIN SISWA ERROR]', err)
+    console.error('[LOGIN SISWA ERROR] message:', err?.message)
+    console.error('[LOGIN SISWA ERROR] stack:', err?.stack)
     res.status(500).json({ error: 'Gagal login' })
   }
 })
@@ -55,7 +62,7 @@ function wajibLoginSiswa(req, res, next) {
   const token = authHeader.split(' ')[1]
   try {
     const payload = jwt.verify(token, JWT_SECRET)
-    if (payload.peran !== 'siswa') {
+    if (payload.role !== 'siswa') {
       return res.status(403).json({ error: 'Akses ditolak' })
     }
     req.siswa = payload

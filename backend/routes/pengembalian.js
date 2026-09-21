@@ -19,7 +19,8 @@ router.get('/', async (req, res) => {
         or(
           ilike(anggota.nama, `%${search}%`),
           ilike(buku.judul, `%${search}%`),
-          ilike(buku.isbn, `%${search}%`)
+          ilike(buku.isbn, `%${search}%`),
+          ilike(eksemplarBuku.barcode, `%${search}%`)  
         )
       )
     }
@@ -48,6 +49,7 @@ router.get('/', async (req, res) => {
         batasKembali: peminjaman.tanggalKembali,
         tanggalDikembalikan: peminjaman.tanggalDikembalikan,
         denda: peminjaman.denda,
+        barcodeEksemplar: eksemplarBuku.barcode, 
       })
       .from(peminjaman)
       .innerJoin(anggota, eq(peminjaman.anggotaId, anggota.id))

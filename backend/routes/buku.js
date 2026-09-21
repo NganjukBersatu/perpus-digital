@@ -93,19 +93,20 @@ router.get('/', async (req, res) => {
     if (status) conditions.push(eq(buku.status, status))
 
     const rows = await db
-      .select({
-        id: buku.id,
-        judul: buku.judul,
-        penulis: buku.penulis,
-        penerbit: buku.penerbit,
-        kategoriId: buku.kategoriId,
-        isbn: buku.isbn,
-        lokasi: buku.lokasi,
-        status: buku.status,
-        kategori: kategori.nama,
-        stok: sql`count(${eksemplarBuku.id})`.mapWith(Number),
-        tersedia: sql`count(${eksemplarBuku.id}) filter (where ${eksemplarBuku.status} = 'tersedia')`.mapWith(Number),
-      })
+  .select({
+    id: buku.id,
+    judul: buku.judul,
+    penulis: buku.penulis,
+    penerbit: buku.penerbit,
+    kategoriId: buku.kategoriId,
+    isbn: buku.isbn,
+    lokasi: buku.lokasi,
+    status: buku.status,
+    kategori: kategori.nama,
+    stok: sql`count(${eksemplarBuku.id})`.mapWith(Number),
+    tersedia: sql`count(${eksemplarBuku.id}) filter (where ${eksemplarBuku.status} = 'tersedia')`.mapWith(Number),
+    barcode: sql`min(${eksemplarBuku.barcode})`,
+  })
       .from(buku)
       .leftJoin(kategori, eq(kategori.id, buku.kategoriId))
       .leftJoin(eksemplarBuku, eq(eksemplarBuku.bukuId, buku.id))
@@ -266,6 +267,8 @@ router.post('/', async (req, res) => {
         .from(eksemplarBuku)
         .where(eq(eksemplarBuku.bukuId, bukuId))
 
+     await sinkronkanStokBuku(baru.id)
+    }
       await tx.update(buku)
         .set({ stok: stat?.stok ?? 0, tersedia: stat?.tersedia ?? 0 })
         .where(eq(buku.id, bukuId))

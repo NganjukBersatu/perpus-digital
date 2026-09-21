@@ -481,7 +481,7 @@ watch(page, fetchData)
     </div>
 
     <div class="toolbar">
-      <input v-model="search" placeholder="Cari nama peminjam, buku, atau ISBN..." class="search" />
+      <input v-model="search" placeholder="Cari nama peminjam, buku, ISBN, atau barcode..." class="search" />
       <div class="status-dropdown">
         <button
           type="button"
@@ -548,7 +548,7 @@ watch(page, fetchData)
       <table>
         <thead>
           <tr>
-            <th>No</th><th>Peminjam</th><th>Buku</th><th>Tanggal Pinjam</th>
+            <th>No</th><th>Peminjam</th><th>Buku</th><th>Barcode</th><th>Tanggal Pinjam</th>
             <th>Batas Kembali</th><th>Tanggal Kembali</th><th>Status</th>
             <th>Keterlambatan</th><th>Denda</th>
           </tr>
@@ -569,6 +569,7 @@ watch(page, fetchData)
               <p class="nama">{{ row.judulBuku }}</p>
               <p class="kelas">{{ row.penulisBuku }}</p>
             </td>
+            <td data-label="Barcode" class="mono">{{ row.barcodeEksemplar || '-' }}</td>
             <td data-label="Tanggal Pinjam">{{ formatTanggal(row.tanggalPinjam) }}</td>
             <td data-label="Batas Kembali">{{ formatTanggal(row.batasKembali) }}</td>
             <td data-label="Tanggal Kembali">{{ formatTanggal(row.tanggalDikembalikan) }}</td>
@@ -580,7 +581,7 @@ watch(page, fetchData)
             <td data-label="Keterlambatan">{{ row.keterlambatan }}</td>
             <td data-label="Denda">Rp{{ (row.denda || 0).toLocaleString('id-ID') }}</td>
             <tr v-if="data.length === 0">
-              <td colspan="9" class="empty">Belum ada data pengembalian</td>
+              <td colspan="10" class="empty">Belum ada data pengembalian</td>
             </tr>
           </tr>
         </tbody>
@@ -1303,6 +1304,13 @@ thead th:nth-child(2) {
 .badge-red { 
     background: #fee2e2; 
     color: #dc2626; 
+}
+
+.mono {
+  font-family: 'IBM Plex Mono', Consolas, monospace;
+  font-size: 11px;
+  color: #6b7280;
+  white-space: nowrap;
 }
 
 .empty { 

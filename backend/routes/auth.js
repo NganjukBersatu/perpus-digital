@@ -139,6 +139,16 @@ function wajibLoginGuru(req, res, next) {
   })
 }
 
+// Khusus melindungi endpoint yang hanya boleh diakses admin
+function wajibAdmin(req, res, next) {
+  wajibLogin(req, res, () => {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Endpoint ini khusus untuk admin' })
+    }
+    next()
+  })
+}
+
 // POST ganti password guru
 // Guru yang sedang login mengganti passwordnya sendiri.
 // Dipanggil baik saat wajib ganti password pertama kali, maupun ganti
@@ -165,4 +175,4 @@ router.post('/guru/ganti-password', wajibLoginGuru, async (req, res) => {
   }
 })
 
-module.exports = { router, wajibLogin, wajibLoginGuru }
+module.exports = { router, wajibLogin, wajibLoginGuru, wajibAdmin }

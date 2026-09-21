@@ -145,14 +145,9 @@ async function pilihBukuLamaDanSimpan(bukuTerpilih) {
 
     showPilihBukuLama.value = false
     bookNotFound.value = false
+    bukuBaruDitambah.value = true
 
-    router.push({
-      path: '/admin/pinjam',
-      query: {
-        barcode: barcode.value,
-        lanjut: 'pinjam'
-      }
-    })
+    await cariBuku(barcode.value) // tampilkan Step 2 (info buku)
   } catch (err) {
     console.error(err)
     scanError.value = "Gagal menambahkan eksemplar baru. Coba lagi."
@@ -164,12 +159,19 @@ async function pilihBukuLamaDanSimpan(bukuTerpilih) {
 async function lanjutDariQuery() {
   const kode = String(route.query.barcode || '').trim()
   const lanjutPinjam = route.query.lanjut === 'pinjam'
+  bukuBaruDitambah.value = route.query.baru === '1'
+  kembaliKeDataBuku.value = route.query.dari === 'data-buku'  
 
   if (!kode) return
 
   barcode.value = kode
   manualBarcode.value = kode
   await cariBuku(kode)
+
+   if (!bookData.value && /^(978|979)\d{10}$/.test(kode)) {
+    await cariBukuByIsbn(kode)
+    if (bookData.value) bookNotFound.value = false
+  }
 
   if (lanjutPinjam && bookData.value && bookData.value.status === 'tersedia') {
     currentStep.value = 3
@@ -188,6 +190,8 @@ async function lanjutDariQuery() {
 
 const bookData = ref(null)
 const bookNotFound = ref(false)
+const bukuBaruDitambah = ref(false)
+const kembaliKeDataBuku = ref(false)
 const isSaving = ref(false)
 const saveSuccess = ref(false)
 const fileInput = ref(null)
@@ -335,6 +339,7 @@ function resetHasilPindai() {
   queryJudulLama.value = ""
   hasilPencarianBuku.value = []
   showKonfirmasiKopiBaru.value = false
+  bukuBaruDitambah.value = false
 }
 
 async function siapkanDaftarKamera() {
@@ -347,6 +352,7 @@ async function siapkanDaftarKamera() {
     }
   } catch (err) {
     console.error(err)
+    scanError.value = `Gagal mendeteksi kamera: ${err.message || err.name || 'penyebab tidak diketahui'}`
   }
 }
 
@@ -398,23 +404,40 @@ async function mulaiPindai() {
     zxingControls = await zxingReader.decodeFromConstraints(
       {
         video: {
-         deviceId: { exact: selectedCameraId.value },
-         width: { ideal: 1280 },
-         height: { ideal: 720 },
+          deviceId: { exact: selectedCameraId.value },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
         },
       },
       scanVideoRef.value,
       (result) => {
-        // error "tidak ada barcode di frame ini" dilewati, itu normal
         if (result) handleKodeTerbaca(result.getText())
       }
     )
     mulaiFallbackOcr()
   } catch (err) {
-    console.error(err)
-    scanError.value =
-      "Kamera tidak bisa diakses. Pilih kamera Logitech di dropdown, izinkan kamera di browser, lalu coba lagi."
-    isScanning.value = false
+    console.error("Gagal pakai deviceId exact, coba fallback facingMode:", err)
+    try {
+      zxingControls = await zxingReader.decodeFromConstraints(
+        {
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        },
+        scanVideoRef.value,
+        (result) => {
+          if (result) handleKodeTerbaca(result.getText())
+        }
+      )
+      mulaiFallbackOcr()
+    } catch (err2) {
+      console.error(err2)
+      scanError.value =
+        "Kamera tidak bisa diakses. Izinkan kamera di browser, lalu coba lagi."
+      isScanning.value = false
+    }
   }
 }
 
@@ -490,6 +513,15 @@ async function isbnAdaDiKatalog(isbn) {
   } catch {
     return false
   }
+}
+
+let ocrWorker = null
+let ocrWorkerReady = false
+
+async function initOcrWorker() {
+  if (ocrWorkerReady) return
+  ocrWorker = await IsbnOcr.createTesseractWorker(() => {}, Tesseract)
+  ocrWorkerReady = true
 }
 
 // Baca baris "ISBN 978-xxx-xxxx-xx-x": bersih dari gangguan batang barcode
@@ -591,12 +623,38 @@ async function onScanSuccess(decodedText) {
   barcode.value = decodedText
   await hentikanPindai()
 
-  // 13 digit polos = ISBN dari barcode penerbit, bukan barcode eksemplar ("ISBN-002")
-  if (/^\d{13}$/.test(decodedText)) {
+  // Prefix 978/979 = Bookland EAN, ciri khas ISBN asli.
+  // Kode toko/penerbit lain (walau sama-sama 13 digit) tetap dicari lewat kolom barcode eksemplar.
+  if (/^(978|979)\d{10}$/.test(decodedText)) {
     await cariBukuByIsbn(decodedText)
     if (!bookData.value) bookNotFound.value = true
   } else {
     await cariBuku(decodedText)
+  }
+}
+
+async function cariBukuByIsbn(isbn) {
+  try {
+    const res = await fetch(`/api/buku/isbn/${isbn}`)
+    if (res.status === 404) {
+      bookNotFound.value = true
+      bookData.value = null
+      currentStep.value = 1
+      return
+    }
+    if (!res.ok) throw new Error("Gagal mengambil data buku")
+
+    bookData.value = await res.json()
+
+    const dipilih = bookData.value.eksemplarList?.find(
+      (ek) => ek.id === bookData.value.eksemplarId
+    )
+    barcode.value = dipilih?.barcode || isbn
+
+    currentStep.value = 2
+  } catch (err) {
+    console.error(err)
+    scanError.value = "Terjadi kesalahan saat mencari data buku."
   }
 }
 
@@ -615,121 +673,6 @@ async function handleFileUpload(e) {
   } finally {
     e.target.value = ""
   }
-}
-
-// ===== TAB OCR ISBN =====
-const ocrVideoRef = ref(null)
-const ocrReady = ref(false)
-const ocrButtonLabel = ref("Menyiapkan kamera...")
-const ocrResultText = ref("Arahkan kamera ke ISBN buku, lalu tekan tombol scan.")
-const showOcrManualFallback = ref(false)
-const ocrManualIsbn = ref("")
-
-let ocrWorker = null
-let ocrStream = null
-let ocrWorkerReady = false
-let ocrFailedAttempts = 0
-
-async function startOcrCamera() {
-  try {
-    ocrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-    if (ocrVideoRef.value) ocrVideoRef.value.srcObject = ocrStream
-  } catch (err) {
-    ocrResultText.value = "Tidak bisa akses kamera: " + err.message
-    showOcrManualFallback.value = true
-  }
-}
-
-async function initOcrWorker() {
-  if (ocrWorkerReady) {
-    ocrReady.value = true
-    return
-  }
-  ocrButtonLabel.value = "Menyiapkan mesin OCR..."
-  ocrWorker = await IsbnOcr.createTesseractWorker((status, progress) => {
-    if (status === "recognizing text") {
-      ocrButtonLabel.value = `Membaca... ${Math.round(progress * 100)}%`
-    }
-  }, Tesseract)
-  ocrWorkerReady = true
-  ocrButtonLabel.value = "Foto & Scan ISBN"
-  ocrReady.value = true
-}
-
-async function mulaiOcr() {
-  resetHasilPindai()
-  ocrResultText.value = "Arahkan kamera ke ISBN buku, lalu tekan tombol scan."
-  showOcrManualFallback.value = false
-  ocrFailedAttempts = 0
-  await startOcrCamera()
-  await initOcrWorker()
-}
-
-function hentikanOcr() {
-  if (ocrStream) {
-    ocrStream.getTracks().forEach((t) => t.stop())
-    ocrStream = null
-  }
-}
-
-async function handleOcrCapture() {
-  if (!ocrVideoRef.value || !ocrWorker) return
-  ocrReady.value = false
-  ocrResultText.value = "Membaca ISBN..."
-
-  const frame = IsbnOcr.captureFrameFromVideo(ocrVideoRef.value)
-  const { validCandidates, allCandidates } = await IsbnOcr.recognizeIsbnFromImage(ocrWorker, frame)
-
-  if (validCandidates.length > 0) {
-    const isbn = validCandidates[0]
-    ocrResultText.value = `Terdeteksi: ${isbn} — mencari di database...`
-    await cariBukuByIsbn(isbn)
-    ocrFailedAttempts = 0
-  } else {
-    ocrFailedAttempts++
-    ocrResultText.value =
-      allCandidates.length > 0
-        ? `Kemungkinan "${allCandidates[0]}" tapi checksum tidak cocok. Coba foto ulang lebih jelas.`
-        : "Tidak ada ISBN yang terbaca. Coba foto ulang."
-    if (ocrFailedAttempts >= 3) showOcrManualFallback.value = true
-  }
-
-  ocrButtonLabel.value = "Foto & Scan ISBN"
-  ocrReady.value = true
-}
-
-// Cocokkan ISBN ke data buku, isi bookData dengan cara yang sama seperti cariBuku().
-// Backend: GET /api/buku/isbn/:isbn (routes/bukuIsbn.js).
-async function cariBukuByIsbn(isbn) {
-  try {
-    const res = await fetch(`/api/buku/isbn/${isbn}`)
-    if (res.status === 404) {
-      ocrResultText.value = `ISBN ${isbn} terbaca, tapi belum ada di database katalog kamu.`
-      return
-    }
-    if (!res.ok) throw new Error("Gagal mengambil data buku")
-
-    bookData.value = await res.json()
-
-    // Backend sudah memilih eksemplar yang "tersedia" (fallback ke eksemplar
-    // pertama kalau semuanya dipinjam) — pakai eksemplarId & barcode itu.
-    const dipilih = bookData.value.eksemplarList?.find(
-      (ek) => ek.id === bookData.value.eksemplarId
-    )
-    barcode.value = dipilih?.barcode || isbn
-
-    ocrResultText.value = `ISBN ${isbn} terdeteksi — buku ditemukan.`
-    currentStep.value = 2
-  } catch (err) {
-    console.error(err)
-    ocrResultText.value = "Terjadi kesalahan saat mencari data buku."
-  }
-}
-
-async function cariBukuByIsbnManual() {
-  const isbn = ocrManualIsbn.value.trim()
-  if (!isbn) return
-  await cariBukuByIsbn(isbn)
 }
 
 // ===== PINJAMAN =====
@@ -785,6 +728,10 @@ async function simpanPeminjaman() {
     if (!res.ok) throw new Error("Gagal menyimpan peminjaman")
     saveSuccess.value = true
     resetForm()
+    if (kembaliKeDataBuku.value) {
+      kembaliKeDataBuku.value = false
+      router.push('/admin/data-buku')
+    }
   } catch (err) {
     console.error(err)
     scanError.value = "Gagal menyimpan data peminjaman. Coba lagi."
@@ -811,14 +758,13 @@ function resetForm() {
 
 function mulaiScanLagi() {
   saveSuccess.value = false
+  kembaliKeDataBuku.value = false  
   resetHasilPindai()
   activeTab.value = "kamera"
 }
 
 watch(activeTab, async (tab) => {
   if (tab !== "kamera" && isScanning.value) await hentikanPindai()
-  if (tab !== "ocr") hentikanOcr()
-  if (tab === "ocr") await mulaiOcr()
   if (currentStep.value === 1) {
     scanError.value = ""
     bookNotFound.value = false
@@ -827,7 +773,6 @@ watch(activeTab, async (tab) => {
 
 onBeforeUnmount(() => {
   hentikanPindai()
-  hentikanOcr()
   if (ocrWorker) ocrWorker.terminate()
 })
 </script>
@@ -879,13 +824,6 @@ onBeforeUnmount(() => {
               @click="activeTab = 'manual'"
             >
               Manual
-            </button>
-            <button
-              class="scan-tab"
-              :class="{ 'scan-tab--active': activeTab === 'ocr' }"
-              @click="activeTab = 'ocr'"
-            >
-              OCR ISBN
             </button>
           </div>
 
@@ -952,35 +890,6 @@ onBeforeUnmount(() => {
                   <button type="button" class="btn-cari-manual" @click="cariBukuManual">
                     Cari
                   </button>
-                </div>
-              </div>
-            </template>
-
-            <template v-else-if="activeTab === 'ocr'">
-              <div class="ocr-box">
-                <video ref="ocrVideoRef" autoplay playsinline class="ocr-video"></video>
-                <button
-                  class="primary-button"
-                  :disabled="!ocrReady"
-                  @click="handleOcrCapture"
-                >
-                  {{ ocrButtonLabel }}
-                </button>
-                <p class="ocr-result">{{ ocrResultText }}</p>
-
-                <div v-if="showOcrManualFallback" class="manual-input manual-input--inline">
-                  <label>OCR gagal membaca? Masukkan ISBN manual:</label>
-                  <div class="manual-input-row">
-                    <input
-                      v-model="ocrManualIsbn"
-                      type="text"
-                      placeholder="978602XXXXXXX"
-                      @keyup.enter="cariBukuByIsbnManual"
-                    />
-                    <button type="button" class="btn-cari-manual" @click="cariBukuByIsbnManual">
-                      Cari
-                    </button>
-                  </div>
                 </div>
               </div>
             </template>
@@ -1064,6 +973,11 @@ onBeforeUnmount(() => {
             Barcode berhasil ditemukan
           </div>
 
+          <div v-if="bukuBaruDitambah" class="success-message banner-buku-baru">
+            <span>✓</span>
+            Buku berhasil ditambahkan ke katalog. Kamu bisa scan buku lain atau lanjut ke peminjaman.
+          </div>
+
           <div class="book-card">
             <div class="book-card__top">
               <div class="book-title">
@@ -1124,7 +1038,9 @@ onBeforeUnmount(() => {
           </div>
 
           <div v-if="!showKonfirmasiKopiBaru" class="result-actions">
-            <button class="secondary-light-button" @click="mulaiScanLagi">Scan buku lain</button>
+            <button class="secondary-light-button" @click="mulaiScanLagi">
+              {{ bukuBaruDitambah ? "Selesai, scan buku lain" : "Scan buku lain" }}
+            </button>
             <button class="secondary-light-button" @click="bukaKonfirmasiKopiBaru">
               + Ini kopi baru
             </button>
@@ -1454,8 +1370,8 @@ button, input, select { font: inherit; }
 
 .scan-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
-  max-width: 560px;
+  grid-template-columns: 1fr 1fr 1fr;
+   max-width: 560px;
   margin: 0 auto 14px;
   padding: 3px;
   background: #f3f6fa;
@@ -2136,6 +2052,12 @@ button, input, select { font: inherit; }
   border-radius: 8px;
   font-size: 11px;
   font-weight: 650;
+}
+
+.banner-buku-baru {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  text-align: left;
 }
 
 @media (max-width: 700px) {

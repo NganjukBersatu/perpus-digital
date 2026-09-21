@@ -38,6 +38,10 @@ const emptyForm = () => ({
 })
 
 const form = ref(emptyForm())
+const isSaving = ref(false)
+const formError = ref('')
+const bukuTersimpan = ref(false)     // true setelah Simpan berhasil
+const kodeBukuTersimpan = ref('') 
 
 async function ambilDaftarKategori() {
   try {
@@ -62,15 +66,33 @@ async function ambilDataBuku() {
   }
 }
 
+function resetStatusModal() {
+  bukuTersimpan.value = false
+  kodeBukuTersimpan.value = ''
+  formError.value = ''
+  isSaving.value = false
+}
+
 function openTambah(barcodeAwal = '') {
   editingId.value = null
+  resetStatusModal()
   form.value = emptyForm()
-  if (barcodeAwal) form.value.barcode = barcodeAwal
+
+  const kode = typeof barcodeAwal === 'string' ? barcodeAwal.trim() : ''
+  if (kode) {
+    form.value.barcode = kode
+    form.value.stok = 1
+    form.value.tersedia = 1
+    const m = kode.match(/^((?:978|979)\d{10})(?:-\d+)?$/)
+    if (m) form.value.isbn = m[1]
+    // kalau tidak cocok (kode toko/penerbit non-ISBN), form.isbn dibiarkan kosong — sesuai desain baru
+  }
   showModal.value = true
 }
 
 function openEdit(buku) {
   editingId.value = buku.id
+  resetStatusModal()
   form.value = {
     judul: buku.judul,
     penulis: buku.penulis,
@@ -88,11 +110,21 @@ function openEdit(buku) {
 function closeModal() {
   showModal.value = false
   editingId.value = null
+  resetStatusModal()
+
+  // Bersihkan ?barcode=...&from=scan dari alamat, supaya refresh tidak membuka modal lagi
+  if (route.query.barcode || route.query.from) {
+    router.replace({ path: route.path, query: {} })
+  }
 }
 
+// Tombol "Simpan": hanya menyimpan data buku
 async function simpanBuku() {
+  if (bukuTersimpan.value) return          // cegah tersimpan dua kali (misalnya tekan Enter)
   if (!form.value.judul || !form.value.penulis) return
 
+  formError.value = ''
+  isSaving.value = true
   try {
     const isEdit = editingId.value !== null
     const url = isEdit ? `${API_URL}/${editingId.value}` : API_URL
@@ -103,29 +135,40 @@ async function simpanBuku() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(form.value),
     })
-
     if (!res.ok) throw new Error()
 
-    const dariScan = route.query.from === 'scan'
-    const barcodeScan = String(route.query.barcode || form.value.barcode || '').trim()
-
-    if (!isEdit && dariScan && barcodeScan) {
-      router.push({
-        path: '/admin/pinjam',
-        query: {
-          barcode: barcodeScan,
-          lanjut: 'pinjam'
-        }
-      })
-      return
-    }
-
     await ambilDataBuku()
-    closeModal()
+
+    if (isEdit) {
+      closeModal()
+    } else {
+      // Buku baru: modal tetap terbuka, tombol Pinjam diaktifkan
+      kodeBukuTersimpan.value =
+        String(form.value.barcode || '').trim() ||
+        String(form.value.isbn || '').replace(/\D/g, '')
+      bukuTersimpan.value = true
+    }
   } catch (err) {
     console.error(err)
-    errorMessage.value = 'Gagal menyimpan data buku'
+    formError.value = 'Gagal menyimpan data buku'
+  } finally {
+    isSaving.value = false
   }
+}
+
+// Tombol "Pinjam": hanya berpindah ke form peminjaman untuk buku yang sudah tersimpan
+function pinjamBuku() {
+  const kode = kodeBukuTersimpan.value
+  if (!bukuTersimpan.value || !kode) return
+
+  showModal.value = false
+  editingId.value = null
+  resetStatusModal()
+
+  router.push({
+    path: '/admin/pinjam',
+    query: { barcode: kode, lanjut: 'pinjam', dari: 'data-buku' },
+  })
 }
 
 function hapusBuku(buku) {
@@ -135,21 +178,26 @@ function hapusBuku(buku) {
 
 async function konfirmasiHapus() {
   if (!bukuToDelete.value) return
-  try {
-    const res = await fetch(`${API_URL}/${bukuToDelete.value.id}`, { method: 'DELETE' })
-    const data = await res.json()
 
-    if (!res.ok) {
-      errorMessage.value = data.error || 'Gagal menghapus buku'
-      return
-    }
+  try {
+    const res = await fetch(`${API_URL}/${bukuToDelete.value.id}`, {
+      method: 'DELETE',
+    })
+    if (!res.ok) throw new Error('Gagal menghapus buku')
+
+    showConfirmModal.value = false
+    bukuToDelete.value = null
 
     await ambilDataBuku()
+
+    if (pagedList.value.length === 0 && currentPage.value > 1) {
+      currentPage.value--
+    }
   } catch (err) {
     console.error(err)
-    errorMessage.value = 'Gagal menghapus buku'
-  } finally {
-    batalHapus()
+    errorMessage.value = 'Gagal menghapus buku. Coba lagi.'
+    showConfirmModal.value = false
+    bukuToDelete.value = null
   }
 }
 
@@ -163,9 +211,10 @@ const filteredList = computed(() => {
   return bukuList.value.filter((b) => {
     const matchSearch =
       !q ||
-      b.judul.toLowerCase().includes(q) ||
+      (b.judul || '').toLowerCase().includes(q) ||
       (b.penulis || '').toLowerCase().includes(q) ||
-      (b.isbn || '').toLowerCase().includes(q)
+      (b.isbn || '').toLowerCase().includes(q) ||
+      (b.barcode || '').toLowerCase().includes(q)
     const matchKategori = !selectedKategori.value || b.kategori === selectedKategori.value
     const matchStatus = !selectedStatus.value || b.status === selectedStatus.value
     return matchSearch && matchKategori && matchStatus
@@ -270,7 +319,7 @@ onUnmounted(() => {
         </span>
         <input
           v-model="searchQuery"
-          placeholder="Cari judul, penulis, atau ISBN..."
+          placeholder="Cari judul, penulis, ISBN, atau barcode..."
           class="search"
           @input="resetPage"
         />
@@ -326,7 +375,7 @@ onUnmounted(() => {
             <th>Judul Buku</th>
             <th>Penulis</th>
             <th>Kategori</th>
-            <th>ISBN</th>
+            <th>Kode Buku</th>
             <th>Stok</th>
             <th>Tersedia</th>
             <th>Lokasi</th>
@@ -340,7 +389,12 @@ onUnmounted(() => {
             <td class="judul">{{ b.judul }}</td>
             <td>{{ b.penulis }}</td>
             <td>{{ b.kategori }}</td>
-            <td>{{ b.isbn }}</td>
+            <td>
+             <span class="kode-buku">
+             <span class="kode-buku__label">{{ b.isbn ? 'ISBN' : 'Barcode' }}</span>
+             <span class="kode-buku__nilai">{{ b.isbn || b.barcode || '-' }}</span>
+           </span>
+           </td>
             <td>{{ b.stok }}</td>
             <td>{{ b.tersedia }}</td>
             <td>{{ b.lokasi }}</td>
@@ -408,7 +462,7 @@ onUnmounted(() => {
       <div class="modal-box">
         <div class="modal-header">
           <h2>{{ editingId !== null ? 'Edit Buku' : 'Tambah Buku' }}</h2>
-          <button class="icon-btn" type="button" @click="closeModal">✕</button>
+          <button class="icon-btn" type="button" @click="closeModal" title="Tutup" aria-label="Tutup">✕</button>
         </div>
 
         <form class="modal-form" @submit.prevent="simpanBuku">
@@ -442,9 +496,9 @@ onUnmounted(() => {
           </div>
 
           <div class="form-group">
-            <label>ISBN</label>
-            <input v-model="form.isbn" type="text" required placeholder="978-xxx-xxxx-xx-x" />
-          </div>
+  <label>ISBN (opsional)</label>
+  <input v-model="form.isbn" type="text" placeholder="978-xxx-xxxx-xx-x — kosongkan jika tidak ada" />
+</div>
 
           <div class="form-group" v-if="editingId === null">
             <label>Barcode</label>
@@ -468,13 +522,33 @@ onUnmounted(() => {
             <input v-model="form.lokasi" type="text" required placeholder="Contoh: Rak T-01" />
           </div>
 
-          <div class="modal-actions">
-            <button type="button" class="btn-batal" @click="closeModal">Kembali</button>
-            <button type="submit" class="btn-simpan">{{ editingId !== null ? 'Update' : 'Simpan' }}</button>
-          </div>
-        </form>
-      </div>
-    </div>
+          
+<div v-if="formError" class="form-error">{{ formError }}</div>
+<div v-if="bukuTersimpan" class="form-sukses">
+  ✓ Buku sudah tersimpan. Klik "Pinjam" untuk lanjut ke form peminjaman.
+</div>
+<div v-if="bukuTersimpan && Number(form.tersedia) < 1" class="form-error">
+  Kolom "Tersedia" masih 0, jadi buku ini belum bisa dipinjam.
+</div>
+
+<div class="modal-actions">
+  <button
+    v-if="editingId === null"
+    type="button"
+    class="btn-simpan btn-simpan--outline"
+    :disabled="!bukuTersimpan || Number(form.tersedia) < 1"
+    @click="pinjamBuku"
+  >
+    Pinjam
+  </button>
+
+  <button type="submit" class="btn-simpan" :disabled="isSaving || bukuTersimpan">
+    {{ bukuTersimpan ? 'Tersimpan ✓' : (editingId !== null ? 'Update' : 'Simpan') }}
+  </button>
+</div>
+</form>
+</div>
+</div>
 
     <div v-if="showConfirmModal" class="modal-overlay" @click.self="batalHapus">
       <div class="confirm-box">
@@ -746,6 +820,30 @@ tbody tr:hover { background: #f9fafb; }
   color: #111827;
 }
 
+.kode-buku {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.kode-buku__label {
+  display: inline-block;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #1d4ed8;
+  background: #dbeafe;
+  border-radius: 4px;
+}
+
+.kode-buku__nilai {
+  font-family: 'IBM Plex Mono', Consolas, monospace;
+  font-size: 12px;
+  color: #374151;
+}
+
 .cover {
   width: 36px;
   height: 48px;
@@ -871,6 +969,33 @@ tbody tr:hover { background: #f9fafb; }
   margin: 0;
 }
 
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  color: #4b5563;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.icon-btn:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.icon-btn:active {
+  background: #e5e7eb;
+  transform: scale(0.95);
+}
+
 .modal-form {
   display: flex;
   flex-direction: column;
@@ -939,6 +1064,32 @@ tbody tr:hover { background: #f9fafb; }
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+}
+
+.btn-simpan--outline {
+  background: #fff;
+  color: #5b4dff;
+  border: 1px solid #5b4dff;
+}
+.btn-simpan:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.form-error {
+  font-size: 12px;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.form-sukses {
+  font-size: 12px;
+  color: #047857;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+  padding: 8px 12px;
 }
 
 .confirm-box {

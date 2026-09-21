@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { authHeaders } from '@/utils/auth'
 
 const daftar = ref([])
 const isLoading = ref(true)
@@ -72,7 +73,7 @@ async function muatData() {
       )
     }
 
-    const res = await fetch(url)
+    const res = await fetch(url, { headers: authHeaders() })
 
     if (!res.ok) {
       throw new Error('response not ok')
@@ -151,6 +152,7 @@ async function tandaiDikembalikan(item) {
       `http://localhost:3000/api/peminjaman/${item.id}/kembalikan`,
       {
         method: 'PATCH',
+        headers: authHeaders(),
       }
     )
 
@@ -184,7 +186,7 @@ async function perpanjangPeminjaman(item) {
   try {
     const res = await fetch(
       `http://localhost:3000/api/peminjaman/${item.id}/perpanjang`,
-      { method: 'PATCH' }
+      { method: 'PATCH', headers: authHeaders() }
     )
 
     if (!res.ok) {

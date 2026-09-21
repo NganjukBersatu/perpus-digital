@@ -6,6 +6,7 @@ import { DecodeHintType, BarcodeFormat } from "@zxing/library"
 import { useRouter, useRoute } from "vue-router"
 import IsbnOcr from "../../utils/isbn-ocr.js" // sesuaikan path relatif ke folder utils/ kamu
 import Tesseract from "tesseract.js"
+import { authHeaders, jsonHeaders } from "../../utils/auth"
 
 const notFoundMessageRef = ref(null)
 const activeTab = ref("kamera")
@@ -25,7 +26,7 @@ async function cariBukuManual() {
 
 async function cariBuku(kodeBarcode) {
   try {
-    const res = await fetch(`/api/eksemplar-buku/${kodeBarcode}`)
+    const res = await fetch(`/api/eksemplar-buku/${kodeBarcode}`, { headers: authHeaders() })
     if (res.status === 404) {
       bookNotFound.value = true
       bookData.value = null
@@ -77,7 +78,7 @@ async function konfirmasiTambahKopiBaru() {
   try {
     const res = await fetch(`/api/buku/${bookData.value.bukuId}/eksemplar`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonHeaders(),
       body: JSON.stringify({ barcode: barcode.value }),
     })
     if (!res.ok) throw new Error("Gagal menambah eksemplar")
@@ -123,7 +124,7 @@ async function cariBukuLama() {
   }
   isSearchingBuku.value = true
   try {
-    const res = await fetch(`/api/buku?q=${encodeURIComponent(q)}`)
+    const res = await fetch(`/api/buku?q=${encodeURIComponent(q)}`, { headers: authHeaders() })
     if (res.ok) hasilPencarianBuku.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -138,7 +139,7 @@ async function pilihBukuLamaDanSimpan(bukuTerpilih) {
   try {
     const res = await fetch(`/api/buku/${bukuTerpilih.id}/eksemplar`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonHeaders(),
       body: JSON.stringify({ barcode: barcode.value }),
     })
     if (!res.ok) throw new Error("Gagal menambah eksemplar")
@@ -256,7 +257,7 @@ const filteredKelas = computed(() => {
 
 async function ambilDaftarKelas() {
   try {
-    const res = await fetch("/api/kelas")
+    const res = await fetch("/api/kelas", { headers: authHeaders() })
     if (res.ok) daftarKelas.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -265,7 +266,7 @@ async function ambilDaftarKelas() {
 
 async function ambilDaftarGuru() {
   try {
-    const res = await fetch("http://localhost:3000/api/guru")
+    const res = await fetch("http://localhost:3000/api/guru", { headers: authHeaders() })
     if (res.ok) daftarGuru.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -512,7 +513,7 @@ function pulihkanIsbn(teks, maksHapus = 4) {
 
 async function isbnAdaDiKatalog(isbn) {
   try {
-    const res = await fetch(`/api/buku/isbn/${isbn}`)
+    const res = await fetch(`/api/buku/isbn/${isbn}`, { headers: authHeaders() })
     return res.ok
   } catch {
     return false
@@ -729,7 +730,7 @@ async function handleOcrCapture() {
 // Backend: GET /api/buku/isbn/:isbn (routes/bukuIsbn.js).
 async function cariBukuByIsbn(isbn) {
   try {
-    const res = await fetch(`/api/buku/isbn/${isbn}`)
+    const res = await fetch(`/api/buku/isbn/${isbn}`, { headers: authHeaders() })
     if (res.status === 404) {
       ocrResultText.value = `ISBN ${isbn} terbaca, tapi belum ada di database katalog kamu.`
       return
@@ -797,7 +798,7 @@ async function simpanPeminjaman() {
   try {
     const res = await fetch("/api/peminjaman", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonHeaders(),
       body: JSON.stringify({
         eksemplarId: bookData.value.eksemplarId,
         nama: peminjam.value.nama,

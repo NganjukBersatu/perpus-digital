@@ -6,6 +6,7 @@ import { DecodeHintType, BarcodeFormat } from "@zxing/library"
 import { useRouter, useRoute } from "vue-router"
 import IsbnOcr from "../../utils/isbn-ocr.js" // sesuaikan path relatif ke folder utils/ kamu
 import Tesseract from "tesseract.js"
+import { authHeaders, jsonHeaders } from "../../utils/auth"
 
 const notFoundMessageRef = ref(null)
 const activeTab = ref("kamera")
@@ -96,7 +97,7 @@ function resetPencarianJudulManual() {
 
 async function cariBuku(kodeBarcode) {
   try {
-    const res = await fetch(`/api/eksemplar-buku/${kodeBarcode}`)
+    const res = await fetch(`/api/eksemplar-buku/${kodeBarcode}`, { headers: authHeaders() })
     if (res.status === 404) {
       bookNotFound.value = true
       bookData.value = null
@@ -148,7 +149,7 @@ async function konfirmasiTambahKopiBaru() {
   try {
     const res = await fetch(`/api/buku/${bookData.value.bukuId}/eksemplar`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonHeaders(),
       body: JSON.stringify({ barcode: barcode.value }),
     })
     if (!res.ok) throw new Error("Gagal menambah eksemplar")
@@ -194,7 +195,7 @@ async function cariBukuLama() {
   }
   isSearchingBuku.value = true
   try {
-    const res = await fetch(`/api/buku?q=${encodeURIComponent(q)}`)
+    const res = await fetch(`/api/buku?q=${encodeURIComponent(q)}`, { headers: authHeaders() })
     if (res.ok) hasilPencarianBuku.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -209,7 +210,7 @@ async function pilihBukuLamaDanSimpan(bukuTerpilih) {
   try {
     const res = await fetch(`/api/buku/${bukuTerpilih.id}/eksemplar`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonHeaders(),
       body: JSON.stringify({ barcode: barcode.value }),
     })
     if (!res.ok) throw new Error("Gagal menambah eksemplar")
@@ -291,6 +292,32 @@ const peminjam = ref({
 
 const daftarGuru = ref([])
 
+// ⬇️ TAMBAHAN: state pengaturan peminjaman (durasiSiswa & durasiGuru)
+const pengaturanPinjam = ref(null)
+
+async function ambilPengaturanPinjam() {
+  try {
+    const res = await fetch("/api/pengaturan")
+    if (!res.ok) return
+    const data = await res.json()
+    pengaturanPinjam.value = data?.detail?.peminjaman || null
+  } catch (err) {
+    console.error(err)
+  }
+}
+
+// hitung otomatis tanggal kembali
+const tanggalKembaliOtomatis = computed(() => {
+  if (!peminjam.value.tanggalPinjam) return ""
+  const durasi =
+    tipePeminjam.value === "guru"
+      ? (pengaturanPinjam.value?.durasiGuru ?? 14)
+      : (pengaturanPinjam.value?.durasiSiswa ?? 7)
+  const tgl = new Date(peminjam.value.tanggalPinjam)
+  tgl.setDate(tgl.getDate() + durasi)
+  return tgl.toISOString().slice(0, 10)
+})
+
 // ===== COMBOBOX KELAS =====
 const daftarKelas = ref([])
 const kelasQuery = ref("")
@@ -305,7 +332,7 @@ const filteredKelas = computed(() => {
 
 async function ambilDaftarKelas() {
   try {
-    const res = await fetch("/api/kelas")
+    const res = await fetch("/api/kelas", { headers: authHeaders() })
     if (res.ok) daftarKelas.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -314,7 +341,7 @@ async function ambilDaftarKelas() {
 
 async function ambilDaftarGuru() {
   try {
-    const res = await fetch("http://localhost:3000/api/guru")
+    const res = await fetch("http://localhost:3000/api/guru", { headers: authHeaders() })
     if (res.ok) daftarGuru.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -431,6 +458,7 @@ onMounted(async () => {
   siapkanDaftarKamera()
   ambilDaftarKelas()
   ambilDaftarGuru()
+  ambilPengaturanPinjam() 
   await lanjutDariQuery()
 })
 
@@ -579,7 +607,7 @@ function pulihkanIsbn(teks, maksHapus = 4) {
 
 async function isbnAdaDiKatalog(isbn) {
   try {
-    const res = await fetch(`/api/buku/isbn/${isbn}`)
+    const res = await fetch(`/api/buku/isbn/${isbn}`, { headers: authHeaders() })
     return res.ok
   } catch {
     return false
@@ -706,7 +734,7 @@ async function onScanSuccess(decodedText) {
 
 async function cariBukuByIsbn(isbn) {
   try {
-    const res = await fetch(`/api/buku/isbn/${isbn}`)
+    const res = await fetch(`/api/buku/isbn/${isbn}`, { headers: authHeaders() })
     if (res.status === 404) {
       bookNotFound.value = true
       bookData.value = null
@@ -772,8 +800,8 @@ async function simpanPeminjaman() {
     }
   }
 
-  if (!peminjam.value.tanggalPinjam || !peminjam.value.tanggalKembali) {
-    scanError.value = "Tanggal pinjam dan tanggal kembali wajib diisi."
+  if (!peminjam.value.tanggalPinjam) {
+    scanError.value = "Tanggal pinjam wajib diisi."
     return
   }
 
@@ -784,19 +812,28 @@ async function simpanPeminjaman() {
   try {
     const res = await fetch("/api/peminjaman", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonHeaders(),
       body: JSON.stringify({
         eksemplarId: bookData.value.eksemplarId,
         nama: peminjam.value.nama,
         kelas: tipePeminjam.value === "siswa" ? peminjam.value.kelas : null,
         tanggalPinjam: peminjam.value.tanggalPinjam,
-        tanggalKembali: peminjam.value.tanggalKembali,
+        tanggalKembali: peminjam.value.tanggalKembali || undefined,
         tipePeminjam: tipePeminjam.value,
         anggotaId: tipePeminjam.value === "guru" ? peminjam.value.anggotaId : null,
       }),
     })
 
-    if (!res.ok) throw new Error("Gagal menyimpan peminjaman")
+    if (!res.ok) {
+      // Ambil pesan asli dari backend
+      let pesanBackend = "Gagal menyimpan peminjaman"
+      try {
+        const errBody = await res.json()
+        pesanBackend = errBody.message || errBody.error || pesanBackend
+      } catch { /* biarkan pakai pesan default */ }
+      throw new Error(pesanBackend)
+    }
+
     saveSuccess.value = true
     resetForm()
     if (kembaliKeDataBuku.value) {
@@ -805,7 +842,7 @@ async function simpanPeminjaman() {
     }
   } catch (err) {
     console.error(err)
-    scanError.value = "Gagal menyimpan data peminjaman. Coba lagi."
+    scanError.value = err.message || "Gagal menyimpan data peminjaman. Coba lagi."
   } finally {
     isSaving.value = false
   }
@@ -1392,10 +1429,23 @@ onBeforeUnmount(() => {
             </label>
 
             <label class="field">
-              <span>Tanggal kembali</span>
+              <span>
+                Tanggal kembali
+                <small class="field-note">(kosongkan untuk pakai durasi otomatis)</small>
+              </span>
               <div class="input-wrapper">
-                <input v-model="peminjam.tanggalKembali" type="date" required />
+                <input
+                  v-model="peminjam.tanggalKembali"
+                  type="date"
+                  :min="peminjam.tanggalPinjam"
+                />
               </div>
+              <small
+                v-if="!peminjam.tanggalKembali && tanggalKembaliOtomatis"
+                class="field-hint"
+              >
+                Otomatis: {{ tanggalKembaliOtomatis }} ({{ tipePeminjam === 'guru' ? pengaturanPinjam?.durasiGuru ?? 14 : pengaturanPinjam?.durasiSiswa ?? 7 }} hari)
+              </small>
             </label>
           </div>
 
@@ -2275,6 +2325,26 @@ button, input, select { font: inherit; }
   background: white;
   border-color: var(--blue);
   box-shadow: 0 0 0 3px rgba(40, 100, 232, 0.1);
+}
+
+.input-readonly {
+  background: #eef2f7 !important;
+  color: #718096 !important;
+  cursor: not-allowed;
+}
+
+.field-note {
+  font-weight: 400;
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #718096;
+  line-height: 1.4;
 }
 
 .kelas-dropdown {

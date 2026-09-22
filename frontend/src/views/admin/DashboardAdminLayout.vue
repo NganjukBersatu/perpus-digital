@@ -44,7 +44,7 @@ const totalNotifikasi = computed(() => {
   return notifikasi.value.terlambat.jumlah + notifikasi.value.jatuhTempoHariIni.jumlah
 })
 
-const NOTIF_STORAGE_KEY = 'notifikasi_waktu_terakhir'
+const NOTIF_STORAGE_KEY = `notifikasi_admin_${getAdmin()?.id || 'guest'}`
 
 function muatWaktuTersimpan() {
   try {
@@ -69,7 +69,7 @@ let jumlahTerakhirDiketahui = null
 
 async function fetchNotifikasi() {
   try {
-    const res = await fetch('http://localhost:3000/api/dashboard/notifikasi')
+    const res = await fetch('http://localhost:3000/api/dashboard/notifikasi', { headers: authHeaders() })
     const data = await res.json()
     const sekarang = new Date().toISOString()
 
@@ -215,7 +215,7 @@ function onSearchInput() {
 
   searchTimeout = setTimeout(async () => {
     try {
-      const res = await fetch(`http://localhost:3000/api/search?q=${encodeURIComponent(q)}`)
+      const res = await fetch(`http://localhost:3000/api/search?q=${encodeURIComponent(q)}`, { headers: authHeaders() })
       searchResults.value = await res.json()
       searchOpen.value = true
     } catch (err) {

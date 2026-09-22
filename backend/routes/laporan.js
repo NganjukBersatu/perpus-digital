@@ -34,7 +34,8 @@ router.get('/', async (req, res) => {
       totalPengembalian: rows.filter((r) => r.tanggalDikembalikan).length,
       totalTerlambat: rows.filter(
         (r) => r.tanggalDikembalikan && r.tanggalKembali &&
-          new Date(r.tanggalDikembalikan) > new Date(r.tanggalKembali)
+          new Date(r.tanggalDikembalikan) > new Date(r.tanggalKembali) &&
+          (r.denda || 0) > 0
       ).length,
       totalDenda: rows.reduce((sum, r) => sum + (r.denda || 0), 0),
     }

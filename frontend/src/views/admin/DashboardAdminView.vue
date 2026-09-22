@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, watch, computed } from 'vue'
+import { authHeaders } from '@/utils/auth'
 
 
 const now = new Date()
@@ -118,7 +119,8 @@ const dikembalikanPoints = computed(() =>
 async function muatStatistikPeminjaman() {
   try {
     const res = await fetch(
-      `http://localhost:3000/api/dashboard/statistik-peminjaman?range=${selectedRange.value}`
+      `http://localhost:3000/api/dashboard/statistik-peminjaman?range=${selectedRange.value}`,
+      { headers: authHeaders() }
     )
     const data = await res.json()
 
@@ -157,7 +159,7 @@ let searchBukuTerpopulerTimeout = null
 
 async function fetchKategoriBuku() {
   try {
-    const res = await fetch('http://localhost:3000/api/buku/kategori')
+    const res = await fetch('http://localhost:3000/api/buku/kategori', { headers: authHeaders() })
     kategoriBukuList.value = await res.json()
   } catch (err) {
     console.error('Gagal mengambil kategori buku', err)
@@ -171,7 +173,7 @@ async function fetchBukuTerpopulerLengkap() {
       kategori: kategoriFilterBuku.value,
       search: searchBukuTerpopuler.value,
     })
-    const res = await fetch(`http://localhost:3000/api/dashboard/buku-terpopuler-lengkap?${params}`)
+    const res = await fetch(`http://localhost:3000/api/dashboard/buku-terpopuler-lengkap?${params}`, { headers: authHeaders() })
     bukuTerpopulerLengkap.value = await res.json()
   } catch (err) {
     console.error('Gagal mengambil buku terpopuler lengkap', err)
@@ -234,7 +236,7 @@ const tampilkanTotalBelumDikembalikan = ref(false)
 
 async function fetchTotalDenda() {
   try {
-    const res = await fetch('http://localhost:3000/api/denda')
+    const res = await fetch('http://localhost:3000/api/denda', { headers: authHeaders() })
     const data = await res.json()
     totalDenda.value = `Rp${(data.totalBelumDibayar || 0).toLocaleString('id-ID')}`
   } catch (err) {
@@ -244,7 +246,7 @@ async function fetchTotalDenda() {
 
 async function fetchStats() {
   try {
-    const res = await fetch('http://localhost:3000/api/dashboard/stats')
+    const res = await fetch('http://localhost:3000/api/dashboard/stats', { headers: authHeaders() })
     if (!res.ok) throw new Error('response not ok')
     const data = await res.json()
 
@@ -263,7 +265,7 @@ async function fetchPeminjamanTerbaru(hari) {
     const url = hari
       ? `http://localhost:3000/api/dashboard/peminjaman-terbaru?hari=${hari}`
       : 'http://localhost:3000/api/dashboard/peminjaman-terbaru'
-    const res = await fetch(url)
+    const res = await fetch(url, { headers: authHeaders() })
     peminjamanTerbaru.value = await res.json()
   } catch (err) {
     console.error('Gagal mengambil peminjaman terbaru', err)
@@ -272,7 +274,7 @@ async function fetchPeminjamanTerbaru(hari) {
 
 async function fetchPeminjamanBelumKembali() {
   try {
-    const res = await fetch('http://localhost:3000/api/dashboard/peminjaman-belum-kembali')
+    const res = await fetch('http://localhost:3000/api/dashboard/peminjaman-belum-kembali', { headers: authHeaders() })
     peminjamanBelumKembali.value = await res.json()
   } catch (err) {
     console.error('Gagal mengambil peminjaman belum kembali', err)
@@ -281,7 +283,7 @@ async function fetchPeminjamanBelumKembali() {
 
 async function fetchBukuTerpopuler() {
   try {
-    const res = await fetch('http://localhost:3000/api/dashboard/buku-terpopuler')
+    const res = await fetch('http://localhost:3000/api/dashboard/buku-terpopuler', { headers: authHeaders() })
     bukuTerpopuler.value = await res.json()
   } catch (err) {
     console.error('Gagal mengambil buku terpopuler', err)
@@ -293,7 +295,7 @@ const tampilkanJatuhTempoHariIni = ref(false)
 
 async function fetchPengingat() {
   try {
-    const res = await fetch('http://localhost:3000/api/dashboard/pengingat')
+    const res = await fetch('http://localhost:3000/api/dashboard/pengingat', { headers: authHeaders() })
     const data = await res.json()
     pengingat.value = data.daftar
     totalBelumDikembalikan.value = data.totalBelumDikembalikan
@@ -306,7 +308,8 @@ async function fetchPengingat() {
 async function kembalikanBuku(id) {
   try {
     const res = await fetch(`http://localhost:3000/api/peminjaman/${id}/kembalikan`, {
-      method: 'PATCH'
+      method: 'PATCH',
+      headers: authHeaders(),
     })
     if (!res.ok) {
       const err = await res.json()

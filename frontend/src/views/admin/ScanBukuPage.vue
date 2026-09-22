@@ -23,6 +23,77 @@ async function cariBukuManual() {
   await cariBuku(kode)
 }
 
+const metodeManual = ref(null) // null | 'kode' | 'judul'
+
+function pilihMetode(metode) {
+  metodeManual.value = metode
+  scanError.value = ""
+}
+
+// ===== CARI BUKU BERDASARKAN JUDUL (untuk buku tanpa barcode) =====
+const queryJudulManual = ref("")
+const hasilJudulManual = ref([])
+const isSearchingJudulManual = ref(false)
+let debounceTimerManual = null
+
+function onQueryJudulManualInput() {
+  clearTimeout(debounceTimerManual)
+  debounceTimerManual = setTimeout(cariJudulManual, 300)
+}
+
+async function cariJudulManual() {
+  const q = queryJudulManual.value.trim()
+  if (!q) {
+    hasilJudulManual.value = []
+    return
+  }
+  isSearchingJudulManual.value = true
+  try {
+    const res = await fetch(`/api/buku?q=${encodeURIComponent(q)}`)
+    if (res.ok) hasilJudulManual.value = await res.json()
+  } catch (err) {
+    console.error(err)
+  } finally {
+    isSearchingJudulManual.value = false
+  }
+}
+
+async function pilihBukuDariJudul(bukuTerpilih) {
+  scanError.value = ""
+  try {
+    const res = await fetch(`/api/buku/${bukuTerpilih.id}/untuk-pinjam`)
+    if (res.status === 404) {
+      scanError.value = "Buku ini belum punya eksemplar yang bisa dipinjam."
+      return
+    }
+    if (!res.ok) throw new Error()
+
+    bookData.value = await res.json()
+    barcode.value =
+      bookData.value.eksemplarList?.find((ek) => ek.id === bookData.value.eksemplarId)?.barcode || ""
+    bookNotFound.value = false
+    currentStep.value = 2
+  } catch (err) {
+    console.error(err)
+    scanError.value = "Terjadi kesalahan saat mengambil data buku."
+  }
+}
+
+// ===== TAMBAH BUKU BARU DARI TAB MANUAL (hasil pencarian judul kosong) =====
+function tambahBukuDariJudulManual() {
+  const judul = queryJudulManual.value.trim()
+  if (!judul) return
+  router.push({
+    path: '/admin/data-buku',
+    query: { judul, from: 'pinjam-judul' }
+  })
+}
+
+function resetPencarianJudulManual() {
+  queryJudulManual.value = ''
+  hasilJudulManual.value = []
+}
+
 async function cariBuku(kodeBarcode) {
   try {
     const res = await fetch(`/api/eksemplar-buku/${kodeBarcode}`)
@@ -781,8 +852,8 @@ onBeforeUnmount(() => {
   <div class="scan-page">
     <div class="page-header">
       <div>
-        <h1>Scan Buku</h1>
-        <p>Scan barcode buku untuk memulai proses peminjaman.</p>
+        <h1> Mulai Pinjam</h1>
+        <p>Proses peminjaman buku dalam beberapa langkah mudah.</p>
       </div>
     </div>
 
@@ -799,8 +870,8 @@ onBeforeUnmount(() => {
 
         <div class="scan-box">
           <div class="scan-box__intro">
-            <h2>Scan barcode buku</h2>
-            <p>Gunakan kamera atau unggah foto barcode buku.</p>
+            <h2>Cari Buku</h2>
+            <p>Temukan dan pinjam buku yang kamu butuhkan.</p>
           </div>
 
           <div class="scan-tabs">
@@ -876,9 +947,43 @@ onBeforeUnmount(() => {
               <div id="reader" class="reader-hidden"></div>
             </template>
 
-            <template v-else-if="activeTab === 'manual'">
-              <div class="manual-input manual-input--inline">
-                <label for="manual-barcode">Masukkan barcode secara manual</label>
+                        <template v-else-if="activeTab === 'manual'">
+              <div class="metode-pilih">
+                
+                <div class="metode-grid">
+                  <button
+                    type="button"
+                    class="metode-card"
+                    :class="{ 'metode-card--aktif': metodeManual === 'kode' }"
+                    @click="pilihMetode('kode')"
+                  >
+                    <svg class="metode-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="5" width="2" height="14" />
+                      <rect x="7" y="5" width="1" height="14" />
+                      <rect x="10" y="5" width="3" height="14" />
+                      <rect x="15" y="5" width="1" height="14" />
+                      <rect x="18" y="5" width="2" height="14" />
+                    </svg>
+                    <span>Ketik kode</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="metode-card"
+                    :class="{ 'metode-card--aktif': metodeManual === 'judul' }"
+                    @click="pilihMetode('judul')"
+                  >
+                    <svg class="metode-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5v-15Z" />
+                      <path d="M4 17.5A2.5 2.5 0 0 1 6.5 15H20" />
+                    </svg>
+                    <span>Cari judul</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- MODE: KETIK KODE -->
+              <div v-if="metodeManual === 'kode'" class="manual-input manual-input--inline">
                 <div class="manual-input-row">
                   <input
                     id="manual-barcode"
@@ -892,8 +997,65 @@ onBeforeUnmount(() => {
                   </button>
                 </div>
               </div>
-            </template>
-          </div>
+
+              <!-- MODE: CARI JUDUL -->
+              <div v-else-if="metodeManual === 'judul'" class="manual-input manual-input--inline">
+                <div class="manual-input-row">
+                  <input
+                    id="manual-judul"
+                    v-model="queryJudulManual"
+                    type="text"
+                    placeholder="Ketik judul buku..."
+                    @input="onQueryJudulManualInput"
+                  />
+                </div>
+
+                <p v-if="isSearchingJudulManual" class="manual-status">Mencari...</p>
+
+                <ul v-if="hasilJudulManual.length" class="manual-result-list">
+                  <li
+                    v-for="b in hasilJudulManual"
+                    :key="b.id"
+                    class="manual-result-item"
+                    @click="pilihBukuDariJudul(b)"
+                  >
+                    <span class="manual-result-item__avatar">{{ b.judul?.charAt(0)?.toUpperCase() }}</span>
+                    <div class="manual-result-item__body">
+                      <strong>{{ b.judul }}</strong>
+                      <span class="manual-result-item__penulis">{{ b.penulis }}</span>
+                    </div>
+                    <span
+                      class="manual-result-item__stok"
+                      :class="{ 'manual-result-item__stok--habis': b.tersedia === 0 }"
+                    >
+                      {{ b.tersedia }}/{{ b.stok }}
+                    </span>
+                  </li>
+                </ul>
+<div v-else-if="queryJudulManual && !isSearchingJudulManual" class="manual-not-found">
+  <p class="manual-not-found__text">
+    Tidak ada judul yang cocok dengan
+    <strong>"{{ queryJudulManual }}"</strong>.
+  </p>
+  <div class="manual-not-found__actions">
+    <button
+      type="button"
+      class="btn-tambah-buku-dari-judul"
+      @click="tambahBukuDariJudulManual"
+    >
+      + Ini buku baru
+    </button>
+    <button
+      type="button"
+      class="btn-cari-ulang"
+      @click="resetPencarianJudulManual"
+    >
+      Cari ulang
+    </button>
+  </div>
+</div>
+</div>
+</template>
 
           <div v-if="scanError" class="message message--error">
             <div class="message__icon">!</div>
@@ -955,6 +1117,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </div>
+      </div>
       </section>
 
       <!-- STEP 2 : INFORMASI BUKU -->
@@ -1039,7 +1202,7 @@ onBeforeUnmount(() => {
 
           <div v-if="!showKonfirmasiKopiBaru" class="result-actions">
             <button class="secondary-light-button" @click="mulaiScanLagi">
-              {{ bukuBaruDitambah ? "Selesai, scan buku lain" : "Scan buku lain" }}
+              {{ bukuBaruDitambah ? "Selesai, scan buku lain" : "Cari buku lain" }}
             </button>
             <button class="secondary-light-button" @click="bukaKonfirmasiKopiBaru">
               + Ini kopi baru
@@ -1460,6 +1623,146 @@ button, input, select { font: inherit; }
 .manual-input-row input:focus {
   border-color: var(--blue);
   box-shadow: 0 0 0 3px rgba(40, 100, 232, 0.1);
+}
+.manual-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 16px 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.metode-pilih {
+  padding: 4px 0 18px;
+}
+.metode-pilih__judul {
+  margin: 0 0 12px;
+  color: var(--navy);
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.metode-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.metode-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 12px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.metode-card:hover {
+  border-color: #bcd2fb;
+}
+.metode-card--aktif {
+  border: 2px solid var(--blue);
+}
+
+.metode-card__icon {
+  width: 22px;
+  height: 22px;
+  color: var(--muted);
+}
+.metode-card--aktif .metode-card__icon {
+  color: var(--blue);
+}
+
+.metode-card span {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.manual-status {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.manual-result-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.manual-result-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: #fbfcfe;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.manual-result-item:hover {
+  border-color: #bcd2fb;
+  background: var(--blue-light);
+}
+
+.manual-result-item__avatar {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--blue);
+  background: var(--blue-light);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.manual-result-item__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.manual-result-item__body strong {
+  color: var(--navy);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.manual-result-item__penulis {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.manual-result-item__stok {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  color: var(--green);
+  background: var(--green-bg);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.manual-result-item__stok--habis {
+  color: var(--red);
+  background: var(--red-bg);
 }
 .btn-cari-manual {
   min-width: 90px;
@@ -2064,6 +2367,60 @@ button, input, select { font: inherit; }
   .form-grid { grid-template-columns: 1fr; }
   .result-actions, .form-actions { flex-direction: column-reverse; }
   .result-actions > *, .form-actions > * { width: 100%; }
+}
+
+/* ===== TAMBAHAN: BUKU TIDAK DITEMUKAN DI TAB MANUAL ===== */
+.manual-not-found {
+  margin-top: 12px;
+  padding: 14px;
+  background: var(--orange-bg);
+  border: 1px solid #ffe2b4;
+  border-radius: 10px;
+}
+
+.manual-not-found__text {
+  margin: 0 0 10px;
+  color: var(--orange);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.manual-not-found__text strong {
+  color: var(--navy);
+}
+
+.manual-not-found__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.btn-tambah-buku-dari-judul {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 8px;
+  background: var(--orange);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-tambah-buku-dari-judul:hover {
+  opacity: 0.9;
+}
+
+.btn-cari-ulang {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--navy);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-cari-ulang:hover {
+  background: #f8fafc;
 }
 
 @media (max-width: 480px) {

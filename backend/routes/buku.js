@@ -93,20 +93,20 @@ router.get('/', async (req, res) => {
     if (status) conditions.push(eq(buku.status, status))
 
     const rows = await db
-  .select({
-    id: buku.id,
-    judul: buku.judul,
-    penulis: buku.penulis,
-    penerbit: buku.penerbit,
-    kategoriId: buku.kategoriId,
-    isbn: buku.isbn,
-    lokasi: buku.lokasi,
-    status: buku.status,
-    kategori: kategori.nama,
-    stok: sql`count(${eksemplarBuku.id})`.mapWith(Number),
-    tersedia: sql`count(${eksemplarBuku.id}) filter (where ${eksemplarBuku.status} = 'tersedia')`.mapWith(Number),
-    barcode: sql`min(${eksemplarBuku.barcode})`,
-  })
+      .select({
+        id: buku.id,
+        judul: buku.judul,
+        penulis: buku.penulis,
+        penerbit: buku.penerbit,
+        kategoriId: buku.kategoriId,
+        isbn: buku.isbn,
+        lokasi: buku.lokasi,
+        status: buku.status,
+        kategori: kategori.nama,
+        stok: sql`count(${eksemplarBuku.id})`.mapWith(Number),
+        tersedia: sql`count(${eksemplarBuku.id}) filter (where ${eksemplarBuku.status} = 'tersedia')`.mapWith(Number),
+        barcode: sql`min(${eksemplarBuku.barcode})`,
+      })
       .from(buku)
       .leftJoin(kategori, eq(kategori.id, buku.kategoriId))
       .leftJoin(eksemplarBuku, eq(eksemplarBuku.bukuId, buku.id))
@@ -258,16 +258,36 @@ router.post('/', async (req, res) => {
       await tx.insert(eksemplarBuku).values(eksemplarBaru)
     }
 
-      // Sinkronkan stok & tersedia
-      const [stat] = await tx
-        .select({
-          stok: sql`count(*)`.mapWith(Number),
-          tersedia: sql`count(*) filter (where ${eksemplarBuku.status} = 'tersedia')`.mapWith(Number),
+    // Buat eksemplar otomatis kalau barcode dikirim (skenario 1)
+    let eksemplarBaru = null
+    if (barcode) {
+      const [eksemplar] = await db
+        .insert(eksemplarBuku)
+        .values({
+          bukuId: baru.id,
+          barcode,
+          status: 'tersedia',
         })
         .from(eksemplarBuku)
         .where(eq(eksemplarBuku.bukuId, bukuId))
 
-     await sinkronkanStokBuku(baru.id)
+      await sinkronkanStokBuku(baru.id)
+    } else if (Number(jumlahEksemplar) > 0) {
+      // Buku tanpa barcode fisik (mis. buku pelajaran/koleksi lama).
+      // Sistem tetap perlu baris eksemplar (karena tabel peminjaman
+      // wajib merujuk ke eksemplar), jadi dibuatkan kode otomatis
+      // dengan format PREFIX-001, PREFIX-002, dst.
+      // Kalau prefix tidak diisi, fallback ke BKU-{id}-001, BKU-{id}-002.
+      const jumlah = Number(jumlahEksemplar)
+      const prefix = (prefixEksemplar || `BKU-${baru.id}`).toUpperCase().trim()
+
+      const nilaiEksemplar = Array.from({ length: jumlah }, (_, i) => ({
+        bukuId: baru.id,
+        barcode: `${prefix}-${String(i + 1).padStart(3, '0')}`,
+        status: 'tersedia',
+      }))
+      await db.insert(eksemplarBuku).values(nilaiEksemplar)
+      await sinkronkanStokBuku(baru.id)
     }
       await tx.update(buku)
         .set({ stok: stat?.stok ?? 0, tersedia: stat?.tersedia ?? 0 })
@@ -313,66 +333,88 @@ router.post('/:id/eksemplar', async (req, res) => {
       return res.status(404).json({ error: 'Buku tidak ditemukan' })
     }
 
-    // Insert dulu pakai barcode SEMENTARA yang sudah pasti unik
-    // (ditempeli timestamp), supaya tidak bentrok dengan barcode
-    // eksemplar lain dari buku yang sama. Setelah dapat id-nya,
-    // baru diganti ke format final "barcode-id".
-    const barcodeSementara = `${barcodeBersih}-tmp-${Date.now()}`
+    // Cek apakah barcode sudah dipakai eksemplar lain
+    const [existing] = await db
+      .select()
+      .from(eksemplarBuku)
+      .where(eq(eksemplarBuku.barcode, barcode))
+
+    let barcodeFinal = barcode
+
+    if (existing) {
+      // Barcode sudah ada (biasanya barcode bawaan penerbit yang sama
+      // untuk beberapa kopi). Tambahkan suffix nomor urut untuk buku ini.
+      const [hitung] = await db
+        .select({ count: sql`count(*)`.mapWith(Number) })
+        .from(eksemplarBuku)
+        .where(eq(eksemplarBuku.bukuId, bukuId))
+
+      const nomorBerikut = (hitung?.count || 0) + 1
+      barcodeFinal = `${barcode}-${String(nomorBerikut).padStart(3, '0')}`
+    }
 
     const [eksemplar] = await db
       .insert(eksemplarBuku)
-      .values({ bukuId, barcode: barcodeSementara, status: 'tersedia' })
-      .returning()
-
-    const barcodeUnik = `${barcodeBersih}-${String(eksemplar.id).padStart(3, '0')}`
-
-    const [updated] = await db
-      .update(eksemplarBuku)
-      .set({ barcode: barcodeUnik })
-      .where(eq(eksemplarBuku.id, eksemplar.id))
+      .values({ bukuId, barcode: barcodeFinal, status: 'tersedia' })
       .returning()
 
     // Sinkronkan stok & tersedia setelah eksemplar baru tersimpan
     await sinkronkanStokBuku(bukuId)
 
-    res.status(201).json(updated)
+    res.status(201).json(eksemplar)
   } catch (err) {
     console.error(err)
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Barcode sudah dipakai eksemplar lain' })
+    }
     res.status(500).json({ error: 'Gagal menambah eksemplar' })
   }
 })
 
-// POST tambah beberapa eksemplar sekaligus TANPA barcode fisik dulu
-// (barcode auto-generate, bisa ditempel/diganti belakangan)
-router.post('/:id/eksemplar/batch', async (req, res) => {
+// GET data buku untuk mulai peminjaman lewat pencarian JUDUL manual
+// (dipakai di tab "Manual" ScanBukuPage.vue, setelah admin pilih
+// salah satu hasil pencarian judul).
+router.get('/:id/untuk-pinjam', async (req, res) => {
   try {
     const bukuId = Number(req.params.id)
-    const jumlah = Number(req.body.jumlah)
 
-    if (!jumlah || jumlah < 1) {
-      return res.status(400).json({ error: 'Jumlah harus lebih dari 0' })
+    const [bukuData] = await db.select().from(buku).where(eq(buku.id, bukuId))
+    if (!bukuData) {
+      return res.status(404).json({ message: 'Buku tidak ditemukan' })
     }
 
-    const [bukuAda] = await db.select().from(buku).where(eq(buku.id, bukuId))
-    if (!bukuAda) return res.status(404).json({ error: 'Buku tidak ditemukan' })
+    const eksemplarRows = await db
+      .select()
+      .from(eksemplarBuku)
+      .where(eq(eksemplarBuku.bukuId, bukuId))
+      .orderBy(eksemplarBuku.id)
 
-    const nilaiBaru = Array.from({ length: jumlah }, (_, i) => ({
-      bukuId,
-      barcode: `AUTO-${bukuId}-${Date.now()}-${i}`,
-      status: 'tersedia',
-    }))
+    if (eksemplarRows.length === 0) {
+      return res.status(404).json({ message: 'Buku ditemukan tapi belum ada eksemplar' })
+    }
 
-    const hasil = await db.insert(eksemplarBuku).values(nilaiBaru).returning()
-    await sinkronkanStokBuku(bukuId)
+    const eksemplarTerpilih =
+      eksemplarRows.find((ek) => ek.status === 'tersedia') || eksemplarRows[0]
 
-    res.status(201).json(hasil)
+    res.json({
+      bukuId: bukuData.id,
+      judul: bukuData.judul,
+      penulis: bukuData.penulis,
+      penerbit: bukuData.penerbit,
+      status: eksemplarTerpilih.status,
+      eksemplarId: eksemplarTerpilih.id,
+      eksemplarList: eksemplarRows.map((ek) => ({
+        id: ek.id,
+        status: ek.status,
+        barcode: ek.barcode,
+      })),
+    })
   } catch (err) {
     console.error(err)
-    res.status(500).json({ error: 'Gagal menambah eksemplar' })
+    res.status(500).json({ message: 'Terjadi kesalahan server' })
   }
 })
 
-// ============================================================
 // PUT edit buku
 // ============================================================
 // CATATAN PENTING:

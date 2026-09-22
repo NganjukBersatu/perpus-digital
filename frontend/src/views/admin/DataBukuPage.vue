@@ -29,17 +29,39 @@ const bukuList = ref([])
 const daftarKategori = ref([])
 
 const emptyForm = () => ({
-  judul: '', penulis: '', kategoriId: '', isbn: '',
-  lokasi: '', status: 'Tersedia',
+  judul: '',
+  penulis: '',
+  penerbit: '',
+  kategoriId: '',
+  isbn: '',
+  stok: 0,
+  tersedia: 0,
+  lokasi: '',
+  status: 'Tersedia',
   barcode: '',
-  jumlahEksemplar: 1, // baru
+  jumlahEksemplar: 1,
+  prefixEksemplar: ''
 })
 
 const form = ref(emptyForm())
 const isSaving = ref(false)
 const formError = ref('')
-const bukuTersimpan = ref(false)     // true setelah Simpan berhasil
-const kodeBukuTersimpan = ref('') 
+const bukuTersimpan = ref(false)
+const kodeBukuTersimpan = ref('')
+
+// ===== OPSI A: Mode input saling eksklusif =====
+// True kalau barcode diisi (mode scan 1 buku)
+const modeScanBarcode = computed(() => {
+  if (editingId.value !== null) return false    // saat edit, tidak berlaku
+  return !!String(form.value.barcode || '').trim()
+})
+
+// True kalau user mau input banyak eksemplar sekaligus (tanpa barcode)
+const modeBulkEksemplar = computed(() => {
+  if (editingId.value !== null) return false    // saat edit, tidak berlaku
+  if (modeScanBarcode.value) return false
+  return Number(form.value.jumlahEksemplar) > 1
+})
 
 // Barcode dianggap "valid & terisi" hanya kalau string dan bukan placeholder aneh
 const barcodeValid = computed(() => {
@@ -91,11 +113,8 @@ function openTambah(barcodeAwal = '') {
   const kode = typeof barcodeAwal === 'string' ? barcodeAwal.trim() : ''
   if (kode) {
     form.value.barcode = kode
-    form.value.stok = 1
-    form.value.tersedia = 1
     const m = kode.match(/^((?:978|979)\d{10})(?:-\d+)?$/)
     if (m) form.value.isbn = m[1]
-    // kalau tidak cocok (kode toko/penerbit non-ISBN), form.isbn dibiarkan kosong — sesuai desain baru
   }
   showModal.value = true
 }
@@ -106,13 +125,16 @@ function openEdit(buku) {
   form.value = {
     judul: buku.judul,
     penulis: buku.penulis,
+    penerbit: buku.penerbit || '',
     kategoriId: buku.kategoriId || '',
     isbn: buku.isbn,
     stok: buku.stok,
     tersedia: buku.tersedia,
     lokasi: buku.lokasi,
     status: buku.status,
-    barcode: ''
+    barcode: '',
+    jumlahEksemplar: 0,
+    prefixEksemplar: ''
   }
   showModal.value = true
 }
@@ -122,15 +144,13 @@ function closeModal() {
   editingId.value = null
   resetStatusModal()
 
-  // Bersihkan ?barcode=...&from=scan dari alamat, supaya refresh tidak membuka modal lagi
   if (route.query.barcode || route.query.from) {
     router.replace({ path: route.path, query: {} })
   }
 }
 
-// Tombol "Simpan": hanya menyimpan data buku
 async function simpanBuku() {
-  if (bukuTersimpan.value) return          // cegah tersimpan dua kali (misalnya tekan Enter)
+  if (bukuTersimpan.value) return
   if (!form.value.judul || !form.value.penulis) return
 
   formError.value = ''
@@ -140,31 +160,18 @@ async function simpanBuku() {
     const url = isEdit ? `${API_URL}/${editingId.value}` : API_URL
     const method = isEdit ? 'PUT' : 'POST'
 
-    // Bersihkan barcode: buang placeholder aneh / event
-    let barcodeBersih = String(form.value.barcode || '').trim()
-    if (
-      barcodeBersih === '[object PointerEvent]' ||
-      barcodeBersih === '[object Object]' ||
-      barcodeBersih === 'undefined'
-    ) {
-      barcodeBersih = ''
-    }
-
-    // Susun payload — stok & tersedia TIDAK dikirim (backend yang hitung)
     const payload = {
       judul: form.value.judul,
       penulis: form.value.penulis,
-      kategoriId: form.value.kategoriId || null,
+      penerbit: form.value.penerbit,
+      kategoriId: form.value.kategoriId,
       isbn: form.value.isbn,
       lokasi: form.value.lokasi,
       status: form.value.status,
+      barcode: form.value.barcode || undefined,
+      jumlahEksemplar: form.value.barcode ? undefined : form.value.jumlahEksemplar,
+      prefixEksemplar: form.value.barcode ? undefined : (form.value.prefixEksemplar || undefined),
     }
-
-    if (!isEdit) {
-      if (barcodeBersih) payload.barcode = barcodeBersih
-      payload.jumlahEksemplar = form.value.jumlahEksemplar || 1
-    }
-
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
@@ -177,7 +184,6 @@ async function simpanBuku() {
     if (isEdit) {
       closeModal()
     } else {
-      // Buku baru: modal tetap terbuka, tombol Pinjam diaktifkan
       kodeBukuTersimpan.value =
         String(form.value.barcode || '').trim() ||
         String(form.value.isbn || '').replace(/\D/g, '')
@@ -191,7 +197,6 @@ async function simpanBuku() {
   }
 }
 
-// Tombol "Pinjam": hanya berpindah ke form peminjaman untuk buku yang sudah tersimpan
 function pinjamBuku() {
   const kode = kodeBukuTersimpan.value
   if (!bukuTersimpan.value || !kode) return
@@ -332,19 +337,14 @@ onMounted(() => {
   document.addEventListener('click', tutupFilterMenu)
 
   const barcodeDariScan = route.query.barcode
-    // route.query.barcode bisa string atau array (kalau query ganda)
-    const barcodeStr = Array.isArray(barcodeDariScan)
-      ? String(barcodeDariScan[0] || '')
-      : String(barcodeDariScan || '')
+  const judulDariPinjam = route.query.judul
 
-    if (
-      barcodeStr &&
-      barcodeStr !== 'undefined' &&
-      barcodeStr !== 'null' &&
-      barcodeStr !== '[object PointerEvent]'
-    ) {
-      openTambah(barcodeStr)
-    }
+  if (barcodeDariScan) {
+    openTambah(String(barcodeDariScan))
+  } else if (judulDariPinjam) {
+    openTambah()
+    form.value.judul = String(judulDariPinjam)
+  }
 })
 
 onUnmounted(() => {
@@ -385,7 +385,7 @@ onUnmounted(() => {
         />
       </div>
 
-<div class="filter-dropdown">
+      <div class="filter-dropdown">
         <button
           type="button"
           class="filter-dropdown-btn"
@@ -450,11 +450,11 @@ onUnmounted(() => {
             <td :title="b.penulis">{{ b.penulis }}</td>
             <td>{{ b.kategori }}</td>
             <td>
-             <span class="kode-buku">
-             <span class="kode-buku__label">{{ b.isbn ? 'ISBN' : 'Barcode' }}</span>
-             <span class="kode-buku__nilai">{{ b.isbn || b.barcode || '-' }}</span>
-           </span>
-           </td>
+              <span class="kode-buku">
+                <span class="kode-buku__label">{{ b.isbn ? 'ISBN' : 'Barcode' }}</span>
+                <span class="kode-buku__nilai">{{ b.isbn || b.barcode || '-' }}</span>
+              </span>
+            </td>
             <td>{{ b.stok }}</td>
             <td>{{ b.tersedia }}</td>
             <td>{{ b.lokasi }}</td>
@@ -571,27 +571,60 @@ onUnmounted(() => {
           </div>
 
           <div class="form-group">
-  <label>ISBN (opsional)</label>
-  <input v-model="form.isbn" type="text" placeholder="978-xxx-xxxx-xx-x — kosongkan jika tidak ada" />
-</div>
-
-          <div class="form-group" v-if="editingId === null">
-            <label>Barcode</label>
-            <input v-model="form.barcode" type="text" placeholder="Scan atau ketik barcode buku (opsional)" />
+            <label>ISBN (opsional)</label>
+            <input v-model="form.isbn" type="text" placeholder="978-xxx-xxxx-xx-x — kosongkan jika tidak ada" />
           </div>
 
+          <!-- BARCODE: di-disable saat mode bulk eksemplar -->
           <div class="form-group" v-if="editingId === null">
-            <label>Jumlah Eksemplar (kalau belum ada barcode)</label>
+            <label>Barcode</label>
             <input
-              v-model.number="form.jumlahEksemplar"
-              type="number"
-              min="1"
-              :disabled="barcodeValid"
-              :class="{ 'input-disabled': barcodeValid }"
+              v-model="form.barcode"
+              type="text"
+              placeholder="Scan atau ketik barcode buku (opsional)"
+              :disabled="modeBulkEksemplar"
             />
-            <small v-if="barcodeValid" class="hint-nonaktif">
-              Dinonaktifkan — barcode diisi berarti hanya 1 eksemplar yang ditambahkan.
+            <small v-if="modeBulkEksemplar" class="hint">
+              Kosongkan karena kamu sedang input banyak eksemplar.
             </small>
+            <small v-else-if="modeScanBarcode" class="hint">
+              Barcode terisi — sistem akan membuat 1 eksemplar dari barcode ini.
+            </small>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Jumlah Eksemplar (copy fisik)</label>
+              <input
+                v-model.number="form.jumlahEksemplar"
+                type="number"
+                min="1"
+                required
+                placeholder="Misal: 3"
+                :disabled="modeScanBarcode"
+              />
+              <small class="hint">
+                {{ modeScanBarcode
+                    ? 'Barcode sudah diisi, eksemplar = 1 copy.'
+                    : 'Stok & Tersedia akan otomatis mengikuti jumlah ini.' }}
+              </small>
+            </div>
+
+            <div class="form-group">
+              <label>Prefix Barcode (opsional)</label>
+              <input
+                v-model="form.prefixEksemplar"
+                type="text"
+                placeholder="Misal: LP"
+                maxlength="10"
+                :disabled="modeScanBarcode"
+              />
+              <small class="hint">
+                {{ modeScanBarcode
+                    ? 'Tidak dipakai karena barcode sudah ada.'
+                    : 'Contoh hasil: LP-001, LP-002' }}
+              </small>
+            </div>
           </div>
 
           <div class="form-group">
@@ -599,33 +632,32 @@ onUnmounted(() => {
             <input v-model="form.lokasi" type="text" required placeholder="Contoh: Rak T-01" />
           </div>
 
-          
-<div v-if="formError" class="form-error">{{ formError }}</div>
-<div v-if="bukuTersimpan" class="form-sukses">
-  ✓ Buku sudah tersimpan. Klik "Pinjam" untuk lanjut ke form peminjaman.
-</div>
-<div v-if="bukuTersimpan && Number(form.tersedia) < 1" class="form-error">
-  Kolom "Tersedia" masih 0, jadi buku ini belum bisa dipinjam.
-</div>
+          <div v-if="formError" class="form-error">{{ formError }}</div>
+          <div v-if="bukuTersimpan" class="form-sukses">
+            ✓ Buku sudah tersimpan. Klik "Pinjam" untuk lanjut ke form peminjaman.
+          </div>
+          <div v-if="bukuTersimpan && Number(form.jumlahEksemplar) < 1 && !form.barcode" class="form-error">
+            Jumlah eksemplar masih 0, jadi buku ini belum bisa dipinjam.
+          </div>
 
-<div class="modal-actions">
-  <button
-    v-if="editingId === null"
-    type="button"
-    class="btn-simpan btn-simpan--outline"
-    :disabled="!bukuTersimpan || Number(form.tersedia) < 1"
-    @click="pinjamBuku"
-  >
-    Pinjam
-  </button>
+          <div class="modal-actions">
+            <button
+              v-if="editingId === null"
+              type="button"
+              class="btn-simpan btn-simpan--outline"
+              :disabled="!bukuTersimpan || (Number(form.jumlahEksemplar) < 1 && !form.barcode)"
+              @click="pinjamBuku"
+            >
+              Pinjam
+            </button>
 
-  <button type="submit" class="btn-simpan" :disabled="isSaving || bukuTersimpan">
-    {{ bukuTersimpan ? 'Tersimpan ✓' : (editingId !== null ? 'Update' : 'Simpan') }}
-  </button>
-</div>
-</form>
-</div>
-</div>
+            <button type="submit" class="btn-simpan" :disabled="isSaving || bukuTersimpan">
+              {{ bukuTersimpan ? 'Tersimpan ✓' : (editingId !== null ? 'Update' : 'Simpan') }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <div v-if="showDetailModal" class="modal-overlay" @click.self="tutupDetail">
       <div class="modal-box detail-modal-box">
@@ -932,7 +964,6 @@ thead th {
   z-index: 3;
 }
 
-/* Kolom No & Judul Buku tetap terlihat saat scroll ke kiri */
 th:nth-child(1),
 td:nth-child(1) {
   position: sticky;
@@ -1320,6 +1351,19 @@ tbody tr:hover { background: #f9fafb; }
 .form-group input:focus,
 .form-group select:focus {
   border-color: #5b4dff;
+}
+
+/* ===== OPSI A: style untuk input yang di-disable ===== */
+.form-group input:disabled,
+.form-group select:disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.hint {
+  color: #6b7280;
+  font-size: 11px;
 }
 
 .modal-actions {

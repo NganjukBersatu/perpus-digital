@@ -195,8 +195,14 @@ onUnmounted(() => {
   .filter-dropdown-list { width: 100%; max-width: 100%; }
 }
 
-.table-wrap { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table-wrap {
+  background: #fff;
+  border-radius: 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+table { width: 100%; min-width: 640px; border-collapse: collapse; font-size: 13px; }
 th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid #f3f4f6; color: #374151; vertical-align: middle; }
 thead th { font-size: 12px; font-weight: 600; color: #6b7280; background: #fafafa; }
 tbody tr:hover { background: #f9fafb; }
@@ -209,4 +215,40 @@ tbody tr:hover { background: #f9fafb; }
 .badge.kembali { background: #d1fae5; color: #065f46; }
 .badge.telat { background: #fee2e2; color: #b91c1c; }
 .badge.denda { background: #fef3c7; color: #92400e; }
+@media (max-width: 640px) {
+  .page {
+    padding: 16px;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .search-box,
+  .filter-dropdown {
+    width: 100%;
+  }
+
+  .table-wrap {
+    border-radius: 10px;
+    margin: 0 -4px;
+  }
+
+  th, td {
+    padding: 10px 12px;
+    font-size: 12.5px;
+  }
+
+  .subtitle {
+    font-size: 12px;
+  }
+}
 </style>

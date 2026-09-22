@@ -169,10 +169,12 @@ const mobileMenuOpen = ref(false)
 
 function toggleMobileMenu() {
   mobileMenuOpen.value = !mobileMenuOpen.value
+  document.body.style.overflow = mobileMenuOpen.value ? 'hidden' : ''
 }
 
 function closeMobileMenu() {
   mobileMenuOpen.value = false
+  document.body.style.overflow = ''
 }
 
 const showLogoutModal = ref(false)
@@ -632,9 +634,10 @@ onBeforeUnmount(() => {
   position: fixed;
   top: 0; left: 0;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   transition: transform 0.25s ease;
-  z-index: 50;
+  z-index: 60;
 }
 
 .sidebar-closed {
@@ -1132,12 +1135,23 @@ onBeforeUnmount(() => {
     margin-left: 0;
   }
 
-  /* backdrop gelap saat sidebar mobile terbuka */
-  .sidebar-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 45;
+  /* pastikan topbar tidak bocor di atas sidebar saat menu mobile terbuka */
+  .topbar {
+    z-index: 30;
+  }
+
+  /* rapikan nav agar tidak menyisakan ruang kosong besar sebelum tombol logout */
+  .sidebar.mobile-open {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+  }
+  .sidebar.mobile-open .nav {
+    flex: 1 1 auto;
+    justify-content: flex-start;
+  }
+  .sidebar.mobile-open .btn-logout {
+    margin-top: auto;
   }
 
   /* rapikan topbar di layar sempit */

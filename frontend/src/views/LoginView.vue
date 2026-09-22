@@ -601,19 +601,22 @@ async function handleLogin() {
 
 @media (max-width: 480px) {
   .login-shell {
-    padding: 0;
+    padding: 16px;
+    align-items: center;
   }
   .login-card {
-    border-radius: 0;
-    min-height: 100vh;
+    border-radius: 20px;
+    min-height: auto;
+    display: block;
   }
   .art-panel {
-    border-radius: 0;
-    min-height: 220px;
-    padding: 24px;
-  }
-  .art-caption {
     display: none;
+  }
+  .form-panel {
+    padding: 32px 24px;
+  }
+  .form-inner {
+    max-width: 100%;
   }
 }
 </style>

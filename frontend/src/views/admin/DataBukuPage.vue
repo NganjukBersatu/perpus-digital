@@ -2,8 +2,8 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-const API_URL = 'http://localhost:3000/api/buku'
-const KATEGORI_URL = 'http://localhost:3000/api/kategori'
+const API_URL = `${import.meta.env.VITE_API_BASE_URL}/buku`
+const KATEGORI_URL = `${import.meta.env.VITE_API_BASE_URL}/kategori`
 
 const searchQuery = ref('')
 const selectedKategori = ref('')
@@ -1579,42 +1579,31 @@ tbody tr:hover { background: #f9fafb; }
     white-space: nowrap;
   }
 
-  .detail-table th:nth-child(4),
-  .detail-table td:nth-child(4) {
-    width: 70px !important;              /* ⬅️ Status tetap cukup */
-    max-width: 70px !important;
-  }
-
-  .pagination {
-    flex-direction: column;
-    align-items: stretch;
+    .pagination {
+    flex-direction: row; 
+    flex-wrap: wrap;     
+    justify-content: center; 
+    align-items: center;
     gap: 12px;
     padding-top: 16px;
   }
 
-  .pages {
-    justify-content: center;
-  }
-
   .range {
+    width: 100%;         
     text-align: center;
     font-size: 12px;
+    margin-bottom: 4px;  
   }
 
-    .perpage-dropdown {
-    width: 100%;
+  .pages {
+    justify-content: center;
+    width: auto;         
   }
 
-  .perpage-dropdown-btn {
-    width: 100%;
-    text-align: left;
-  }
-
-  .perpage-dropdown-list {
-    left: 0;
-    right: 0;
-    width: 100%;
-    min-width: 0;
+  .select-sm {
+    width: auto;         
+    min-width: 110px;    
+    margin-left: 0;      
   }
 
   .modal-box {

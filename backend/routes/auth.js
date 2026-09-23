@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken')
 const { db } = require('../db/client')
 const { adminAkun, anggota } = require('../db/schema')
 const { eq, and } = require('drizzle-orm')
+const { loginLimiter } = require('../middleware/rateLimiter')
 
 // JWT_SECRET wajib di-set lewat file .env, tidak boleh diam-diam
 // pakai nilai bawaan yang keliatan di kode ini.
@@ -16,7 +17,7 @@ if (!JWT_SECRET) {
 }
 
 // POST login admin
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
     const { username, password } = req.body
     if (!username || !password) {
@@ -61,7 +62,7 @@ router.post('/login', async (req, res) => {
 // Password awal guru = NIP mereka sendiri (di-hash saat guru dibuat di routes/guru.js).
 // Response menyertakan harusGantiPassword supaya frontend tahu harus
 // mengarahkan guru ke halaman ganti password dulu atau tidak.
-router.post('/guru/login', async (req, res) => {
+router.post('/guru/login', loginLimiter, async (req, res) => {
   try {
     const { nip, password } = req.body
     if (!nip || !password) {
@@ -105,6 +106,63 @@ router.post('/guru/login', async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Gagal login' })
+  }
+})
+
+// POST lupa password guru
+// Verifikasi identitas pakai NIP + Tanggal Lahir (bukan password lama,
+// karena tujuannya memang untuk kondisi lupa password). Kalau cocok,
+// password guru direset kembali ke NIP-nya sendiri (di-hash ulang) dan
+// harusGantiPassword diset true, supaya guru dipaksa membuat password
+// baru begitu berhasil login lagi.
+router.post('/guru/lupa-password', async (req, res) => {
+  try {
+    const { nip, tanggalLahir } = req.body
+
+    if (!nip || !tanggalLahir) {
+      return res.status(400).json({ error: 'NIP dan tanggal lahir wajib diisi' })
+    }
+
+    const nipBersih = String(nip).trim()
+
+    const [guru] = await db
+      .select()
+      .from(anggota)
+      .where(and(eq(anggota.nip, nipBersih), eq(anggota.peran, 'guru')))
+
+    if (!guru) {
+      return res.status(401).json({ error: 'NIP atau tanggal lahir tidak sesuai' })
+    }
+
+    if (!guru.tanggalLahir) {
+      return res.status(400).json({
+        error: 'Data tanggal lahir belum lengkap di sistem. Silakan hubungi admin perpustakaan.',
+      })
+    }
+
+    // guru.tanggalLahir dari database berbentuk 'YYYY-MM-DD' (kolom date),
+    // sama seperti yang dikirim dari <input type="date"> di frontend.
+    const tanggalLahirDb = String(guru.tanggalLahir).slice(0, 10)
+    const tanggalLahirInput = String(tanggalLahir).slice(0, 10)
+
+    if (tanggalLahirDb !== tanggalLahirInput) {
+      return res.status(401).json({ error: 'NIP atau tanggal lahir tidak sesuai' })
+    }
+
+    const passwordBaruHash = await bcrypt.hash(guru.nip, 10)
+
+    await db
+      .update(anggota)
+      .set({ password: passwordBaruHash, harusGantiPassword: true })
+      .where(eq(anggota.id, guru.id))
+
+    res.json({
+      success: true,
+      message: 'Password berhasil direset. Silakan login kembali menggunakan NIP sebagai password.',
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Gagal mereset password' })
   }
 })
 

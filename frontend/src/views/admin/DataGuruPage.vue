@@ -14,8 +14,11 @@ const mapelMenuOpen = ref(false)
 
 const showModal = ref(false)
 const modalMode = ref('tambah')
-const form = ref({ id: null, nama: '', nip: '', mapel: '' })
+const form = ref({ id: null, nama: '', nip: '', mapel: '', tanggalLahir: '' })
 const isSaving = ref(false)
+
+const currentPage = ref(1)
+const perPage = ref(5)
 
 const mapelOptions = computed(() => {
   const semua = daftar.value.map((g) => g.mapel).filter(Boolean)
@@ -27,11 +30,30 @@ const filteredDaftar = computed(() => {
   return daftar.value.filter((g) => g.mapel === selectedMapel.value)
 })
 
+const totalData = computed(() => filteredDaftar.value.length)
+const totalPages = computed(() => Math.max(1, Math.ceil(totalData.value / perPage.value)))
+
+const pagedDaftar = computed(() => {
+  const start = (currentPage.value - 1) * perPage.value
+  return filteredDaftar.value.slice(start, start + perPage.value)
+})
+
+const rangeText = computed(() => {
+  if (totalData.value === 0) return 'Menampilkan 0 data'
+  const start = (currentPage.value - 1) * perPage.value + 1
+  const end = Math.min(currentPage.value * perPage.value, totalData.value)
+  return `Menampilkan ${start} - ${end} dari ${totalData.value} data`
+})
+
+function resetPage() {
+  currentPage.value = 1
+}
+
 async function muatData() {
   isLoading.value = true
   errorMessage.value = ''
   try {
-    const url = new URL('http://localhost:3000/api/guru')
+    const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/guru`)
     if (searchQuery.value) url.searchParams.set('q', searchQuery.value)
     const res = await fetch(url)
     if (!res.ok) throw new Error('response not ok')
@@ -47,12 +69,15 @@ async function muatData() {
 let searchTimeout = null
 function onSearchInput() {
   clearTimeout(searchTimeout)
-  searchTimeout = setTimeout(muatData, 350)
+  searchTimeout = setTimeout(() => {
+    muatData()
+    resetPage()
+  }, 350)
 }
 
 function bukaModalTambah(namaAwal = '') {
   modalMode.value = 'tambah'
-  form.value = { id: null, nama: namaAwal || '', nip: '', mapel: '' }
+  form.value = { id: null, nama: namaAwal || '', nip: '', mapel: '', tanggalLahir: '' }
   showModal.value = true
 }
 
@@ -63,6 +88,7 @@ function bukaModalEdit(item) {
     nama: item.nama || '',
     nip: item.nip || '',
     mapel: item.mapel || '',
+    tanggalLahir: item.tanggalLahir || '',
   }
   showModal.value = true
 }
@@ -81,18 +107,19 @@ async function simpan() {
   try {
     const isEdit = modalMode.value === 'edit'
     const url = isEdit
-      ? `http://localhost:3000/api/guru/${form.value.id}`
-      : 'http://localhost:3000/api/guru'
+  ? `${import.meta.env.VITE_API_BASE_URL}/guru/${form.value.id}`
+  : `${import.meta.env.VITE_API_BASE_URL}/guru`
 
     const res = await fetch(url, {
-      method: isEdit ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        nama: form.value.nama,
-        nip: form.value.nip,
-        mapel: form.value.mapel,
-      }),
-    })
+  method: isEdit ? 'PUT' : 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    nama: form.value.nama,
+    nip: form.value.nip,
+    mapel: form.value.mapel,
+    tanggalLahir: form.value.tanggalLahir,
+  }),
+})
 
     if (!res.ok) throw new Error('Gagal menyimpan')
 
@@ -126,8 +153,8 @@ async function hapus(item) {
   if (!confirm(`Hapus data guru "${item.nama}"?`)) return
 
   try {
-    const res = await fetch(`http://localhost:3000/api/guru/${item.id}`, {
-      method: 'DELETE',
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/guru/${item.id}`, {
+            method: 'DELETE',
     })
     if (!res.ok) throw new Error('Gagal menghapus')
     await muatData()
@@ -144,6 +171,7 @@ function labelMapelTerpilih() {
 function pilihMapel(mapel) {
   selectedMapel.value = mapel
   mapelMenuOpen.value = false
+  resetPage()
 }
 
 function tutupFilterMenu(e) {
@@ -232,24 +260,58 @@ onUnmounted(() => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(item, i) in filteredDaftar" :key="item.id">
-            <td>{{ i + 1 }}</td>
-            <td class="judul">{{ item.nama }}</td>
-            <td>{{ item.nip || '-' }}</td>
-            <td>{{ item.mapel || '-' }}</td>
-            <td class="aksi-cell">
-              <button class="detail-btn" @click="bukaModalEdit(item)">Edit</button>
-              <button class="detail-btn detail-btn-danger" @click="hapus(item)">Hapus</button>
-            </td>
-          </tr>
-          <tr v-if="!isLoading && filteredDaftar.length === 0">
-            <td colspan="5" class="empty">Belum ada data guru. Tambahkan guru pertama.</td>
-          </tr>
-          <tr v-if="isLoading">
-            <td colspan="5" class="empty">Memuat data...</td>
-          </tr>
-        </tbody>
+  <tr v-for="(item, i) in pagedDaftar" :key="item.id">
+    <td>{{ (currentPage - 1) * perPage + i + 1 }}</td>
+    <td class="judul">{{ item.nama }}</td>
+    <td>{{ item.nip || '-' }}</td>
+    <td>{{ item.mapel || '-' }}</td>
+    <td class="aksi-cell">
+      <button class="detail-btn" @click="bukaModalEdit(item)">Edit</button>
+      <button class="detail-btn detail-btn-danger" @click="hapus(item)">Hapus</button>
+    </td>
+  </tr>
+  <tr v-if="!isLoading && filteredDaftar.length === 0">
+    <td colspan="5" class="empty">Belum ada data guru. Tambahkan guru pertama.</td>
+  </tr>
+  <tr v-if="isLoading">
+    <td colspan="5" class="empty">Memuat data...</td>
+  </tr>
+</tbody>
       </table>
+    </div>
+
+    <div class="pagination">
+      <span class="range">{{ rangeText }}</span>
+
+      <div class="pages">
+        <button type="button" :disabled="currentPage === 1" @click="currentPage--">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 6l-6 6 6 6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+
+        <button
+          v-for="n in totalPages"
+          :key="n"
+          type="button"
+          class="page-num"
+          :class="{ active: currentPage === n }"
+          @click="currentPage = n"
+        >
+          {{ n }}
+        </button>
+
+        <button type="button" :disabled="currentPage === totalPages" @click="currentPage++">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </div>
+
+      <select v-model.number="perPage" class="select select-sm" @change="resetPage">
+        <option :value="5">5 / halaman</option>
+        <option :value="10">10 / halaman</option>
+      </select>
     </div>
 
     <div v-if="showModal" class="modal-overlay" @click.self="tutupModal">
@@ -267,9 +329,16 @@ onUnmounted(() => {
         </div>
 
         <div class="form-group">
-          <label>Mata Pelajaran <span class="optional">(opsional)</span></label>
-          <input type="text" v-model="form.mapel" placeholder="Contoh: Matematika, Bahasa Indonesia" />
-        </div>
+  <label>Mata Pelajaran <span class="optional">(opsional)</span></label>
+  <input type="text" v-model="form.mapel" placeholder="Contoh: Matematika, Bahasa Indonesia" />
+</div>
+
+<div class="form-group">
+  <label>Tanggal Lahir <span class="optional">(opsional)</span></label>
+  <input type="date" v-model="form.tanggalLahir" />
+</div>
+
+<div class="modal-actions">
 
         <div class="modal-actions">
           <button class="btn-secondary" @click="tutupModal">Batal</button>
@@ -280,6 +349,7 @@ onUnmounted(() => {
       </div>
     </div>
   </div>
+</div>
 </template>
 
 <style scoped>
@@ -382,6 +452,25 @@ tbody tr:hover { background: #f9fafb; }
 .icon-svg { width: 16px; height: 16px; display: block; }
 
 .empty { text-align: center; color: #9ca3af; padding: 24px; }
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 4px 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+.pages { display: flex; align-items: center; gap: 6px; }
+.pages button {
+  min-width: 32px; height: 32px; border: 0; background: transparent;
+  border-radius: 8px; cursor: pointer; color: #4b5563;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.pages .page-num.active { background: #5b4dff; color: #fff; }
+.pages button:disabled { opacity: 0.4; cursor: default; }
+.select-sm { min-width: auto; }
 
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
@@ -542,7 +631,35 @@ tbody tr:hover { background: #f9fafb; }
   .btn-secondary,
   .btn-primary {
     padding: 10px 16px;
+
+  }
+    .pagination {
+    flex-direction: row; 
+    flex-wrap: wrap;     
+    justify-content: center; 
+    align-items: center;
+    gap: 12px;
+    padding-top: 16px;
+  }
+
+  .range {
+    width: 100%;         
+    text-align: center;
+    font-size: 12px;
+    margin-bottom: 4px;  
+  }
+
+  .pages {
+    justify-content: center;
+    width: auto;         
+  }
+
+  .select-sm {
+    width: auto;         
+    min-width: 110px;    
+    margin-left: 0;      
   }
 }
+
 
 </style>

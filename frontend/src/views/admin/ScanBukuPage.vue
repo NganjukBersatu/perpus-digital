@@ -341,7 +341,7 @@ async function ambilDaftarKelas() {
 
 async function ambilDaftarGuru() {
   try {
-    const res = await fetch("http://localhost:3000/api/guru", { headers: authHeaders() })
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/guru`)
     if (res.ok) daftarGuru.value = await res.json()
   } catch (err) {
     console.error(err)

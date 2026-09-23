@@ -11,14 +11,15 @@ router.get('/', async (req, res) => {
     const { q } = req.query
 
     const rows = await db
-      .select({
-        id: anggota.id,
-        nama: anggota.nama,
-        nip: anggota.nip,
-        mapel: anggota.mapel,
-        peran: anggota.peran,
-      })
-      .from(anggota)
+  .select({
+    id: anggota.id,
+    nama: anggota.nama,
+    nip: anggota.nip,
+    mapel: anggota.mapel,
+    peran: anggota.peran,
+    tanggalLahir: anggota.tanggalLahir,
+  })
+  .from(anggota)
       .where(
         and(
           eq(anggota.peran, 'guru'),
@@ -39,7 +40,7 @@ router.get('/', async (req, res) => {
 // diwajibkan ganti password saat login pertama kali (harusGantiPassword).
 router.post('/', async (req, res) => {
   try {
-    const { nama, nip, mapel } = req.body
+    const { nama, nip, mapel, tanggalLahir } = req.body
 
     if (!nama || !String(nama).trim()) {
       return res.status(400).json({ error: 'Nama wajib diisi' })
@@ -63,12 +64,13 @@ router.post('/', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(nipBersih, 10)
 
-    const [baru] = await db
+        const [baru] = await db
       .insert(anggota)
       .values({
         nama: String(nama).trim(),
         nip: nipBersih,
         mapel: mapel || null,
+        tanggalLahir: tanggalLahir || null,
         kelas: null,
         peran: 'guru',
         password: passwordHash,
@@ -89,7 +91,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const id = Number(req.params.id)
-    const { nama, nip, mapel } = req.body
+    const { nama, nip, mapel, tanggalLahir } = req.body
 
     if (!nama || !String(nama).trim()) {
       return res.status(400).json({ error: 'Nama wajib diisi' })
@@ -101,6 +103,7 @@ router.put('/:id', async (req, res) => {
         nama: String(nama).trim(),
         nip: nip || null,
         mapel: mapel || null,
+        tanggalLahir: tanggalLahir || null,
       })
       .where(and(eq(anggota.id, id), eq(anggota.peran, 'guru')))
       .returning()

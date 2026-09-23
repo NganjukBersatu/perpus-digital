@@ -14,6 +14,7 @@ const error = ref('')
 const keyword = ref('')
 const filterStatus = ref('Semua')
 const peminjamanAktif = ref([])
+const hariSebelumJatuhTempo = ref(3)
 
 const userFromStorage = (() => {
   try {
@@ -30,6 +31,20 @@ function authHeaders() {
   return {
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json'
+  }
+}
+
+async function fetchPengaturanNotifikasi() {
+  try {
+    const res = await fetch(`${API_BASE}/pengaturan`)
+    if (!res.ok) return
+    const data = await res.json()
+    const batas = data?.detail?.notifikasi?.hariSebelumJatuhTempo
+    if (typeof batas === 'number' && batas >= 1) {
+      hariSebelumJatuhTempo.value = batas
+    }
+  } catch (err) {
+    console.error('Gagal memuat pengaturan notifikasi:', err)
   }
 }
 
@@ -64,7 +79,9 @@ async function fetchPeminjaman() {
         batasKembali: item.tanggalKembali || item.batasKembali,
         status: item.status || 'Dipinjam',
         tanggalDikembalikan: item.tanggalDikembalikan || null,
-        denda: item.denda || 0
+        denda: item.denda || 0,
+        masaTenggang: item.masaTenggang || 0, 
+        hariKenaDenda: item.hariKenaDenda || 0,
       }))
       .filter((p) => !p.tanggalDikembalikan)
   } catch (err) {
@@ -76,7 +93,10 @@ async function fetchPeminjaman() {
   }
 }
 
-onMounted(fetchPeminjaman)
+onMounted(() => {
+  fetchPengaturanNotifikasi()
+  fetchPeminjaman()
+})
 
 watch(userId, (id) => {
   if (id) fetchPeminjaman()
@@ -105,24 +125,36 @@ function hitungHariTerlambat(item) {
   today.setHours(0, 0, 0, 0)
   const due = new Date(item.batasKembali)
   due.setHours(0, 0, 0, 0)
-  const selisih = Math.floor((today - due) / (1000 * 60 * 60 * 24))
+  const selisih = Math.round((today - due) / (1000 * 60 * 60 * 24))
   return selisih > 0 ? selisih : 0
 }
 
 function isTerlambat(item) {
-  return hitungHariTerlambat(item) > 0
+  const hariTelat = hitungHariTerlambat(item)
+  const masaTenggang = item.masaTenggang || 0
+  return hariTelat > masaTenggang
+}
+
+function isDalamTenggang(item) {
+  const hariTelat = hitungHariTerlambat(item)
+  if (hariTelat <= 0) return false
+  const masaTenggang = item.masaTenggang || 0
+  return hariTelat <= masaTenggang
 }
 
 function isHampirJatuhTempo(item) {
   if (!item.batasKembali || isTerlambat(item)) return false
   const today = new Date()
+  today.setHours(0, 0, 0, 0)
   const due = new Date(item.batasKembali)
-  const diff = (due - today) / (1000 * 60 * 60 * 24)
-  return diff <= 3
+  due.setHours(0, 0, 0, 0)
+  const diff = Math.round((due - today) / (1000 * 60 * 60 * 24))
+  return diff >= 0 && diff <= hariSebelumJatuhTempo.value 
 }
 
 function statusTampil(item) {
   if (isTerlambat(item)) return 'Terlambat'
+  if (isDalamTenggang(item)) return 'Masa Tenggang' 
   if (isHampirJatuhTempo(item)) return 'Hampir Jatuh Tempo'
   return 'Dipinjam'
 }
@@ -145,6 +177,7 @@ const daftarTampil = computed(() => {
       filterStatus.value === 'Semua' ||
       (filterStatus.value === 'Dipinjam' && status === 'Dipinjam') ||
       (filterStatus.value === 'Hampir Jatuh Tempo' && status === 'Hampir Jatuh Tempo') ||
+      (filterStatus.value === 'Masa Tenggang' && status === 'Masa Tenggang') ||
       (filterStatus.value === 'Terlambat' && status === 'Terlambat')
 
     return cocokKeyword && cocokFilter
@@ -210,7 +243,7 @@ function goToKatalog() {
         <h2>Daftar Peminjaman</h2>
         <div class="filter-chips">
           <button
-            v-for="f in ['Semua', 'Dipinjam', 'Hampir Jatuh Tempo', 'Terlambat']"
+            v-for="f in ['Semua', 'Dipinjam', 'Hampir Jatuh Tempo', 'Masa Tenggang', 'Terlambat']"
             :key="f"
             class="chip"
             :class="{ active: filterStatus === f }"
@@ -270,6 +303,7 @@ function goToKatalog() {
                     :class="{
                       'status-active': statusTampil(item) === 'Dipinjam',
                       'status-soon': statusTampil(item) === 'Hampir Jatuh Tempo',
+                      'status-grace': statusTampil(item) === 'Masa Tenggang', 
                       'status-late': statusTampil(item) === 'Terlambat'
                     }"
                   >
@@ -471,6 +505,7 @@ function goToKatalog() {
 
 .status-active { background: #dbeafe; color: #1d4ed8; }
 .status-soon { background: #ffedd5; color: #c2410c; }
+.status-grace { background: #fef3c7; color: #a16207; }  
 .status-late { background: #fee2e2; color: #b91c1c; }
 
 .denda-text {

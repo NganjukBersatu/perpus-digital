@@ -92,7 +92,7 @@ async function muatData() {
       )
     }
 
-    const res = await fetch(url)
+    const res = await fetch(url, { headers: authHeaders() })
 
     if (!res.ok) {
       throw new Error('response not ok')
@@ -170,6 +170,7 @@ async function tandaiDikembalikan(item) {
   try {
     const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/peminjaman/${item.id}/kembalikan`, {
         method: 'PATCH',
+        headers: authHeaders(),
       }
     )
 

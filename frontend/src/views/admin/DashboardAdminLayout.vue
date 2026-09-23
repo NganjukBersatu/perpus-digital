@@ -44,7 +44,7 @@ const totalNotifikasi = computed(() => {
   return notifikasi.value.terlambat.jumlah + notifikasi.value.jatuhTempoHariIni.jumlah
 })
 
-const NOTIF_STORAGE_KEY = 'notifikasi_waktu_terakhir'
+const NOTIF_STORAGE_KEY = `notifikasi_admin_${getAdmin()?.id || 'guest'}`
 
 function muatWaktuTersimpan() {
   try {

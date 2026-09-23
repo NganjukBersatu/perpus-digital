@@ -3,6 +3,7 @@ const router = express.Router()
 const db = require('../db')
 const { peminjaman, eksemplarBuku, anggota, buku } = require('../db/schema')
 const { ambilPengaturanDenda, hitungDenda } = require('../utils/hitungDenda')
+const { sinkronkanStokBuku } = require('./buku')
 const { eq, and, isNotNull, isNull, gte, lte, or, ilike, sql } = require('drizzle-orm')
 
 // GET /api/pengembalian?search=&status=&start=&end=&page=&limit=
@@ -171,6 +172,13 @@ router.patch('/:id', async (req, res) => {
       .update(eksemplarBuku)
       .set({ status: 'tersedia' })
       .where(eq(eksemplarBuku.id, row.eksemplarId))
+
+    const [{ bukuId: bukuIdDikembalikan }] = await db
+      .select({ bukuId: eksemplarBuku.bukuId })
+      .from(eksemplarBuku)
+      .where(eq(eksemplarBuku.id, row.eksemplarId))
+    await sinkronkanStokBuku(bukuIdDikembalikan)
+
 
     res.json({ message: 'Buku berhasil dikembalikan', denda })
   } catch (err) {

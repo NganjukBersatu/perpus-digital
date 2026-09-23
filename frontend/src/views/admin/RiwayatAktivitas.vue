@@ -11,6 +11,9 @@ const filterTipe = ref('semua')
 const tipeMenuOpen = ref(false)
 const errorMessage = ref('')
 
+const currentPage = ref(1)
+const perPage = ref(5)
+
 const filteredRiwayat = computed(() => {
   const q = searchQuery.value.toLowerCase().trim()
   return riwayatList.value.filter((r) => {
@@ -22,6 +25,25 @@ const filteredRiwayat = computed(() => {
     return cocokTipe && cocokSearch
   })
 })
+
+const totalData = computed(() => filteredRiwayat.value.length)
+const totalPages = computed(() => Math.max(1, Math.ceil(totalData.value / perPage.value)))
+
+const pagedRiwayat = computed(() => {
+  const start = (currentPage.value - 1) * perPage.value
+  return filteredRiwayat.value.slice(start, start + perPage.value)
+})
+
+const rangeText = computed(() => {
+  if (totalData.value === 0) return 'Menampilkan 0 data'
+  const start = (currentPage.value - 1) * perPage.value + 1
+  const end = Math.min(currentPage.value * perPage.value, totalData.value)
+  return `Menampilkan ${start} - ${end} dari ${totalData.value} data`
+})
+
+function resetPage() {
+  currentPage.value = 1
+}
 
 function formatTanggal(tgl) {
   if (!tgl) return '-'
@@ -63,6 +85,7 @@ function labelTipeTerpilih() {
 function pilihTipe(value) {
   filterTipe.value = value
   tipeMenuOpen.value = false
+  resetPage()
 }
 
 function tutupFilterMenu(e) {
@@ -98,7 +121,7 @@ onUnmounted(() => {
             <path d="M20 20l-3.5-3.5" stroke-linecap="round" />
           </svg>
         </span>
-        <input v-model="searchQuery" class="search" placeholder="Cari nama siswa/guru atau judul buku..." />
+        <input v-model="searchQuery" class="search" placeholder="Cari nama siswa/guru atau judul buku..." @input="resetPage" />
       </div>
 
       <div class="filter-dropdown">
@@ -133,26 +156,60 @@ onUnmounted(() => {
             <th>Keterangan</th>
           </tr>
         </thead>
-        <tbody>
-          <tr v-for="item in filteredRiwayat" :key="item.id">
-            <td>{{ formatTanggal(item.tanggal) }}</td>
-            <td><span class="badge" :class="item.tipe">{{ labelTipe(item.tipe) }}</span></td>
-            <td class="judul">{{ item.nama }}</td>
-            <td>{{ item.kelas || '-' }}</td>
-            <td>{{ item.keterangan }}</td>
-          </tr>
+<tbody>
+  <tr v-for="item in pagedRiwayat" :key="item.id">
+    <td>{{ formatTanggal(item.tanggal) }}</td>
+    <td><span class="badge" :class="item.tipe">{{ labelTipe(item.tipe) }}</span></td>
+    <td class="judul">{{ item.nama }}</td>
+    <td>{{ item.kelas || '-' }}</td>
+    <td>{{ item.keterangan }}</td>
+  </tr>
 
-          <tr v-if="!isLoading && filteredRiwayat.length === 0">
-            <td colspan="5" class="empty">
-              {{ searchQuery ? 'Tidak ada aktivitas yang cocok.' : 'Belum ada aktivitas.' }}
-            </td>
-          </tr>
+  <tr v-if="!isLoading && filteredRiwayat.length === 0">
+    <td colspan="5" class="empty">
+      {{ searchQuery ? 'Tidak ada aktivitas yang cocok.' : 'Belum ada aktivitas.' }}
+    </td>
+  </tr>
 
-          <tr v-if="isLoading">
-            <td colspan="5" class="empty">Memuat data...</td>
-          </tr>
-        </tbody>
+  <tr v-if="isLoading">
+    <td colspan="5" class="empty">Memuat data...</td>
+  </tr>
+</tbody>
       </table>
+    </div>
+
+    <div v-if="!isLoading && filteredRiwayat.length > 0" class="pagination">
+      <span class="range">{{ rangeText }}</span>
+
+      <div class="pages">
+        <button type="button" :disabled="currentPage === 1" @click="currentPage--">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 6l-6 6 6 6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+
+        <button
+          v-for="n in totalPages"
+          :key="n"
+          type="button"
+          class="page-num"
+          :class="{ active: currentPage === n }"
+          @click="currentPage = n"
+        >
+          {{ n }}
+        </button>
+
+        <button type="button" :disabled="currentPage === totalPages" @click="currentPage++">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </div>
+
+      <select v-model.number="perPage" class="select select-sm" @change="resetPage">
+        <option :value="5">5 / halaman</option>
+        <option :value="10">10 / halaman</option>
+      </select>
     </div>
   </div>
 </template>
@@ -210,6 +267,25 @@ tbody tr:hover { background: #f9fafb; }
 .empty { text-align: center; color: #9ca3af; padding: 28px; }
 .icon-svg { width: 16px; height: 16px; display: block; }
 
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 4px 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+.pages { display: flex; align-items: center; gap: 6px; }
+.pages button {
+  min-width: 32px; height: 32px; border: 0; background: transparent;
+  border-radius: 8px; cursor: pointer; color: #4b5563;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.pages .page-num.active { background: #5b4dff; color: #fff; }
+.pages button:disabled { opacity: 0.4; cursor: default; }
+.select-sm { min-width: auto; }
+
 .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; }
 .badge.pinjam { background: #dbeafe; color: #1d4ed8; }
 .badge.kembali { background: #d1fae5; color: #065f46; }
@@ -236,6 +312,25 @@ tbody tr:hover { background: #f9fafb; }
   .filter-dropdown {
     width: 100%;
   }
+  .select {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  background: #fff;
+  color: #000;
+  outline: none;
+  cursor: pointer;
+}
+
+.select:focus {
+  border-color: #5b4dff;
+}
+
+.select-sm {
+  min-width: 110px; 
+  width: auto;
+}
 
   .table-wrap {
     border-radius: 10px;
@@ -249,6 +344,33 @@ tbody tr:hover { background: #f9fafb; }
 
   .subtitle {
     font-size: 12px;
+  }
+
+    .pagination {
+    flex-direction: row;       
+    flex-wrap: wrap;           
+    justify-content: center;  
+    align-items: center;
+    gap: 12px;
+    padding-top: 16px;
+  }
+
+  .range {
+    width: 100%;               
+    text-align: center;
+    font-size: 12px;
+    margin-bottom: 4px;
+  }
+
+  .pages {
+    justify-content: center;
+    width: auto;               
+  }
+
+  .select-sm {
+    width: auto;               
+    min-width: 110px;         
+    margin-left: 0;
   }
 }
 </style>

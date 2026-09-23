@@ -118,7 +118,7 @@ const dikembalikanPoints = computed(() =>
 async function muatStatistikPeminjaman() {
   try {
     const res = await fetch(
-      `http://localhost:3000/api/dashboard/statistik-peminjaman?range=${selectedRange.value}`
+      `${import.meta.env.VITE_API_BASE_URL}/dashboard/statistik-peminjaman?range=${selectedRange.value}`
     )
     const data = await res.json()
 
@@ -157,7 +157,7 @@ let searchBukuTerpopulerTimeout = null
 
 async function fetchKategoriBuku() {
   try {
-    const res = await fetch('http://localhost:3000/api/buku/kategori')
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/buku/kategori`)
     kategoriBukuList.value = await res.json()
   } catch (err) {
     console.error('Gagal mengambil kategori buku', err)
@@ -171,7 +171,7 @@ async function fetchBukuTerpopulerLengkap() {
       kategori: kategoriFilterBuku.value,
       search: searchBukuTerpopuler.value,
     })
-    const res = await fetch(`http://localhost:3000/api/dashboard/buku-terpopuler-lengkap?${params}`)
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/dashboard/buku-terpopuler-lengkap?${params}`)
     bukuTerpopulerLengkap.value = await res.json()
   } catch (err) {
     console.error('Gagal mengambil buku terpopuler lengkap', err)
@@ -234,7 +234,7 @@ const tampilkanTotalBelumDikembalikan = ref(false)
 
 async function fetchTotalDenda() {
   try {
-    const res = await fetch('http://localhost:3000/api/denda')
+const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/denda`)
     const data = await res.json()
     totalDenda.value = `Rp${(data.totalBelumDibayar || 0).toLocaleString('id-ID')}`
   } catch (err) {
@@ -244,7 +244,7 @@ async function fetchTotalDenda() {
 
 async function fetchStats() {
   try {
-    const res = await fetch('http://localhost:3000/api/dashboard/stats')
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/dashboard/stats`)
     if (!res.ok) throw new Error('response not ok')
     const data = await res.json()
 
@@ -261,8 +261,8 @@ async function fetchStats() {
 async function fetchPeminjamanTerbaru(hari) {
   try {
     const url = hari
-      ? `http://localhost:3000/api/dashboard/peminjaman-terbaru?hari=${hari}`
-      : 'http://localhost:3000/api/dashboard/peminjaman-terbaru'
+      ? `${import.meta.env.VITE_API_BASE_URL}/dashboard/peminjaman-terbaru?hari=${hari}`
+      : `${import.meta.env.VITE_API_BASE_URL}/dashboard/peminjaman-terbaru`
     const res = await fetch(url)
     peminjamanTerbaru.value = await res.json()
   } catch (err) {
@@ -272,7 +272,7 @@ async function fetchPeminjamanTerbaru(hari) {
 
 async function fetchPeminjamanBelumKembali() {
   try {
-    const res = await fetch('http://localhost:3000/api/dashboard/peminjaman-belum-kembali')
+   const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/dashboard/peminjaman-belum-kembali`)
     peminjamanBelumKembali.value = await res.json()
   } catch (err) {
     console.error('Gagal mengambil peminjaman belum kembali', err)
@@ -281,7 +281,7 @@ async function fetchPeminjamanBelumKembali() {
 
 async function fetchBukuTerpopuler() {
   try {
-    const res = await fetch('http://localhost:3000/api/dashboard/buku-terpopuler')
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/dashboard/buku-terpopuler`)
     bukuTerpopuler.value = await res.json()
   } catch (err) {
     console.error('Gagal mengambil buku terpopuler', err)
@@ -305,7 +305,7 @@ async function fetchPengingat() {
 
 async function kembalikanBuku(id) {
   try {
-    const res = await fetch(`http://localhost:3000/api/peminjaman/${id}/kembalikan`, {
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/peminjaman/${id}/kembalikan`, {
       method: 'PATCH'
     })
     if (!res.ok) {

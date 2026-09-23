@@ -24,6 +24,21 @@ const errorMessage = ref('')
 const showPassword = ref(false)
 const isLoading = ref(false)
 
+// State untuk fitur "Lupa Password" khusus Guru
+const guruAuthMode = ref('login') // 'login' | 'lupa'
+const lupaForm = ref({ nip: '', tanggalLahir: '' })
+const lupaError = ref('')
+const lupaMessage = ref('')
+const isLupaLoading = ref(false)
+
+// State untuk fitur "Daftar" khusus Siswa
+const siswaAuthMode = ref('login') // 'login' | 'daftar'
+const daftarForm = ref({ nama: '', nis: '', kelas: '', tanggalLahir: '' })
+const daftarError = ref('')
+const daftarMessage = ref('')
+const isDaftarLoading = ref(false)
+const daftarKelasOptions = ref([])
+
 const roleLabel = computed(() => {
   const found = roles.find(r => r.value === selectedRole.value)
   return found ? found.label : ''
@@ -32,6 +47,14 @@ const roleLabel = computed(() => {
 watch(selectedRole, () => {
   form.value = { nis: '', tanggalLahir: '', username: '', password: '', nip: '' }
   errorMessage.value = ''
+  guruAuthMode.value = 'login'
+  lupaForm.value = { nip: '', tanggalLahir: '' }
+  lupaError.value = ''
+  lupaMessage.value = ''
+  siswaAuthMode.value = 'login'
+  daftarForm.value = { nama: '', nis: '', kelas: '', tanggalLahir: '' }
+  daftarError.value = ''
+  daftarMessage.value = ''
 })
 
 async function handleLogin() {
@@ -122,6 +145,117 @@ async function handleLogin() {
     isLoading.value = false
   }
 }
+
+function bukaLupaPassword() {
+  guruAuthMode.value = 'lupa'
+  lupaForm.value = { nip: form.value.nip || '', tanggalLahir: '' }
+  lupaError.value = ''
+  lupaMessage.value = ''
+}
+
+function kembaliKeLogin() {
+  guruAuthMode.value = 'login'
+  lupaError.value = ''
+  lupaMessage.value = ''
+}
+
+async function handleLupaPassword() {
+  lupaError.value = ''
+  lupaMessage.value = ''
+  isLupaLoading.value = true
+
+  try {
+    const res = await fetch(
+      `${import.meta.env.VITE_API_BASE_URL}/auth/guru/lupa-password`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nip: lupaForm.value.nip,
+          tanggalLahir: lupaForm.value.tanggalLahir
+        })
+      }
+    )
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      lupaError.value = data.error || data.message || 'Gagal memverifikasi data'
+      return
+    }
+
+    lupaMessage.value = 'Berhasil! Password Anda telah direset. Silakan login kembali menggunakan NIP sebagai password.'
+  } catch (err) {
+    console.error('LUPA PASSWORD ERROR:', err)
+    lupaError.value = 'Tidak bisa terhubung ke server'
+  } finally {
+    isLupaLoading.value = false
+  }
+}
+
+async function bukaDaftarSiswa() {
+  siswaAuthMode.value = 'daftar'
+  daftarForm.value = { nama: '', nis: '', kelas: '', tanggalLahir: '' }
+  daftarError.value = ''
+  daftarMessage.value = ''
+
+  if (daftarKelasOptions.value.length === 0) {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/kelas`)
+      if (res.ok) {
+        daftarKelasOptions.value = await res.json()
+      }
+    } catch (err) {
+      console.error('Gagal memuat daftar kelas', err)
+    }
+  }
+}
+
+function kembaliKeLoginSiswa() {
+  siswaAuthMode.value = 'login'
+  daftarError.value = ''
+  daftarMessage.value = ''
+}
+
+async function handleDaftarSiswa() {
+  daftarError.value = ''
+  daftarMessage.value = ''
+  isDaftarLoading.value = true
+
+  try {
+    const res = await fetch(
+      `${import.meta.env.VITE_API_BASE_URL}/auth/siswa/daftar`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nama: daftarForm.value.nama,
+          nis: daftarForm.value.nis,
+          kelas: daftarForm.value.kelas,
+          tanggalLahir: daftarForm.value.tanggalLahir
+        })
+      }
+    )
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      daftarError.value = data.error || data.message || 'Gagal mendaftar'
+      return
+    }
+
+    // Isi form login otomatis biar siswa tinggal klik "Masuk"
+    form.value.nis = daftarForm.value.nis
+    form.value.tanggalLahir = daftarForm.value.tanggalLahir
+
+    daftarMessage.value = 'Pendaftaran berhasil! Silakan klik "Masuk sebagai Siswa" di bawah.'
+  } catch (err) {
+    console.error('DAFTAR SISWA ERROR:', err)
+    daftarError.value = 'Tidak bisa terhubung ke server'
+  } finally {
+    isDaftarLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -209,7 +343,7 @@ async function handleLogin() {
           </div>
 
           <form @submit.prevent="handleLogin">
-            <template v-if="selectedRole === 'siswa'">
+                        <template v-if="selectedRole === 'siswa' && siswaAuthMode === 'login'">
               <div class="field">
                 <label>NIS</label>
                 <div class="input-wrap">
@@ -230,9 +364,82 @@ async function handleLogin() {
                   <input v-model="form.tanggalLahir" type="date" required />
                 </div>
               </div>
+              <div class="forgot-link">
+                <button type="button" class="link-btn" @click="bukaDaftarSiswa">Belum punya akun? Daftar</button>
+              </div>
             </template>
 
-            <template v-else-if="selectedRole === 'guru'">
+            <template v-else-if="selectedRole === 'siswa' && siswaAuthMode === 'daftar'">
+              <p class="lupa-desc">Isi data diri Anda untuk membuat akun siswa.</p>
+
+              <div class="field">
+                <label>Nama Lengkap</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="8" r="3" />
+                    <path d="M5 21a7 7 0 0 1 14 0" />
+                  </svg>
+                  <input v-model="daftarForm.nama" type="text" placeholder="Masukkan nama lengkap" required />
+                </div>
+              </div>
+
+              <div class="field">
+                <label>NIS</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    <path d="M3 9h18" />
+                  </svg>
+                  <input v-model="daftarForm.nis" type="text" placeholder="Masukkan NIS" required />
+                </div>
+              </div>
+
+              <div class="field">
+                <label>Kelas</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    <path d="M3 9h18" />
+                  </svg>
+                  <select v-model="daftarForm.kelas" required class="select-kelas">
+                    <option value="" disabled>Pilih kelas</option>
+                    <option v-for="k in daftarKelasOptions" :key="k" :value="k">
+                    {{ k }}
+                  </option>
+                </select>
+                </div>
+              </div>
+
+              <div class="field">
+                <label>Tanggal Lahir</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  <input v-model="daftarForm.tanggalLahir" type="date" required />
+                </div>
+              </div>
+
+              <p v-if="daftarError" class="error-text">{{ daftarError }}</p>
+              <p v-if="daftarMessage" class="success-text">{{ daftarMessage }}</p>
+
+              <button
+                type="button"
+                class="btn-login"
+                :disabled="isDaftarLoading"
+                :style="{ opacity: isDaftarLoading ? 0.7 : 1, cursor: isDaftarLoading ? 'not-allowed' : 'pointer' }"
+                @click="handleDaftarSiswa"
+              >
+                {{ isDaftarLoading ? 'Memproses...' : 'Daftar' }}
+              </button>
+
+              <button type="button" class="link-btn back-link" @click="kembaliKeLoginSiswa">
+                ← Kembali ke halaman login
+              </button>
+            </template>
+
+            <template v-else-if="selectedRole === 'guru' && guruAuthMode === 'login'">
               <div class="field">
                 <label>NIP</label>
                 <div class="input-wrap">
@@ -262,7 +469,53 @@ async function handleLogin() {
       </svg>
     </button>
   </div>
+  <div class="forgot-link">
+    <button type="button" class="link-btn" @click="bukaLupaPassword">Lupa password?</button>
+  </div>
 </div>
+            </template>
+
+            <template v-else-if="selectedRole === 'guru' && guruAuthMode === 'lupa'">
+              <p class="lupa-desc">Masukkan NIP dan tanggal lahir Anda untuk mereset password.</p>
+
+              <div class="field">
+                <label>NIP</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="8" r="3" />
+                    <path d="M5 21a7 7 0 0 1 14 0" />
+                  </svg>
+                  <input v-model="lupaForm.nip" type="text" placeholder="Masukkan NIP" required />
+                </div>
+              </div>
+
+              <div class="field">
+                <label>Tanggal Lahir</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  <input v-model="lupaForm.tanggalLahir" type="date" required />
+                </div>
+              </div>
+
+              <p v-if="lupaError" class="error-text">{{ lupaError }}</p>
+              <p v-if="lupaMessage" class="success-text">{{ lupaMessage }}</p>
+
+              <button
+                type="button"
+                class="btn-login"
+                :disabled="isLupaLoading"
+                :style="{ opacity: isLupaLoading ? 0.7 : 1, cursor: isLupaLoading ? 'not-allowed' : 'pointer' }"
+                @click="handleLupaPassword"
+              >
+                {{ isLupaLoading ? 'Memproses...' : 'Reset Password' }}
+              </button>
+
+              <button type="button" class="link-btn back-link" @click="kembaliKeLogin">
+                ← Kembali ke halaman login
+              </button>
             </template>
 
             <template v-else>
@@ -299,18 +552,20 @@ async function handleLogin() {
 </div>
 </template>
 
-            <p v-if="errorMessage" class="error-text">
-              {{ errorMessage }}
-            </p>
+            <template v-if="!(selectedRole === 'guru' && guruAuthMode === 'lupa') && !(selectedRole === 'siswa' && siswaAuthMode === 'daftar')">
+              <p v-if="errorMessage" class="error-text">
+                {{ errorMessage }}
+              </p>
 
-            <button
-              type="submit"
-              class="btn-login"
-              :disabled="isLoading"
-              :style="{ opacity: isLoading ? 0.7 : 1, cursor: isLoading ? 'not-allowed' : 'pointer' }"
-            >
-              {{ isLoading ? 'Memproses...' : `Masuk sebagai ${roleLabel}` }}
-            </button>
+              <button
+                type="submit"
+                class="btn-login"
+                :disabled="isLoading"
+                :style="{ opacity: isLoading ? 0.7 : 1, cursor: isLoading ? 'not-allowed' : 'pointer' }"
+              >
+                {{ isLoading ? 'Memproses...' : `Masuk sebagai ${roleLabel}` }}
+              </button>
+            </template>
           </form>
 
           <p class="form-footer">
@@ -539,6 +794,21 @@ async function handleLogin() {
   color-scheme: dark;
 }
 
+.select-kelas {
+  width: 100%;
+  padding: 11px 12px 11px 36px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background-color: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+  font-size: 13px;
+  outline: none;
+  appearance: none;
+}
+.select-kelas option {
+  background: #1e3a6e;
+  color: #ffffff;
+}
 .btn-login {
   width: 100%;
   margin-top: 8px;
@@ -573,6 +843,49 @@ async function handleLogin() {
   font-size: 13px;
   margin: 8px 0 4px;
   text-align: center;
+}
+
+.success-text {
+  color: #4ade80;
+  font-size: 13px;
+  margin: 8px 0 4px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.forgot-link {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6fa1ff;
+  cursor: pointer;
+}
+.link-btn:hover {
+  text-decoration: underline;
+}
+
+.back-link {
+  display: block;
+  width: 100%;
+  text-align: center;
+  margin-top: 14px;
+  font-size: 13px;
+  color: #9fb0d1;
+}
+
+.lupa-desc {
+  font-size: 12px;
+  color: #9fb0d1;
+  margin: 0 0 16px;
+  line-height: 1.5;
 }
 
 /* ===== RESPONSIVE ===== */

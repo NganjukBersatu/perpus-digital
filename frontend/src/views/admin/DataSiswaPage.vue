@@ -15,28 +15,47 @@ const showModal = ref(false)
 const modalMode = ref('tambah')
 const form = ref({ id: null, nama: '', kelas: '', nis: '', tanggalLahir: '' })
 
+const currentPage = ref(1)
+const perPage = ref(5)
+
 const kelasOptions = computed(() => {
   const semuaKelas = daftarSiswa.value.map(s => s.kelas).filter(Boolean)
   return [...new Set(semuaKelas)]
 })
 
 const filteredSiswa = computed(() => {
-  const base = !selectedKelas.value
-    ? daftarSiswa.value
-    : daftarSiswa.value.filter((s) => s.kelas === selectedKelas.value)
+  let hasil = daftarSiswa.value
 
-  // Tampilkan hanya 1 baris per nama (tidak peduli besar-kecil huruf/spasi)
-  const namaTerlihat = new Set()
-  const hasilUnik = []
-  for (const s of base) {
-    const kunci = (s.nama || '').trim().toLowerCase()
-    if (!namaTerlihat.has(kunci)) {
-      namaTerlihat.add(kunci)
-      hasilUnik.push(s)
-    }
+  if (selectedKelas.value) {
+    hasil = hasil.filter((s) => s.kelas === selectedKelas.value)
   }
-  return hasilUnik
+
+  const q = searchQuery.value.trim().toLowerCase()
+  if (q) {
+    hasil = hasil.filter((s) => (s.nama || '').toLowerCase().includes(q))
+  }
+
+  return hasil
 })
+
+const totalData = computed(() => filteredSiswa.value.length)
+const totalPages = computed(() => Math.max(1, Math.ceil(totalData.value / perPage.value)))
+
+const pagedSiswa = computed(() => {
+  const start = (currentPage.value - 1) * perPage.value
+  return filteredSiswa.value.slice(start, start + perPage.value)
+})
+
+const rangeText = computed(() => {
+  if (totalData.value === 0) return 'Menampilkan 0 data'
+  const start = (currentPage.value - 1) * perPage.value + 1
+  const end = Math.min(currentPage.value * perPage.value, totalData.value)
+  return `Menampilkan ${start} - ${end} dari ${totalData.value} data`
+})
+
+function resetPage() {
+  currentPage.value = 1
+}
 
 function labelKelasTerpilih() {
   return selectedKelas.value || 'Semua Kelas'
@@ -45,6 +64,7 @@ function labelKelasTerpilih() {
 function pilihKelas(kelas) {
   selectedKelas.value = kelas
   kelasMenuOpen.value = false
+  resetPage()
 }
 
 function tutupFilterMenu(e) {
@@ -153,7 +173,7 @@ async function hapusSiswa(item) {
           v-model="searchQuery"
           class="search"
           placeholder="Cari nama siswa..."
-          @input="onSearchInput"
+          @input="resetPage"
         />
       </div>
 
@@ -191,8 +211,8 @@ async function hapusSiswa(item) {
 </tr>
         </thead>
         <tbody>
-          <tr v-for="(item, i) in filteredSiswa" :key="item.id">
-  <td>{{ i + 1 }}</td>
+  <tr v-for="(item, i) in pagedSiswa" :key="item.id">
+  <td>{{ (currentPage - 1) * perPage + i + 1 }}</td>
   <td class="judul">{{ item.nama }}</td>
   <td>{{ item.kelas || '-' }}</td>
   <td>{{ item.nis || '-' }}</td>
@@ -209,6 +229,40 @@ async function hapusSiswa(item) {
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <div class="pagination">
+      <span class="range">{{ rangeText }}</span>
+
+      <div class="pages">
+        <button type="button" :disabled="currentPage === 1" @click="currentPage--">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 6l-6 6 6 6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+
+        <button
+          v-for="n in totalPages"
+          :key="n"
+          type="button"
+          class="page-num"
+          :class="{ active: currentPage === n }"
+          @click="currentPage = n"
+        >
+          {{ n }}
+        </button>
+
+        <button type="button" :disabled="currentPage === totalPages" @click="currentPage++">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </div>
+
+      <select v-model.number="perPage" class="select select-sm" @change="resetPage">
+        <option :value="5">5 / halaman</option>
+        <option :value="10">10 / halaman</option>
+      </select>
     </div>
 
     <div v-if="showModal" class="modal-overlay" @click.self="tutupModal">
@@ -347,6 +401,25 @@ tbody tr:hover { background: #f9fafb; }
 
 .empty { text-align: center; color: #9ca3af; padding: 24px; }
 
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 4px 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+.pages { display: flex; align-items: center; gap: 6px; }
+.pages button {
+  min-width: 32px; height: 32px; border: 0; background: transparent;
+  border-radius: 8px; cursor: pointer; color: #4b5563;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.pages .page-num.active { background: #5b4dff; color: #fff; }
+.pages button:disabled { opacity: 0.4; cursor: default; }
+.select-sm { min-width: auto; }
+
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
   display: flex; align-items: center; justify-content: center; z-index: 100;
@@ -386,5 +459,33 @@ tbody tr:hover { background: #f9fafb; }
   .modal-card h2 { font-size: 16px; }
   .modal-actions { margin-top: 14px; }
   .btn-secondary, .btn-primary { padding: 10px 16px; }
+  .pagination {
+    flex-direction: row;       
+    flex-wrap: wrap;          
+    justify-content: center;  
+    align-items: center;
+    gap: 12px;
+    padding-top: 16px;
+  }
+
+  .range {
+    width: 100%;               
+    text-align: center;
+    font-size: 12px;
+    margin-bottom: 4px;        
+  }
+
+  .pages {
+    justify-content: center;
+    width: auto;               
+  }
+
+  .select-sm {
+    width: auto;               
+    min-width: 110px;         
+    margin-left: 0;
+    margin-top: 0;            
+    align-self: center;
+  }
 }
 </style>

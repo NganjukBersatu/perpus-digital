@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 
 const daftar = ref([])
 const isLoading = ref(true)
@@ -11,14 +11,36 @@ const statusMenuOpen = ref(false)
 const totalBelumDibayar = ref(0)
 const totalSudahDibayar = ref(0)
 
+const currentPage = ref(1)
+const perPage = ref(5)
+
 let searchTimeout = null
+
+const totalData = computed(() => daftar.value.length)
+const totalPages = computed(() => Math.max(1, Math.ceil(totalData.value / perPage.value)))
+
+const pagedDaftar = computed(() => {
+  const start = (currentPage.value - 1) * perPage.value
+  return daftar.value.slice(start, start + perPage.value)
+})
+
+const rangeText = computed(() => {
+  if (totalData.value === 0) return 'Menampilkan 0 data'
+  const start = (currentPage.value - 1) * perPage.value + 1
+  const end = Math.min(currentPage.value * perPage.value, totalData.value)
+  return `Menampilkan ${start} - ${end} dari ${totalData.value} data`
+})
+
+function resetPage() {
+  currentPage.value = 1
+}
 
 async function muatData() {
   isLoading.value = true
   errorMessage.value = ''
 
   try {
-    const url = new URL('http://localhost:3000/api/denda')
+    const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/denda`)
 
     if (searchQuery.value) {
       url.searchParams.set('search', searchQuery.value)
@@ -37,6 +59,7 @@ async function muatData() {
     daftar.value = json.data
     totalBelumDibayar.value = json.totalBelumDibayar
     totalSudahDibayar.value = json.totalSudahDibayar
+    resetPage()
   } catch (err) {
     console.error(err)
     errorMessage.value =
@@ -88,7 +111,7 @@ async function konfirmasiTandaiDibayar() {
 
   try {
     const res = await fetch(
-      `http://localhost:3000/api/denda/${itemAkanDibayar.value.id}/bayar`,
+      `${import.meta.env.VITE_API_BASE_URL}/denda/${itemAkanDibayar.value.id}/bayar`,
       { method: 'PATCH' }
     )
 
@@ -266,17 +289,16 @@ onUnmounted(() => {
             <th>Aksi</th>
           </tr>
         </thead>
+       <tbody>
 
-        <tbody>
+       <tr
+       v-for="(item, i) in pagedDaftar"
+       :key="item.id"
+      >
 
-          <tr
-            v-for="(item, i) in daftar"
-            :key="item.id"
-          >
-
-            <td>
-              {{ i + 1 }}
-            </td>
+      <td>
+      {{ (currentPage - 1) * perPage + i + 1 }}
+      </td>
 
             <td>
               <strong>
@@ -361,6 +383,40 @@ onUnmounted(() => {
         </tbody>
       </table>
 
+    </div>
+
+    <div v-if="!isLoading && daftar.length > 0" class="pagination">
+      <span class="range">{{ rangeText }}</span>
+
+      <div class="pages">
+        <button type="button" :disabled="currentPage === 1" @click="currentPage--">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 6l-6 6 6 6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+
+        <button
+          v-for="n in totalPages"
+          :key="n"
+          type="button"
+          class="page-num"
+          :class="{ active: currentPage === n }"
+          @click="currentPage = n"
+        >
+          {{ n }}
+        </button>
+
+        <button type="button" :disabled="currentPage === totalPages" @click="currentPage++">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </div>
+
+      <select v-model.number="perPage" class="select select-sm" @change="resetPage">
+        <option :value="5">5 / halaman</option>
+        <option :value="10">10 / halaman</option>
+      </select>
     </div>
 
     <!-- MODAL KONFIRMASI -->
@@ -680,6 +736,25 @@ tbody tr:hover {
   padding: 24px;
 }
 
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 4px 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+.pages { display: flex; align-items: center; gap: 6px; }
+.pages button {
+  min-width: 32px; height: 32px; border: 0; background: transparent;
+  border-radius: 8px; cursor: pointer; color: #4b5563;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.pages .page-num.active { background: #5b4dff; color: #fff; }
+.pages button:disabled { opacity: 0.4; cursor: default; }
+.select-sm { min-width: auto; }
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -777,12 +852,39 @@ tbody tr:hover {
     max-width: 120px;
   }
 
-  td:nth-child(2) strong,
+    td:nth-child(2) strong,
   td:nth-child(2) .sub-text {
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .pagination {
+    flex-direction: row; 
+    flex-wrap: wrap;     
+    justify-content: center; 
+    align-items: center;
+    gap: 12px;
+    padding-top: 16px;
+  }
+
+  .range {
+    width: 100%;         
+    text-align: center;
+    font-size: 12px;
+    margin-bottom: 4px;  
+  }
+
+  .pages {
+    justify-content: center;
+    width: auto;         
+  }
+
+  .select-sm {
+    width: auto;         
+    min-width: 110px;    
+    margin-left: 0;      
   }
 }
 </style>

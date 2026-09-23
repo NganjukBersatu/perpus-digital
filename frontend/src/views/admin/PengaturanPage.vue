@@ -80,7 +80,7 @@ function showToast(text) {
 
 async function loadSettings() {
   try {
-    const res = await fetch('http://localhost:3000/api/pengaturan')
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/pengaturan`)
     if (!res.ok) throw new Error('Gagal memuat')
     const data = await res.json()
 
@@ -104,7 +104,7 @@ async function loadSettings() {
 
 async function saveSettings() {
   try {
-    const res = await fetch('http://localhost:3000/api/pengaturan', {
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/pengaturan`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({

@@ -24,7 +24,7 @@ function onProfilUpdated(e) {
 
 async function sinkronkanDariServer() {
   try {
-    const res = await fetch('http://localhost:3000/api/admin/profil', {
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/admin/profil`, {
       headers: { ...authHeaders() },
     })
     if (!res.ok) return
@@ -69,7 +69,7 @@ let jumlahTerakhirDiketahui = null
 
 async function fetchNotifikasi() {
   try {
-    const res = await fetch('http://localhost:3000/api/dashboard/notifikasi')
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/dashboard/notifikasi`)
     const data = await res.json()
     const sekarang = new Date().toISOString()
 
@@ -217,7 +217,7 @@ function onSearchInput() {
 
   searchTimeout = setTimeout(async () => {
     try {
-      const res = await fetch(`http://localhost:3000/api/search?q=${encodeURIComponent(q)}`)
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/search?q=${encodeURIComponent(q)}`)
       searchResults.value = await res.json()
       searchOpen.value = true
     } catch (err) {

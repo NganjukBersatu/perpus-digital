@@ -53,12 +53,12 @@ const loadingTerlambat = ref(false)
 const tarifDendaPerHari = 0
 
 const fetchSummary = async () => {
-  const res = await axios.get('http://localhost:3000/api/pengembalian/summary')
+  const res = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/pengembalian/summary`)
   summary.value = res.data
 }
 
 const fetchData = async () => {
-  const res = await axios.get('http://localhost:3000/api/pengembalian', {
+  const res = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/pengembalian`, {
     params: {
       search: search.value,
       status: status.value,
@@ -122,7 +122,7 @@ const kolomExport = [
 ]
 
 const ambilSemuaDataExport = async () => {
-  const res = await axios.get('http://localhost:3000/api/pengembalian', {
+  const res = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/pengembalian`, {
     params: {
       search: search.value,
       status: status.value,
@@ -250,7 +250,7 @@ const bukaDetailHariIni = async () => {
   showDetailHariIni.value = true
   loadingHariIni.value = true
   try {
-    const res = await axios.get('http://localhost:3000/api/pengembalian', {
+    const res = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/pengembalian`, {
       params: {
         search: '',
         status: 'Semua',
@@ -274,7 +274,7 @@ const tutupDetailHariIni = () => {
 }
 
 const ambilSemuaPengembalian = async () => {
-  const res = await axios.get('http://localhost:3000/api/pengembalian', {
+ const res = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/pengembalian`, {
     params: {
       search: '',
       status: 'Semua',
@@ -1614,20 +1614,56 @@ thead th:nth-child(2) {
     max-width: 120px;
   }
 
-  /* footer & pagination */
+   /* ===== FOOTER & PAGINATION MOBILE ===== */
+    /* ===== FOOTER & PAGINATION MOBILE (SEJAJAR) ===== */
   .footer {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;       /* Susun horizontal */
+    flex-wrap: wrap;           /* Izinkan turun baris jika sempit */
+    justify-content: center;   /* Pusatkan semua elemen */
+    align-items: center;
     gap: 10px;
     text-align: center;
+    padding: 16px 12px;
+  }
+
+  .footer > span {
+    width: 100%;               /* Teks ambil satu baris penuh (baris 1) */
+    text-align: center;
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 4px;
   }
 
   .pagination {
+    display: flex;
+    flex-direction: row;
     justify-content: center;
+    align-items: center;
+    gap: 6px;
+    width: auto;               /* Ukuran normal */
   }
 
-  .footer .select {
-    width: 100%;
+  .pagination button {
+    min-width: 32px;
+    height: 32px;
+    padding: 4px 8px;
+  }
+
+  /* Dropdown "5 / halaman" — card rapi sejajar dengan tombol */
+  .footer > .select,
+  .footer .select.select-sm {
+    width: auto !important;
+    min-width: 120px !important;
+    max-width: 160px !important;
+    margin: 0 !important;      /* Hilangkan margin auto */
+    display: inline-block !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 8px !important;
+    padding: 8px 12px !important;
+    background-color: #fff !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) !important;
+    font-size: 13px !important;
+    box-sizing: border-box !important;
   }
 }
 </style>

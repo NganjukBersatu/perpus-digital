@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 
 const daftar = ref([])
 const isLoading = ref(true)
@@ -11,6 +11,9 @@ const statusMenuOpen = ref(false)
 const tanggalDari = ref('')
 const tanggalSampai = ref('')
 
+const currentPage = ref(1)
+const perPage = ref(5)
+
 let searchTimeout = null
 
 const pengaturanPinjam = ref({
@@ -19,9 +22,28 @@ const pengaturanPinjam = ref({
   durasiPerpanjang: 7,
 })
 
+const totalData = computed(() => daftar.value.length)
+const totalPages = computed(() => Math.max(1, Math.ceil(totalData.value / perPage.value)))
+
+const pagedDaftar = computed(() => {
+  const start = (currentPage.value - 1) * perPage.value
+  return daftar.value.slice(start, start + perPage.value)
+})
+
+const rangeText = computed(() => {
+  if (totalData.value === 0) return 'Menampilkan 0 data'
+  const start = (currentPage.value - 1) * perPage.value + 1
+  const end = Math.min(currentPage.value * perPage.value, totalData.value)
+  return `Menampilkan ${start} - ${end} dari ${totalData.value} data`
+})
+
+function resetPage() {
+  currentPage.value = 1
+}
+
 async function muatPengaturanPeminjaman() {
   try {
-    const res = await fetch('http://localhost:3000/api/pengaturan')
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/pengaturan`)
     const json = await res.json()
     if (json.detail?.peminjaman) {
       pengaturanPinjam.value = {
@@ -40,9 +62,7 @@ async function muatData() {
   errorMessage.value = ''
 
   try {
-    const url = new URL(
-      'http://localhost:3000/api/data-peminjaman'
-    )
+    const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/data-peminjaman`)
 
     if (searchQuery.value) {
       url.searchParams.set(
@@ -81,6 +101,7 @@ async function muatData() {
     const json = await res.json()
 
     daftar.value = json.data
+    resetPage()
   } catch (err) {
     console.error(err)
 
@@ -147,9 +168,7 @@ async function tandaiDikembalikan(item) {
   }
 
   try {
-    const res = await fetch(
-      `http://localhost:3000/api/peminjaman/${item.id}/kembalikan`,
-      {
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/peminjaman/${item.id}/kembalikan`, {
         method: 'PATCH',
       }
     )
@@ -182,10 +201,7 @@ async function perpanjangPeminjaman(item) {
   }
 
   try {
-    const res = await fetch(
-      `http://localhost:3000/api/peminjaman/${item.id}/perpanjang`,
-      { method: 'PATCH' }
-    )
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/peminjaman/${item.id}/perpanjang`, { method: 'PATCH' })
 
     if (!res.ok) {
       const err = await res.json()
@@ -467,14 +483,14 @@ onUnmounted(() => {
 
         <tbody>
 
-          <tr
-            v-for="(item, i) in daftar"
-            :key="item.id"
-          >
+        <tr
+         v-for="(item, i) in pagedDaftar"
+        :key="item.id"
+        >
 
             <td>
-              {{ i + 1 }}
-            </td>
+  {{ (currentPage - 1) * perPage + i + 1 }}
+</td>
 
             <td>
 
@@ -573,11 +589,38 @@ onUnmounted(() => {
 
     </div>
 
-    <div
-      v-if="!isLoading && daftar.length > 0"
-      class="table-footer"
-    >
-      Menampilkan {{ daftar.length }} data
+        <div v-if="!isLoading && daftar.length > 0" class="pagination">
+      <span class="range">{{ rangeText }}</span>
+
+      <div class="pages">
+        <button type="button" :disabled="currentPage === 1" @click="currentPage--">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 6l-6 6 6 6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+
+        <button
+          v-for="n in totalPages"
+          :key="n"
+          type="button"
+          class="page-num"
+          :class="{ active: currentPage === n }"
+          @click="currentPage = n"
+        >
+          {{ n }}
+        </button>
+
+        <button type="button" :disabled="currentPage === totalPages" @click="currentPage++">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </div>
+
+      <select v-model.number="perPage" class="select select-sm" @change="resetPage">
+        <option :value="5">5 / halaman</option>
+        <option :value="10">10 / halaman</option>
+      </select>
     </div>
 
   </div>
@@ -877,11 +920,24 @@ tbody tr:hover {
   padding: 24px;
 }
 
-.table-footer {
-  margin-top: 14px;
-  font-size: 11px;
-  color: #9ca3af;
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 4px 0;
+  font-size: 13px;
+  color: #6b7280;
 }
+.pages { display: flex; align-items: center; gap: 6px; }
+.pages button {
+  min-width: 32px; height: 32px; border: 0; background: transparent;
+  border-radius: 8px; cursor: pointer; color: #4b5563;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.pages .page-num.active { background: #5b4dff; color: #fff; }
+.pages button:disabled { opacity: 0.4; cursor: default; }
+.select-sm { min-width: auto; }
 
 @media (max-width: 640px) {
   .page {
@@ -926,8 +982,8 @@ tbody tr:hover {
     order: 1;
   }
 
-  .select,
-  .filter-dropdown {
+  .toolbar .select,
+  .toolbar .filter-dropdown {
     flex: 1 1 100%;
     order: 2;
     min-width: 0;
@@ -1050,5 +1106,32 @@ tbody tr:hover {
     margin-top: 12px;
     font-size: 11px;
   }
+     .pagination {
+    flex-direction: row; 
+    flex-wrap: wrap;     
+    justify-content: center; 
+    align-items: center;
+    gap: 12px;
+    padding-top: 16px;
+  }
+
+  .range {
+    width: 100%;         
+    text-align: center;
+    font-size: 12px;
+    margin-bottom: 4px;  
+  }
+
+  .pages {
+    justify-content: center;
+    width: auto;         
+  }
+
+  .select-sm {
+    width: auto;         
+    min-width: 110px;    
+    margin-left: 0;      
+  }
 }
+
 </style>

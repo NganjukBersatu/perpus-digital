@@ -4,10 +4,10 @@ const bcrypt = require('bcrypt')
 const { db } = require('../db/client')
 const { adminAkun } = require('../db/schema')
 const { eq } = require('drizzle-orm')
-const { wajibLogin } = require('./auth')
+const { wajibAdmin } = require('./auth')
 
 // GET profil admin yang sedang login
-router.get('/profil', wajibLogin, async (req, res) => {
+router.get('/profil', wajibAdmin, async (req, res) => {
   try {
     const [akun] = await db.select().from(adminAkun).where(eq(adminAkun.id, req.admin.id))
     if (!akun) return res.status(404).json({ error: 'Akun tidak ditemukan' })
@@ -20,7 +20,7 @@ router.get('/profil', wajibLogin, async (req, res) => {
 })
 
 // PUT update data profil (termasuk username)
-router.put('/profil', wajibLogin, async (req, res) => {
+router.put('/profil', wajibAdmin, async (req, res) => {
   try {
     const { namaLengkap, email, telepon, jabatan, nipNik, username } = req.body
 
@@ -75,7 +75,7 @@ router.put('/profil', wajibLogin, async (req, res) => {
 })
 
 // PUT ganti password
-router.put('/password', wajibLogin, async (req, res) => {
+router.put('/password', wajibAdmin, async (req, res) => {
   try {
     const { passwordLama, passwordBaru } = req.body
     if (!passwordLama || !passwordBaru) {

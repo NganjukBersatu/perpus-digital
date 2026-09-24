@@ -19,6 +19,9 @@ const showModal = ref(false)
 const editingId = ref(null)
 const showConfirmModal = ref(false)
 const bukuToDelete = ref(null)
+const showDetailModal = ref(false)
+const detailBuku = ref(null)
+const detailLoading = ref(false)
 
 const isLoading = ref(false)
 const errorMessage = ref('')
@@ -58,6 +61,18 @@ const modeBulkEksemplar = computed(() => {
   if (editingId.value !== null) return false    // saat edit, tidak berlaku
   if (modeScanBarcode.value) return false
   return Number(form.value.jumlahEksemplar) > 1
+})
+
+// Barcode dianggap "valid & terisi" hanya kalau string dan bukan placeholder aneh
+const barcodeValid = computed(() => {
+  const b = String(form.value.barcode || '').trim()
+  return (
+    b !== '' &&
+    b !== '[object PointerEvent]' &&
+    b !== '[object Object]' &&
+    b !== 'undefined' &&
+    b !== 'null'
+  )
 })
 
 async function ambilDaftarKategori() {
@@ -302,6 +317,21 @@ function tutupFilterMenu(e) {
     kategoriMenuOpen.value = false
     statusMenuOpen.value = false
   }
+  if (!e.target.closest?.('.perpage-dropdown')) {
+    perPageMenuOpen.value = false
+  }
+}
+
+const perPageMenuOpen = ref(false)
+
+function labelPerPageTerpilih() {
+  return `${perPage.value} / halaman`
+}
+
+function pilihPerPage(nilai) {
+  perPage.value = nilai
+  perPageMenuOpen.value = false
+  resetPage()
 }
 
 onMounted(() => {
@@ -419,8 +449,8 @@ onUnmounted(() => {
         <tbody>
           <tr v-for="(b, i) in pagedList" :key="b.id">
             <td>{{ (currentPage - 1) * perPage + i + 1 }}</td>
-            <td class="judul">{{ b.judul }}</td>
-            <td>{{ b.penulis }}</td>
+            <td class="judul judul-link" @click="bukaDetail(b)">{{ b.judul }}</td>
+            <td :title="b.penulis">{{ b.penulis }}</td>
             <td>{{ b.kategori }}</td>
             <td>
               <span class="kode-buku">
@@ -485,10 +515,25 @@ onUnmounted(() => {
         </button>
       </div>
 
-      <select v-model.number="perPage" class="select select-sm" @change="resetPage">
-        <option :value="5">5 / halaman</option>
-        <option :value="10">10 / halaman</option>
-      </select>
+      <div class="perpage-dropdown">
+        <button
+          type="button"
+          class="perpage-dropdown-btn"
+          @click.stop="perPageMenuOpen = !perPageMenuOpen"
+        >
+          {{ labelPerPageTerpilih() }}
+        </button>
+        <ul v-if="perPageMenuOpen" class="perpage-dropdown-list">
+          <li
+            v-for="n in [5, 10]"
+            :key="n"
+            :class="{ aktif: perPage === n }"
+            @click="pilihPerPage(n)"
+          >
+            {{ n }} / halaman
+          </li>
+        </ul>
+      </div>
     </div>
 
     <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
@@ -614,6 +659,73 @@ onUnmounted(() => {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <div v-if="showDetailModal" class="modal-overlay" @click.self="tutupDetail">
+      <div class="modal-box detail-modal-box">
+        <div class="modal-header modal-header-close-only">
+          <button class="icon-btn" type="button" @click="tutupDetail">✕</button>
+        </div>
+
+        <div v-if="detailLoading" class="detail-loading">Memuat...</div>
+
+        <div v-else-if="detailBuku">
+          <div class="detail-info">
+            <div class="detail-info-row">
+              <span class="detail-label">Judul</span>
+              <span class="detail-value">{{ detailBuku.buku.judul }}</span>
+            </div>
+            <div class="detail-info-row">
+              <span class="detail-label">Penulis</span>
+              <span class="detail-value">{{ detailBuku.buku.penulis }}</span>
+            </div>
+            <div class="detail-info-row">
+              <span class="detail-label">ISBN</span>
+              <span class="detail-value">{{ detailBuku.buku.isbn || '-' }}</span>
+            </div>
+            <div class="detail-info-row">
+              <span class="detail-label">Kategori</span>
+              <span class="detail-value">{{ detailBuku.buku.kategori || '-' }}</span>
+            </div>
+            <div class="detail-info-row">
+              <span class="detail-label">Lokasi</span>
+              <span class="detail-value">{{ detailBuku.buku.lokasi || '-' }}</span>
+            </div>
+          </div>
+ 
+          <div class="detail-table-wrap">
+            <table class="detail-table">
+              <thead>
+                <tr>
+                  <th>Judul Buku</th>
+                  <th>Penulis</th>
+                   <th>Barcode</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="e in detailBuku.eksemplar" :key="e.id">
+                  <td>{{ detailBuku.buku.judul }}</td>
+                  <td :title="detailBuku.buku.penulis">{{ detailBuku.buku.penulis }}</td>
+                  <td>{{ e.barcode }}</td>
+                  <td>
+                    <span
+                      class="badge"
+                      :class="{ 'badge-green': e.status === 'tersedia', 'badge-red': e.status === 'dipinjam' }"
+                      :title="e.status === 'dipinjam' && e.namaPeminjam ? `Dipinjam oleh ${e.namaPeminjam} (${e.kelasPeminjam || '-'})` : ''"
+                    >
+                      {{ e.status === 'tersedia' ? 'Tersedia' : 'Dipinjam' }}
+                    </span>
+                  </td>
+                </tr>
+                <tr v-if="detailBuku.eksemplar.length === 0">
+                  <td colspan="4" class="empty">Belum ada eksemplar untuk buku ini</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -918,6 +1030,88 @@ tbody tr:hover { background: #f9fafb; }
   box-shadow: 0 1px 4px rgba(0,0,0,0.12);
 }
 
+.judul-link {
+  cursor: pointer;
+  color: #2864e8;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+}
+.judul-link:hover {
+  text-decoration-color: #2864e8;
+}
+.detail-modal-box {
+  width: 560px;
+  position: relative;
+}
+.modal-header-close-only {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 5;
+  margin: 0;
+  padding: 0;
+}
+.detail-info {
+  position: sticky;
+  left: 0;
+  margin-top: 28px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  display: grid;
+  gap: 8px;
+}
+
+.detail-table-wrap {
+  overflow-x: auto;
+  margin-top: 0;  
+}
+.detail-info {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  display: grid;
+  gap: 8px;
+}
+
+.detail-info-row {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.detail-label {
+  min-width: 70px;
+  color: #6b7280;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.detail-value {
+  color: #111827;
+  word-break: break-word;
+}
+.detail-loading {
+  padding: 20px 0;
+  text-align: center;
+  color: #9ca3af;
+}
+.detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.detail-table th,
+.detail-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f0f0f0;
+  text-align: left;
+}
+
 .aksi-cell {
   display: flex;
   gap: 6px;
@@ -987,7 +1181,55 @@ tbody tr:hover { background: #f9fafb; }
   cursor: default;
 }
 
-.select-sm { min-width: auto; }
+.select-sm { 
+  min-width: auto; 
+}
+
+.perpage-dropdown {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.perpage-dropdown-btn {
+  font-family: inherit;
+  font-size: 13px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 28px 8px 10px;
+  color: #000;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 8px center;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Buka ke ATAS supaya tidak menutupi tabel */
+.perpage-dropdown-list {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  right: auto;
+  min-width: 100%;
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  z-index: 40;
+}
+
+.perpage-dropdown-list li {
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.perpage-dropdown-list li:hover,
+.perpage-dropdown-list li.aktif {
+  background: #dbeafe;
+}
 
 .empty { 
     text-align: center; 
@@ -1087,6 +1329,16 @@ tbody tr:hover { background: #f9fafb; }
   font-size: 12px;
   font-weight: 600;
   color: #374151;
+}
+
+.input-disabled {
+  background: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+.hint-nonaktif {
+  font-size: 11px;
+  color: #9ca3af;
 }
 
 .form-group input,
@@ -1298,10 +1550,33 @@ tbody tr:hover { background: #f9fafb; }
     padding: 10px 12px;
   }  
   
-  th:nth-child(2),
-  td:nth-child(2) {
-    width: 110px;
-    max-width: 110px;
+  .detail-table {
+    min-width: 480px !important;
+    table-layout: fixed;
+  }
+
+  .detail-table th:nth-child(1),
+  .detail-table td:nth-child(1) {
+    width: 110px !important;
+    max-width: 110px !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .detail-table th:nth-child(2),
+  .detail-table td:nth-child(2) {
+    width: 60px !important;              /* ⬅️ dipersempit dari 110px */
+    max-width: 60px !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .detail-table th:nth-child(3),
+  .detail-table td:nth-child(3) {
+    width: 120px !important;             /* ⬅️ Barcode diberi ruang lebih */
+    max-width: 120px !important;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

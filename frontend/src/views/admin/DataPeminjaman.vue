@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { authHeaders } from '@/utils/auth'
 
 const daftar = ref([])
 const isLoading = ref(true)

@@ -24,6 +24,12 @@ const errorMessage = ref('')
 const showPassword = ref(false)
 const isLoading = ref(false)
 
+const nomorAdmin = '6285607748208' // ganti sesuai nomor WA admin/penjaga perpus
+const pesanTemplate = 'Halo, saya mengalami kendala saat login ke sistem perpustakaan.'
+const kontakAdminUrl = computed(() =>
+  `https://wa.me/${nomorAdmin}?text=${encodeURIComponent(pesanTemplate)}`
+)
+
 // State untuk fitur "Lupa Password" khusus Guru
 const guruAuthMode = ref('login') // 'login' | 'lupa'
 const lupaForm = ref({ nip: '', tanggalLahir: '' })
@@ -343,31 +349,31 @@ async function handleDaftarSiswa() {
           </div>
 
           <form @submit.prevent="handleLogin">
-                        <template v-if="selectedRole === 'siswa' && siswaAuthMode === 'login'">
-              <div class="field">
-                <label>NIS</label>
-                <div class="input-wrap">
-                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="4" width="18" height="16" rx="2" />
-                    <path d="M3 9h18" />
-                  </svg>
-                  <input v-model="form.nis" type="text" placeholder="Masukkan NIS" required />
-                </div>
-              </div>
-              <div class="field">
-                <label>Tanggal Lahir</label>
-                <div class="input-wrap">
-                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" />
-                  </svg>
-                  <input v-model="form.tanggalLahir" type="date" required />
-                </div>
-              </div>
-              <div class="forgot-link">
-                <button type="button" class="link-btn" @click="bukaDaftarSiswa">Belum punya akun? Daftar</button>
-              </div>
-            </template>
+          <template v-if="selectedRole === 'siswa' && siswaAuthMode === 'login'">
+  <div class="field">
+    <label>NIS</label>
+    <div class="input-wrap">
+      <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="M3 9h18" />
+      </svg>
+      <input v-model="form.nis" type="text" placeholder="Masukkan NIS" required />
+    </div>
+  </div>
+  <div class="field">
+    <label>Tanggal Lahir</label>
+    <div class="input-wrap">
+      <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
+      </svg>
+      <input v-model="form.tanggalLahir" type="date" required />
+    </div>
+    <div class="forgot-link">
+      <button type="button" class="link-btn" @click="bukaDaftarSiswa">Belum punya akun? Daftar</button>
+    </div>
+  </div>
+</template>
 
             <template v-else-if="selectedRole === 'siswa' && siswaAuthMode === 'daftar'">
               <p class="lupa-desc">Isi data diri Anda untuk membuat akun siswa.</p>
@@ -568,9 +574,14 @@ async function handleDaftarSiswa() {
             </template>
           </form>
 
-          <p class="form-footer">
-            Ada kendala saat masuk? Hubungi admin perpustakaan.
-          </p>
+         <a         
+        :href="kontakAdminUrl"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="form-footer"
+         >
+         Ada kendala saat masuk? <span class="kontak-highlight">Hubungi admin perpustakaan.</span>
+         </a>
         </div>
       </div>
     </div>
@@ -836,6 +847,15 @@ async function handleDaftarSiswa() {
   color: #6b7fa3;
   text-align: center;
   line-height: 1.5;
+  text-decoration: none;
+  display: block;
+}
+.form-footer:hover {
+  text-decoration: underline;
+}
+.kontak-highlight {
+  color: #6fa1ff;
+  text-decoration: underline;
 }
 
 .error-text {

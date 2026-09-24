@@ -298,6 +298,15 @@ router.delete('/:id', async (req, res) => {
     res.json({ success: true, deleted })
   } catch (err) {
     console.error(err)
+
+    // Kode 23001 = foreign key RESTRICT (masih ada riwayat di tabel peminjaman,
+    // walaupun status peminjamannya sudah "dikembalikan")
+    if (err.cause?.code === '23001') {
+      return res.status(409).json({
+        error: 'Buku ini tidak bisa dihapus karena masih memiliki riwayat peminjaman (pernah dipinjam/dikembalikan).',
+      })
+    }
+
     res.status(500).json({ error: 'Gagal menghapus buku' })
   }
 })

@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 
-const API_URL = 'http://localhost:3000/api/riwayat'
+const API_URL = '/api/riwayat'
 
 const riwayatList = ref([])
 const isLoading = ref(false)

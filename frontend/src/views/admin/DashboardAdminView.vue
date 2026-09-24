@@ -294,7 +294,7 @@ const tampilkanJatuhTempoHariIni = ref(false)
 
 async function fetchPengingat() {
   try {
-    const res = await fetch('http://localhost:3000/api/dashboard/pengingat', { headers: authHeaders() })
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/dashboard/pengingat`, { headers: authHeaders() })
     const data = await res.json()
     pengingat.value = data.daftar
     totalBelumDikembalikan.value = data.totalBelumDikembalikan

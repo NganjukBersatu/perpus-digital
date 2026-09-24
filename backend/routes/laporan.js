@@ -3,12 +3,18 @@ const router = express.Router()
 const db = require('../db')
 const { peminjaman, anggota, eksemplarBuku, buku, pengaturanPerpustakaan } = require('../db/schema')
 const { eq, and, gte, lte, desc } = require('drizzle-orm')
+const { wajibAdmin } = require('./auth')
+const { normalisasiTanggal } = require('../utils/validasi')
 
-router.get('/', async (req, res) => {
+router.get('/', wajibAdmin, async (req, res) => {
   try {
-    const { dari, sampai } = req.query
+    const dari = normalisasiTanggal(req.query.dari)
+    const sampai = normalisasiTanggal(req.query.sampai)
     if (!dari || !sampai) {
-      return res.status(400).json({ error: 'Rentang tanggal (dari & sampai) wajib diisi' })
+      return res.status(400).json({ error: 'Rentang tanggal (dari & sampai) wajib diisi dengan format YYYY-MM-DD' })
+    }
+    if (dari > sampai) {
+      return res.status(400).json({ error: 'Tanggal "dari" tidak boleh setelah tanggal "sampai"' })
     }
 
     const rows = await db

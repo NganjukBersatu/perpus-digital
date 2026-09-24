@@ -15,7 +15,8 @@ const router = express.Router();
 // Sesuaikan path ini dengan lokasi instance db & schema kamu yang sebenarnya
 const { db } = require("../db/client")
 const { buku, eksemplarBuku } = require("../db/schema")
-router.get('/isbn/:isbn', async (req, res) => {
+const { wajibAdmin } = require('./auth')
+router.get('/isbn/:isbn', wajibAdmin, async (req, res) => {
 
   const { isbn } = req.params;
 

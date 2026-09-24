@@ -1,15 +1,23 @@
 require("dotenv").config()
+
+// Semua perhitungan tanggal (new Date(), setHours, dsb.) mengikuti WIB,
+// apa pun zona waktu server. Bisa ditimpa lewat .env (TZ=...).
+process.env.TZ = process.env.TZ || "Asia/Jakarta"
+
 const express = require("express")
 const cors = require("cors")
-const { sql, desc, isNull, gte, lte, and, eq, lt, ilike, inArray } = require("drizzle-orm")
+const { sql, desc, isNull, gte, and, eq, lt, ilike, inArray } = require("drizzle-orm")
 
 const { db, closeDb } = require("./db/client")
 const { buku, eksemplarBuku, anggota, peminjaman } = require("./db/schema")
 const { ambilPengaturanDenda, hitungDenda, ambilPengaturanNotifikasi, ambilPengaturanPeminjaman } = require("./utils/hitungDenda")
 const { sinkronkanStokBuku } = require("./routes/buku")
 const { tanggalHariIniLokal } = require("./utils/tanggal")
+const { normalisasiTanggal, escapeLike } = require("./utils/validasi")
+const { ErrorBisnis } = require("./utils/errorBisnis")
+const { prosesPengembalian } = require("./utils/pengembalian")
 
-const { router: authRoutes, wajibLogin, wajibAdmin } = require("./routes/auth")
+const { router: authRoutes, wajibLoginGuru, wajibAdmin } = require("./routes/auth")
 const adminRoutes = require("./routes/admin")
 const pengaturanRoutes = require("./routes/pengaturan")
 const pengembalianRoutes = require("./routes/pengembalian")
@@ -25,19 +33,43 @@ const bukuRoutes = require("./routes/buku")
 const bukuIsbnRoutes = require("./routes/bukuIsbn")
 const { router: authSiswaRoutes, wajibLoginSiswa } = require("./routes/authSiswa")
 const dashboardSiswaRoutes = require("./routes/dashboardSiswa")
-const { pasangRouteNotifikasiSiswa } = require('./routes/notifikasiSiswa')
-const { pasangRouteNotifikasiGuru } = require('./routes/notifikasiGuru')
+const { pasangRouteNotifikasiSiswa } = require("./routes/notifikasiSiswa")
+const { pasangRouteNotifikasiGuru } = require("./routes/notifikasiGuru")
 
 
 const app = express()
-app.use(cors())
+
+// Aktifkan hanya kalau backend berada di belakang reverse proxy (nginx, Cloudflare, dll).
+// Contoh di .env: TRUST_PROXY=1 (percaya 1 lapis proxy).
+// Tanpa ini, rate limiter melihat IP proxy, bukan IP pengguna yang sebenarnya.
+if (process.env.TRUST_PROXY) {
+  const v = process.env.TRUST_PROXY
+  app.set("trust proxy", /^\d+$/.test(v) ? Number(v) : v)
+}
+
+// Di production isi CORS_ORIGIN di .env, mis. CORS_ORIGIN=https://perpus.sekolah.sch.id
+// (boleh lebih dari satu, pisahkan dengan koma). Kalau kosong, semua origin diizinkan.
+app.use(cors({
+  origin: process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(",").map((s) => s.trim())
+    : true,
+}))
 app.use(express.json())
 
 app.use("/api/auth", authRoutes)
 app.use("/api/auth/siswa", authSiswaRoutes)
 app.use("/api/admin", adminRoutes)
 app.use("/api/pengaturan", pengaturanRoutes)
-app.use("/api/pengembalian", pengembalianRoutes)
+app.use("/api/pengembalian", wajibAdmin, pengembalianRoutes)
+
+// Route notifikasi didaftarkan SEBELUM router /api/siswa dan /api/guru, supaya
+// path spesifiknya (/notifikasi) tidak tertangkap route lain di router tersebut
+// (mis. GET /:id) atau middleware admin di dalamnya.
+pasangRouteNotifikasiSiswa(app, wajibLoginSiswa)
+pasangRouteNotifikasiGuru(app, wajibLoginGuru)
+
+// Cek: kalau routes/buku.js punya route GET '/:id', route /kategori di bawah
+// tidak akan pernah terpanggil. Lihat catatan di dekat app.get("/api/buku/kategori").
 app.use("/api/buku", bukuRoutes)
 app.use("/api/buku", bukuIsbnRoutes)
 app.use("/api/siswa", siswaRoutes)
@@ -48,10 +80,8 @@ app.use("/api/denda", dendaRoutes)
 app.use("/api/kategori", kategoriRoutes)
 app.use("/api/riwayat", riwayatRoutes)
 app.use("/api/laporan", laporanRoutes)
-app.use('/api/dashboard-siswa', require('./routes/dashboardSiswa'))
+app.use("/api/dashboard-siswa", dashboardSiswaRoutes)
 // app.use('/api/katalog-siswa', require('./routes/katalogSiswa'))
-pasangRouteNotifikasiSiswa(app, wajibLoginSiswa)
-pasangRouteNotifikasiGuru(app, wajibLogin)
 
 // route admin di index.js: wajib login sebagai admin
 app.use("/api/peminjaman", wajibAdmin)
@@ -60,14 +90,20 @@ app.use("/api/eksemplar-buku", wajibAdmin)
 app.use("/api/search", wajibAdmin)
 
 // GET data buku berdasarkan barcode
+// Pencarian memakai awalan (prefix): scan "978123" akan cocok dengan "978123-01",
+// "978123-02", dst. Kalau ada barcode yang persis sama, itu yang diprioritaskan.
 app.get("/api/eksemplar-buku/:barcode", async (req, res) => {
   try {
-    const { barcode } = req.params
+    const barcode = String(req.params.barcode || "").trim()
+    if (!barcode) {
+      return res.status(400).json({ message: "Barcode wajib diisi" })
+    }
 
     const cocok = await db
       .select({
         eksemplarId: eksemplarBuku.id,
         bukuId: eksemplarBuku.bukuId,
+        barcode: eksemplarBuku.barcode,
         status: eksemplarBuku.status,
         judul: buku.judul,
         penulis: buku.penulis,
@@ -75,13 +111,23 @@ app.get("/api/eksemplar-buku/:barcode", async (req, res) => {
       })
       .from(eksemplarBuku)
       .innerJoin(buku, eq(buku.id, eksemplarBuku.bukuId))
-      .where(ilike(eksemplarBuku.barcode, `${barcode}%`))
+      .where(ilike(eksemplarBuku.barcode, `${escapeLike(barcode)}%`))
+      .orderBy(eksemplarBuku.id)
 
     if (cocok.length === 0) {
       return res.status(404).json({ message: "Buku tidak ditemukan" })
     }
 
-    const bukuId = cocok[0].bukuId
+    const persis = cocok.find((r) => String(r.barcode).toLowerCase() === barcode.toLowerCase())
+    const bukuId = (persis || cocok[0]).bukuId
+
+    // hanya pertimbangkan eksemplar dari buku yang sama
+    const kandidat = cocok.filter((r) => r.bukuId === bukuId)
+    const dipilih =
+      (persis && persis.status === "tersedia" ? persis : null) ||
+      kandidat.find((r) => r.status === "tersedia") ||
+      persis ||
+      kandidat[0]
 
     const semuaEksemplar = await db
       .select({
@@ -92,8 +138,6 @@ app.get("/api/eksemplar-buku/:barcode", async (req, res) => {
       .from(eksemplarBuku)
       .where(eq(eksemplarBuku.bukuId, bukuId))
       .orderBy(eksemplarBuku.id)
-
-    const dipilih = cocok.find((r) => r.status === "tersedia") || cocok[0]
 
     res.json({
       eksemplarId: dipilih.eksemplarId,
@@ -113,135 +157,146 @@ app.get("/api/eksemplar-buku/:barcode", async (req, res) => {
 // POST simpan peminjaman baru
 app.post("/api/peminjaman", async (req, res) => {
   try {
-    const {
-      eksemplarId,
-      nama,
-      kelas,
-      tanggalPinjam,
-      tanggalKembali,
-      tipePeminjam,
-      anggotaId,
-    } = req.body
+    const { eksemplarId, nama, kelas, tanggalPinjam, tanggalKembali, tipePeminjam, anggotaId } = req.body || {}
 
-    let anggotaIdFinal
-    let semuaAnggotaId = []
-
-    if (tipePeminjam === "guru") {
-      if (!anggotaId) {
-        return res.status(400).json({ message: "Guru wajib dipilih dari daftar" })
-      }
-      anggotaIdFinal = anggotaId
-      semuaAnggotaId = [anggotaId]
-    } else {
-      // Mode siswa: cari SEMUA anggota yang namanya sama di kelas yang sama.
-      const anggotaLama = await db
-        .select({ id: anggota.id })
-        .from(anggota)
-        .where(
-          and(
-            ilike(anggota.nama, nama),
-            eq(anggota.kelas, kelas),
-            eq(anggota.peran, "siswa")
-          )
-        )
-
-      if (anggotaLama.length > 0) {
-        anggotaIdFinal = anggotaLama[0].id
-        semuaAnggotaId = anggotaLama.map((a) => a.id)
-      } else {
-        const anggotaBaru = await db
-          .insert(anggota)
-          .values({ nama, kelas, peran: "siswa" })
-          .returning({ id: anggota.id })
-        anggotaIdFinal = anggotaBaru[0].id
-        semuaAnggotaId = [anggotaIdFinal]
-      }
+    // ---------- validasi input ----------
+    const idEksemplar = Number(eksemplarId)
+    if (!Number.isInteger(idEksemplar)) {
+      return res.status(400).json({ message: "eksemplarId tidak valid" })
+    }
+    const tglPinjam = normalisasiTanggal(tanggalPinjam)
+    if (!tglPinjam) {
+      return res.status(400).json({ message: "Tanggal pinjam tidak valid (format YYYY-MM-DD)" })
     }
 
     const peranPeminjam = tipePeminjam === "guru" ? "guru" : "siswa"
-    const pengaturanPinjam = await ambilPengaturanPeminjaman(db)
+    const namaBersih = String(nama || "").trim()
+    const kelasBersih = String(kelas || "").trim()
 
-    let tanggalKembaliFinal
-
-    if (tanggalKembali && String(tanggalKembali).trim()) {
-      const tglManual = new Date(tanggalKembali)
-      const tglMulaiCek = new Date(tanggalPinjam)
-      if (tglManual < tglMulaiCek) {
-        return res.status(400).json({ message: "Tanggal kembali tidak boleh sebelum tanggal pinjam" })
+    if (peranPeminjam === "guru") {
+      if (!Number.isInteger(Number(anggotaId))) {
+        return res.status(400).json({ message: "Guru wajib dipilih dari daftar" })
       }
-      tanggalKembaliFinal = String(tanggalKembali).slice(0, 10)
-    } else {
-      const durasi = peranPeminjam === "guru" ? pengaturanPinjam.durasiGuru : pengaturanPinjam.durasiSiswa
-      const tglMulai = new Date(tanggalPinjam)
-      const tglKembaliDihitung = new Date(tglMulai)
-      tglKembaliDihitung.setDate(tglKembaliDihitung.getDate() + durasi)
-      tanggalKembaliFinal = tglKembaliDihitung.toISOString().slice(0, 10)
+    } else if (!namaBersih || !kelasBersih) {
+      return res.status(400).json({ message: "Nama dan kelas wajib diisi" })
     }
 
-    if (!semuaAnggotaId.length) {
-      return res.status(500).json({ message: "Gagal memproses data peminjam" })
-    }
-
-    const [{ bukuId: bukuIdTerkait }] = await db
-      .select({ bukuId: eksemplarBuku.bukuId })
-      .from(eksemplarBuku)
-      .where(eq(eksemplarBuku.id, eksemplarId))
-
-    const [{ stokTersedia }] = await db
-      .select({ stokTersedia: sql`count(*)` })
-      .from(eksemplarBuku)
-      .where(and(eq(eksemplarBuku.bukuId, bukuIdTerkait), eq(eksemplarBuku.status, "tersedia")))
-
-    if (Number(stokTersedia) <= pengaturanPinjam.minStokPinjam) {
-      return res.status(400).json({
-        message: `Stok tersedia (${stokTersedia}) sudah mencapai batas minimal (${pengaturanPinjam.minStokPinjam}), tidak bisa dipinjamkan`
-      })
-    }
-
-    const [{ jumlahAktif }] = await db
-      .select({ jumlahAktif: sql`count(*)` })
-      .from(peminjaman)
-      .where(
-        and(
-          inArray(peminjaman.anggotaId, semuaAnggotaId),
-          isNull(peminjaman.tanggalDikembalikan)
-        )
-      )
-
-    const maxBuku = peranPeminjam === "guru" ? pengaturanPinjam.maxBukuGuru : pengaturanPinjam.maxBukuSiswa
-    if (Number(jumlahAktif) >= maxBuku) {
-      return res.status(400).json({ message: `Batas pinjam tercapai (maks ${maxBuku} buku)` })
-    }
-
+    const pengaturanPinjam = await ambilPengaturanPeminjaman(db)
     const pengaturanDenda = await ambilPengaturanDenda(db)
 
-    await db.insert(peminjaman).values({
-      nama,
-      kelas,
-      eksemplarId,
-      anggotaId: anggotaIdFinal,
-      tanggalPinjam,
-      tanggalKembali: tanggalKembaliFinal,
+    // ---------- tanggal kembali (UTC supaya tidak geser hari) ----------
+    let tanggalKembaliFinal
+    if (tanggalKembali && String(tanggalKembali).trim()) {
+      tanggalKembaliFinal = normalisasiTanggal(tanggalKembali)
+      if (!tanggalKembaliFinal) {
+        return res.status(400).json({ message: "Tanggal kembali tidak valid (format YYYY-MM-DD)" })
+      }
+      if (tanggalKembaliFinal < tglPinjam) {
+        return res.status(400).json({ message: "Tanggal kembali tidak boleh sebelum tanggal pinjam" })
+      }
+    } else {
+      const durasi = peranPeminjam === "guru" ? pengaturanPinjam.durasiGuru : pengaturanPinjam.durasiSiswa
+      const d = new Date(tglPinjam + "T00:00:00Z")
+      d.setUTCDate(d.getUTCDate() + Number(durasi))
+      tanggalKembaliFinal = d.toISOString().slice(0, 10)
+    }
 
-      nominalDendaPerHari: pengaturanDenda.aktif
-        ? (peranPeminjam === "guru" ? pengaturanDenda.nominalPerHariGuru : pengaturanDenda.nominalPerHariSiswa)
-        : 0,
-      dendaMaksimal: pengaturanDenda.aktif
-        ? (peranPeminjam === "guru" ? pengaturanDenda.dendaMaksimalGuru : pengaturanDenda.dendaMaksimalSiswa)
-        : 0,
-      dendaGuruAktif: pengaturanDenda.dendaGuruAktif ?? false,
-      masaTenggang: pengaturanDenda.masaTenggang ?? 0,
+    // ---------- semua perubahan data dalam SATU transaksi ----------
+    const hasil = await db.transaction(async (tx) => {
+      // 1) klaim eksemplar secara atomik: hanya berhasil kalau masih 'tersedia'
+      const [ek] = await tx
+        .update(eksemplarBuku)
+        .set({ status: "dipinjam" })
+        .where(and(eq(eksemplarBuku.id, idEksemplar), eq(eksemplarBuku.status, "tersedia")))
+        .returning({ bukuId: eksemplarBuku.bukuId })
+      if (!ek) throw new ErrorBisnis(409, "Eksemplar tidak ditemukan atau sedang tidak tersedia")
+
+      // 2) stok minimal (dihitung setelah eksemplar ini diklaim, jadi +1)
+      const [{ stokTersedia }] = await tx
+        .select({ stokTersedia: sql`count(*)`.mapWith(Number) })
+        .from(eksemplarBuku)
+        .where(and(eq(eksemplarBuku.bukuId, ek.bukuId), eq(eksemplarBuku.status, "tersedia")))
+      const stokSebelum = stokTersedia + 1
+      if (stokSebelum <= pengaturanPinjam.minStokPinjam) {
+        throw new ErrorBisnis(
+          400,
+          `Stok tersedia (${stokSebelum}) sudah mencapai batas minimal (${pengaturanPinjam.minStokPinjam}), tidak bisa dipinjamkan`
+        )
+      }
+
+      // 3) tentukan peminjam
+      let idPeminjam, namaFinal, kelasFinal, semuaId
+      if (peranPeminjam === "guru") {
+        const [g] = await tx
+          .select({ id: anggota.id, nama: anggota.nama, kelas: anggota.kelas })
+          .from(anggota)
+          .where(and(eq(anggota.id, Number(anggotaId)), eq(anggota.peran, "guru")))
+        if (!g) throw new ErrorBisnis(400, "Guru tidak ditemukan")
+        idPeminjam = g.id
+        namaFinal = g.nama
+        kelasFinal = g.kelas
+        semuaId = [g.id]
+      } else {
+        const lama = await tx
+          .select({ id: anggota.id })
+          .from(anggota)
+          .where(
+            and(
+              sql`lower(btrim(${anggota.nama})) = lower(${namaBersih})`,
+              eq(anggota.kelas, kelasBersih),
+              eq(anggota.peran, "siswa")
+            )
+          )
+        if (lama.length > 0) {
+          idPeminjam = lama[0].id
+          semuaId = lama.map((a) => a.id)
+        } else {
+          const [baru] = await tx
+            .insert(anggota)
+            .values({ nama: namaBersih, kelas: kelasBersih, peran: "siswa" })
+            .returning({ id: anggota.id })
+          idPeminjam = baru.id
+          semuaId = [baru.id]
+        }
+        namaFinal = namaBersih
+        kelasFinal = kelasBersih
+      }
+
+      // 4) batas jumlah pinjam
+      const [{ jumlahAktif }] = await tx
+        .select({ jumlahAktif: sql`count(*)`.mapWith(Number) })
+        .from(peminjaman)
+        .where(and(inArray(peminjaman.anggotaId, semuaId), isNull(peminjaman.tanggalDikembalikan)))
+      const maxBuku = peranPeminjam === "guru" ? pengaturanPinjam.maxBukuGuru : pengaturanPinjam.maxBukuSiswa
+      if (jumlahAktif >= maxBuku) {
+        throw new ErrorBisnis(400, `Batas pinjam tercapai (maks ${maxBuku} buku)`)
+      }
+
+      // 5) simpan peminjaman
+      await tx.insert(peminjaman).values({
+        nama: namaFinal,
+        kelas: kelasFinal,
+        eksemplarId: idEksemplar,
+        anggotaId: idPeminjam,
+        tanggalPinjam: tglPinjam,
+        tanggalKembali: tanggalKembaliFinal,
+        nominalDendaPerHari: pengaturanDenda.aktif
+          ? (peranPeminjam === "guru" ? pengaturanDenda.nominalPerHariGuru : pengaturanDenda.nominalPerHariSiswa)
+          : 0,
+        dendaMaksimal: pengaturanDenda.aktif
+          ? (peranPeminjam === "guru" ? pengaturanDenda.dendaMaksimalGuru : pengaturanDenda.dendaMaksimalSiswa)
+          : 0,
+        dendaGuruAktif: pengaturanDenda.dendaGuruAktif ?? false,
+        masaTenggang: pengaturanDenda.masaTenggang ?? 0,
+      })
+
+      return { bukuId: ek.bukuId }
     })
 
-    await db
-      .update(eksemplarBuku)
-      .set({ status: "dipinjam" })
-      .where(eq(eksemplarBuku.id, eksemplarId))
-
-    await sinkronkanStokBuku(bukuIdTerkait)
-
+    await sinkronkanStokBuku(hasil.bukuId)
     res.status(201).json({ message: "Peminjaman berhasil disimpan" })
   } catch (err) {
+    if (err instanceof ErrorBisnis) return res.status(err.status).json({ message: err.message })
     console.error(err)
     res.status(500).json({ message: "Gagal menyimpan peminjaman" })
   }
@@ -250,77 +305,15 @@ app.post("/api/peminjaman", async (req, res) => {
 // PATCH tandai peminjaman sebagai dikembalikan
 app.patch("/api/peminjaman/:id/kembalikan", async (req, res) => {
   try {
-    const { id } = req.params
+    const id = Number(req.params.id)
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "ID tidak valid" })
 
-    const rows = await db
-      .select({
-        id: peminjaman.id,
-        nama: peminjaman.nama,
-        kelas: peminjaman.kelas,
-        eksemplarId: peminjaman.eksemplarId,
-        tanggalPinjam: peminjaman.tanggalPinjam,
-        tanggalKembali: peminjaman.tanggalKembali,
-        tanggalDikembalikan: peminjaman.tanggalDikembalikan,
-        denda: peminjaman.denda,
-        judulBuku: buku.judul,
-        nominalDendaPerHari: peminjaman.nominalDendaPerHari,
-        dendaMaksimal: peminjaman.dendaMaksimal,
-        dendaGuruAktif: peminjaman.dendaGuruAktif,
-        masaTenggang: peminjaman.masaTenggang,
-        peran: anggota.peran,
-      })
-      .from(peminjaman)
-      .innerJoin(anggota, eq(peminjaman.anggotaId, anggota.id))
-      .innerJoin(eksemplarBuku, eq(peminjaman.eksemplarId, eksemplarBuku.id))   // ⬅️ TAMBAHAN
-      .innerJoin(buku, eq(eksemplarBuku.bukuId, buku.id))                        // ⬅️ TAMBAHAN
-      .where(eq(peminjaman.id, Number(id)))
+    const { updated, bukuId } = await prosesPengembalian(id)
+    if (bukuId) await sinkronkanStokBuku(bukuId)
 
-    if (rows.length === 0) {
-      return res.status(404).json({ message: "Data peminjaman tidak ditemukan" })
-    }
-
-    const pinjam = rows[0]
-
-    if (pinjam.tanggalDikembalikan) {
-      return res.status(400).json({ message: "Buku ini sudah dikembalikan" })
-    }
-
-    const tanggalDikembalikan = tanggalHariIniLokal()
-
-    const pengaturanDenda = {
-      aktif: pinjam.nominalDendaPerHari > 0,
-      nominalPerHari: pinjam.nominalDendaPerHari,
-      dendaMaksimal: pinjam.dendaMaksimal,
-      dendaGuruAktif: pinjam.dendaGuruAktif ?? false,
-      masaTenggang: pinjam.masaTenggang ?? 0,
-    }
-
-    const { denda } = hitungDenda({
-      tanggalKembali: pinjam.tanggalKembali,
-      tanggalDikembalikan,
-      peran: pinjam.peran,
-      pengaturanDenda,
-    })
-
-    const updated = await db
-      .update(peminjaman)
-      .set({ tanggalDikembalikan, denda })
-      .where(eq(peminjaman.id, Number(id)))
-      .returning()
-
-    await db
-      .update(eksemplarBuku)
-      .set({ status: "tersedia" })
-      .where(eq(eksemplarBuku.id, pinjam.eksemplarId))
-
-    const [{ bukuId: bukuIdDikembalikan }] = await db
-      .select({ bukuId: eksemplarBuku.bukuId })
-      .from(eksemplarBuku)
-      .where(eq(eksemplarBuku.id, pinjam.eksemplarId))
-    await sinkronkanStokBuku(bukuIdDikembalikan)
-
-    res.json(updated[0])
+    res.json(updated)
   } catch (err) {
+    if (err instanceof ErrorBisnis) return res.status(err.status).json({ message: err.message })
     console.error(err)
     res.status(500).json({ message: "Gagal memproses pengembalian" })
   }
@@ -328,14 +321,16 @@ app.patch("/api/peminjaman/:id/kembalikan", async (req, res) => {
 
 app.patch("/api/peminjaman/:id/perpanjang", async (req, res) => {
   try {
-    const { id } = req.params
+    const id = Number(req.params.id)
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "ID tidak valid" })
+
     const pengaturanPinjam = await ambilPengaturanPeminjaman(db)
 
     if (!pengaturanPinjam.bolehPerpanjang) {
       return res.status(400).json({ message: "Perpanjangan peminjaman tidak diizinkan" })
     }
 
-    const [pinjam] = await db.select().from(peminjaman).where(eq(peminjaman.id, Number(id)))
+    const [pinjam] = await db.select().from(peminjaman).where(eq(peminjaman.id, id))
     if (!pinjam) return res.status(404).json({ message: "Data peminjaman tidak ditemukan" })
     if (pinjam.tanggalDikembalikan) {
       return res.status(400).json({ message: "Buku ini sudah dikembalikan, tidak bisa diperpanjang" })
@@ -344,16 +339,34 @@ app.patch("/api/peminjaman/:id/perpanjang", async (req, res) => {
       return res.status(400).json({ message: `Sudah mencapai batas maksimal ${pengaturanPinjam.maxPerpanjang}x perpanjangan` })
     }
 
-    const tglBaru = new Date(pinjam.tanggalKembali)
-    tglBaru.setDate(tglBaru.getDate() + pengaturanPinjam.durasiPerpanjang)
+    const tglLama = normalisasiTanggal(pinjam.tanggalKembali)
+    if (!tglLama) {
+      throw new Error(`tanggalKembali tidak valid untuk peminjaman ${id}`)
+    }
+
+    // Perpanjangan setelah jatuh tempo akan memundurkan tanggal kembali dan otomatis
+    // mengecilkan/menghapus denda. Hapus blok if ini kalau kebijakan sekolah
+    // memang mengizinkan perpanjangan untuk buku yang sudah telat.
+    if (tglLama < tanggalHariIniLokal()) {
+      return res.status(400).json({
+        message: "Peminjaman sudah melewati jatuh tempo, tidak bisa diperpanjang. Proses pengembaliannya dulu.",
+      })
+    }
+
+    const tglBaru = new Date(tglLama + "T00:00:00Z")
+    tglBaru.setUTCDate(tglBaru.getUTCDate() + Number(pengaturanPinjam.durasiPerpanjang))
 
     const [updated] = await db.update(peminjaman)
       .set({
         tanggalKembali: tglBaru.toISOString().slice(0, 10),
         jumlahPerpanjangan: (pinjam.jumlahPerpanjangan || 0) + 1,
       })
-      .where(eq(peminjaman.id, Number(id)))
+      .where(and(eq(peminjaman.id, id), isNull(peminjaman.tanggalDikembalikan)))
       .returning()
+
+    if (!updated) {
+      return res.status(400).json({ message: "Buku ini sudah dikembalikan, tidak bisa diperpanjang" })
+    }
 
     res.json(updated)
   } catch (err) {
@@ -364,9 +377,9 @@ app.patch("/api/peminjaman/:id/perpanjang", async (req, res) => {
 
 app.get("/api/dashboard/stats", async (req, res) => {
   try {
-    const today = new Date().toISOString().split("T")[0]
+    const today = tanggalHariIniLokal()
 
-    const totalBuku = await db.select({ count: sql`count(*)` }).from(buku)
+    const totalBuku = await db.select({ count: sql`count(*)`.mapWith(Number) }).from(buku)
     const totalAnggota = await db
       .select({
         count: sql`count(distinct lower(btrim(${anggota.nama})))`.mapWith(Number)
@@ -375,12 +388,12 @@ app.get("/api/dashboard/stats", async (req, res) => {
       .where(sql`${anggota.peran} in ('siswa', 'guru')`)
 
     const totalDipinjam = await db
-      .select({ count: sql`count(*)` })
+      .select({ count: sql`count(*)`.mapWith(Number) })
       .from(peminjaman)
       .where(isNull(peminjaman.tanggalDikembalikan))
 
     const totalTerlambat = await db
-      .select({ count: sql`count(*)` })
+      .select({ count: sql`count(*)`.mapWith(Number) })
       .from(peminjaman)
       .where(and(
         isNull(peminjaman.tanggalDikembalikan),
@@ -405,7 +418,7 @@ app.get("/api/dashboard/peminjaman-terbaru", async (req, res) => {
     const { hari } = req.query
     let data
 
-    if (hari) {
+    if (hari && Number.isFinite(Number(hari))) {
       const batasAwal = new Date()
       batasAwal.setDate(batasAwal.getDate() - Number(hari))
       batasAwal.setHours(0, 0, 0, 0)
@@ -413,7 +426,7 @@ app.get("/api/dashboard/peminjaman-terbaru", async (req, res) => {
       data = await db
         .select()
         .from(peminjaman)
-        .where(gte(peminjaman.tanggalPinjam, batasAwal.toISOString().split("T")[0]))
+        .where(gte(peminjaman.tanggalPinjam, formatTanggalISO(batasAwal)))
         .orderBy(desc(peminjaman.id))
     } else {
       data = await db
@@ -423,7 +436,7 @@ app.get("/api/dashboard/peminjaman-terbaru", async (req, res) => {
         .limit(5)
     }
 
-    const today = new Date().toISOString().split("T")[0]
+    const today = tanggalHariIniLokal()
 
     const dataWithStatus = data.map((row) => {
       const sudahDikembalikan = !!row.tanggalDikembalikan
@@ -460,15 +473,19 @@ app.get("/api/dashboard/peminjaman-belum-kembali", async (req, res) => {
         judulBuku: buku.judul,
         nominalDendaPerHari: peminjaman.nominalDendaPerHari,
         dendaMaksimal: peminjaman.dendaMaksimal,
+        dendaGuruAktif: peminjaman.dendaGuruAktif,
         masaTenggang: peminjaman.masaTenggang,
+        peran: anggota.peran,
       })
       .from(peminjaman)
+      .innerJoin(anggota, eq(anggota.id, peminjaman.anggotaId))
       .innerJoin(eksemplarBuku, eq(eksemplarBuku.id, peminjaman.eksemplarId))
       .innerJoin(buku, eq(buku.id, eksemplarBuku.bukuId))
       .where(isNull(peminjaman.tanggalDikembalikan))
 
     const today = new Date()
     today.setHours(0, 0, 0, 0)
+    const hariIniStr = tanggalHariIniLokal()
 
     const data = rows.map((row) => {
       const batas = new Date(row.tanggalKembali)
@@ -486,11 +503,20 @@ app.get("/api/dashboard/peminjaman-belum-kembali", async (req, res) => {
         const masaTenggang = row.masaTenggang || 0
         const hariKenaDenda = Math.max(0, hariTelat - masaTenggang)
 
-        const tarif = row.nominalDendaPerHari || 0
-        denda = hariKenaDenda * tarif
-        if (row.dendaMaksimal > 0) {
-          denda = Math.min(denda, row.dendaMaksimal)
-        }
+        // pakai hitungDenda supaya sama persis dengan yang dikenakan saat pengembalian
+        // (termasuk aturan denda guru)
+        denda = hitungDenda({
+          tanggalKembali: row.tanggalKembali,
+          tanggalDikembalikan: hariIniStr,
+          peran: row.peran,
+          pengaturanDenda: {
+            aktif: (row.nominalDendaPerHari || 0) > 0,
+            nominalPerHari: row.nominalDendaPerHari || 0,
+            dendaMaksimal: row.dendaMaksimal || 0,
+            dendaGuruAktif: row.dendaGuruAktif ?? false,
+            masaTenggang: row.masaTenggang ?? 0,
+          },
+        }).denda
 
         sisaHari = hariKenaDenda > 0
           ? `Telat ${hariTelat} hari`
@@ -544,6 +570,11 @@ app.get("/api/dashboard/buku-terpopuler", async (req, res) => {
 })
 
 // GET daftar kategori buku yang ada (untuk dropdown filter)
+// CATATAN: router bukuRoutes sudah didaftarkan di atas. Jalankan
+//   grep -n "router.get" routes/buku.js routes/bukuIsbn.js
+// Kalau ada router.get('/:id') atau router.get('/'), pindahkan handler ini ke
+// SEBELUM app.use("/api/buku", bukuRoutes), atau ke dalam routes/buku.js,
+// kalau tidak handler ini tidak akan pernah terpanggil.
 app.get("/api/buku/kategori", async (req, res) => {
   try {
     const rows = await db.execute(sql`
@@ -562,7 +593,8 @@ app.get("/api/buku/kategori", async (req, res) => {
 // GET buku terpopuler lengkap (dengan filter rentang waktu, kategori, dan pencarian judul)
 app.get("/api/dashboard/buku-terpopuler-lengkap", async (req, res) => {
   try {
-    const { range = "semua", kategori, search } = req.query
+    const { range = "semua", kategori } = req.query
+    const search = String(req.query.search ?? "").trim()
 
     let startDate = null
     const now = new Date()
@@ -585,13 +617,13 @@ app.get("/api/dashboard/buku-terpopuler-lengkap", async (req, res) => {
     `
 
     if (startDate) {
-      query = sql`${query} and p.tanggal_pinjam >= ${startDate.toISOString().split("T")[0]}`
+      query = sql`${query} and p.tanggal_pinjam >= ${formatTanggalISO(startDate)}`
     }
     if (kategori && kategori !== "Semua Kategori") {
-      query = sql`${query} and b.kategori = ${kategori}`
+      query = sql`${query} and b.kategori = ${String(kategori)}`
     }
     if (search) {
-      query = sql`${query} and b.judul ilike ${'%' + search + '%'}`
+      query = sql`${query} and b.judul ilike ${"%" + escapeLike(search) + "%"}`
     }
 
     query = sql`${query} group by b.id, b.judul, b.kategori order by dipinjam desc`
@@ -600,7 +632,7 @@ app.get("/api/dashboard/buku-terpopuler-lengkap", async (req, res) => {
 
     const data = rows.rows.map((r) => ({
       judul: r.judul,
-      kategori: r.kategori || '-',
+      kategori: r.kategori || "-",
       dipinjam: Number(r.dipinjam),
     }))
 
@@ -615,7 +647,6 @@ app.get("/api/dashboard/buku-terpopuler-lengkap", async (req, res) => {
 app.get("/api/dashboard/pengingat", async (req, res) => {
   try {
     const pengaturanNotif = await ambilPengaturanNotifikasi(db)
-    const pengaturanDenda = await ambilPengaturanDenda(db)
 
     const semuaBelumKembali = await db
       .select({
@@ -636,6 +667,7 @@ app.get("/api/dashboard/pengingat", async (req, res) => {
 
     const today = new Date()
     today.setHours(0, 0, 0, 0)
+    const hariIniStr = tanggalHariIniLokal()
 
     const daftar = []
 
@@ -648,17 +680,22 @@ app.get("/api/dashboard/pengingat", async (req, res) => {
         if (!pengaturanNotif.notifikasiTerlambat) continue
 
         const hariTelat = Math.abs(selisihHari)
-        const masaTenggang = row.masaTenggang ?? pengaturanDenda.masaTenggang ?? 0
+        const masaTenggang = row.masaTenggang ?? 0
         const hariKenaDenda = Math.max(0, hariTelat - masaTenggang)
 
-        const peran = row.peran
-        const dendaGuruAktif = row.dendaGuruAktif ?? pengaturanDenda.dendaGuruAktif ?? false
-        const bolehDihitung = pengaturanDenda.aktif && (peran !== 'guru' || dendaGuruAktif)
-
-        const tarif = row.nominalDendaPerHari ?? pengaturanDenda.nominalPerHari ?? 0
-        const maks = row.dendaMaksimal ?? pengaturanDenda.dendaMaksimal ?? 0
-        let denda = bolehDihitung ? hariKenaDenda * tarif : 0
-        if (maks > 0) denda = Math.min(denda, maks)
+        // pakai snapshot denda milik peminjaman + hitungDenda, sama seperti saat pengembalian
+        const { denda } = hitungDenda({
+          tanggalKembali: row.tanggalKembali,
+          tanggalDikembalikan: hariIniStr,
+          peran: row.peran,
+          pengaturanDenda: {
+            aktif: (row.nominalDendaPerHari || 0) > 0,
+            nominalPerHari: row.nominalDendaPerHari || 0,
+            dendaMaksimal: row.dendaMaksimal || 0,
+            dendaGuruAktif: row.dendaGuruAktif ?? false,
+            masaTenggang: row.masaTenggang ?? 0,
+          },
+        })
 
         daftar.push({
           id: row.id,
@@ -754,7 +791,7 @@ app.get("/api/dashboard/notifikasi", async (req, res) => {
 // GET daftar semua buku beserta jumlah stok & tersedia
 app.get("/api/buku", async (req, res) => {
   try {
-    const { search } = req.query
+    const search = String(req.query.search ?? "").trim()
 
     let query = sql`
       select
@@ -769,7 +806,8 @@ app.get("/api/buku", async (req, res) => {
     `
 
     if (search) {
-      query = sql`${query} where b.judul ilike ${'%' + search + '%'} or b.isbn ilike ${'%' + search + '%'} or b.penulis ilike ${'%' + search + '%'}`
+      const pola = "%" + escapeLike(search) + "%"
+      query = sql`${query} where b.judul ilike ${pola} or b.isbn ilike ${pola} or b.penulis ilike ${pola}`
     }
 
     query = sql`${query} group by b.id order by b.judul`
@@ -805,29 +843,30 @@ app.get("/api/buku", async (req, res) => {
 // GET pencarian gabungan (buku, siswa, guru, ISBN)
 app.get("/api/search", async (req, res) => {
   try {
-    const q = (req.query.q || "").trim()
+    const q = String(req.query.q ?? "").trim()
     if (!q) {
       return res.json({ buku: [], siswa: [], guru: [] })
     }
+    const pola = "%" + escapeLike(q) + "%"
 
     const bukuRows = await db.execute(sql`
       select id, judul, penulis, isbn
       from buku
-      where judul ilike ${'%' + q + '%'} or isbn ilike ${'%' + q + '%'}
+      where judul ilike ${pola} or isbn ilike ${pola}
       limit 5
     `)
 
     const siswaRows = await db.execute(sql`
       select id, nama, kelas
       from anggota
-      where nama ilike ${'%' + q + '%'} and peran = 'siswa'
+      where nama ilike ${pola} and peran = 'siswa'
       limit 5
     `)
 
     const guruRows = await db.execute(sql`
       select id, nama, kelas
       from anggota
-      where nama ilike ${'%' + q + '%'} and peran = 'guru'
+      where nama ilike ${pola} and peran = 'guru'
       limit 5
     `)
 
@@ -870,13 +909,14 @@ function getRangeConfig(range) {
   } else if (range === "1bulan") {
     start.setDate(start.getDate() - 29)
   } else if (range === "3bulan") {
-    start.setMonth(start.getMonth() - 3)
-    groupBy = "day"
+    start.setDate(start.getDate() - 89)
   } else if (range === "1tahun") {
-    start.setFullYear(start.getFullYear() - 1)
+    // 12 bulan kalender, dimulai dari tanggal 1 (menghindari loncat bulan di tanggal 29-31)
+    start.setDate(1)
+    start.setMonth(start.getMonth() - 11)
     groupBy = "month"
   } else {
-    start.setMonth(start.getMonth() - 6)
+    start.setDate(start.getDate() - 181)
     groupBy = "week"
   }
 
@@ -887,6 +927,7 @@ function buildBuckets(start, now, groupBy) {
   const buckets = []
   const cursor = new Date(start)
   cursor.setHours(0, 0, 0, 0)
+  if (groupBy === "month") cursor.setDate(1)
 
   while (cursor <= now) {
     buckets.push({
@@ -896,7 +937,7 @@ function buildBuckets(start, now, groupBy) {
 
     if (groupBy === "day") cursor.setDate(cursor.getDate() + 1)
     else if (groupBy === "week") cursor.setDate(cursor.getDate() + 7)
-    else cursor.setMonth(cursor.getMonth() + 1)
+    else cursor.setMonth(cursor.getMonth() + 1) // aman karena tanggal selalu 1
   }
 
   return buckets
@@ -974,6 +1015,20 @@ app.get("/api/dashboard/statistik-peminjaman", async (req, res) => {
   }
 })
 
+// Penangan error terakhir (harus setelah semua route): JSON yang rusak dari klien
+// menghasilkan 400 yang rapi, bukan halaman error HTML.
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err)
+  if (err.type === "entity.parse.failed") {
+    return res.status(400).json({ message: "Format JSON tidak valid" })
+  }
+  if (err.type === "entity.too.large") {
+    return res.status(413).json({ message: "Data terlalu besar" })
+  }
+  console.error(err)
+  res.status(500).json({ message: "Terjadi kesalahan pada server" })
+})
+
 const PORT = process.env.PORT || 3000
 const server = app.listen(PORT, () => console.log(`Backend jalan di http://localhost:${PORT}`))
 
@@ -991,11 +1046,11 @@ function shutdown(signal) {
       await closeDb()
       process.exit(0)
     } catch (err) {
-      console.error('Gagal menutup database:', err)
+      console.error("Gagal menutup database:", err)
       process.exit(1)
     }
   })
 }
 
-process.on('SIGTERM', () => shutdown('SIGTERM'))
-process.on('SIGINT', () => shutdown('SIGINT'))
+process.on("SIGTERM", () => shutdown("SIGTERM"))
+process.on("SIGINT", () => shutdown("SIGINT"))

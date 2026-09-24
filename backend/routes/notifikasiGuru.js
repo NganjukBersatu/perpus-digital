@@ -1,23 +1,18 @@
 // routes/notifikasiGuru.js
-// Guru login lewat endpoint yang sama dengan admin (routes/auth.js),
-// jadi middleware yang dipakai adalah `wajibLogin`, dan payload token
-// ditaruh di req.admin (meski isinya guru: { id, nip, role: 'guru' }).
+// Route ini dipasang dari index.js dengan middleware `wajibLoginGuru` (routes/auth.js),
+// yang sudah memastikan token valid, role = 'guru', dan guru tidak sedang wajib ganti
+// password. Payload token ada di req.user: { id, nip, role: 'guru', hgp }.
 
 const { eq, and, isNull } = require('drizzle-orm')
 const { db } = require('../db/client')
 const { peminjaman, eksemplarBuku, buku } = require('../db/schema')
 const { ambilAturanNotifikasi, bangunNotifikasiPinjaman } = require('../helpers/aturanNotifikasi')
 
-function pasangRouteNotifikasiGuru(app, wajibLogin) {
+function pasangRouteNotifikasiGuru(app, wajibLoginGuru) {
 
-  app.get('/api/guru/notifikasi', wajibLogin, async (req, res) => {
+  app.get('/api/guru/notifikasi', wajibLoginGuru, async (req, res) => {
     try {
-      // req.admin di sini sebenarnya payload guru: { id, nip, role: 'guru' }
-      if (req.admin.role !== 'guru') {
-        return res.status(403).json({ message: 'Akses hanya untuk guru' })
-      }
-
-      const anggotaId = req.admin.id
+      const anggotaId = req.user.id
 
       const daftarPinjam = await db
         .select({
@@ -45,7 +40,7 @@ function pasangRouteNotifikasiGuru(app, wajibLogin) {
       const notifikasi = []
 
       for (const item of daftarPinjam) {
-        // ⬅️ Khusus guru: denda hanya berlaku kalau dendaGuruAktif === true
+        // Khusus guru: denda hanya berlaku kalau dendaGuruAktif === true
         const dendaBerlaku = item.dendaGuruAktif === true
         notifikasi.push(...bangunNotifikasiPinjaman(item, aturan, { dendaBerlaku }))
       }
@@ -57,7 +52,7 @@ function pasangRouteNotifikasiGuru(app, wajibLogin) {
     }
   })
 
-  app.patch('/api/guru/notifikasi/:id/baca', wajibLogin, async (req, res) => {
+  app.patch('/api/guru/notifikasi/:id/baca', wajibLoginGuru, async (req, res) => {
     res.json({ ok: true })
   })
 }

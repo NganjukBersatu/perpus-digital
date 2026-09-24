@@ -3,13 +3,24 @@ const router = express.Router()
 const db = require('../db')   
 const { peminjaman, eksemplarBuku, anggota, buku } = require('../db/schema')
 const { eq, and, gte, lte, or, ilike, sql } = require('drizzle-orm')
+const { wajibLogin } = require('./auth')
+const { tanggalHariIniLokal } = require('../utils/tanggal')
+const { normalisasiTanggal } = require('../utils/validasi')
 
 // GET /api/data-peminjaman?search=&status=&start=&end=&anggotaId=
 // Menampilkan SEMUA transaksi peminjaman: yang masih dipinjam, tepat waktu, maupun terlambat.
 // anggotaId (opsional): filter hanya peminjaman milik anggota tertentu (dipakai di dashboard guru/siswa).
 // Belum ada pagination/limit dulu — semua data yang cocok filter langsung dikirim.
-router.get('/', async (req, res) => {
+router.get('/', wajibLogin, async (req, res) => {
   try {
+    // Guru yang belum ganti password tidak boleh memakai endpoint ini
+    if (req.user.role === 'guru' && req.user.hgp) {
+      return res.status(403).json({
+        error: 'Anda harus mengganti password terlebih dahulu',
+        kode: 'HARUS_GANTI_PASSWORD',
+      })
+    }
+
     const { search = '', status = 'Semua', start, end, anggotaId } = req.query
 
     const conditions = []
@@ -25,11 +36,20 @@ router.get('/', async (req, res) => {
     }
 
     if (start && end) {
-      conditions.push(gte(peminjaman.tanggalPinjam, start))
-      conditions.push(lte(peminjaman.tanggalPinjam, end))
+      const mulai = normalisasiTanggal(start)
+      const selesai = normalisasiTanggal(end)
+      if (!mulai || !selesai) {
+        return res.status(400).json({ message: 'Format tanggal harus YYYY-MM-DD' })
+      }
+      conditions.push(gte(peminjaman.tanggalPinjam, mulai))
+      conditions.push(lte(peminjaman.tanggalPinjam, selesai))
     }
 
-    if (anggotaId) {
+    // Admin boleh melihat semua data atau memfilter anggota mana pun.
+    // Non-admin (guru/siswa) SELALU dibatasi ke datanya sendiri, apa pun isi ?anggotaId=.
+    if (req.user.role !== 'admin') {
+      conditions.push(eq(peminjaman.anggotaId, Number(req.user.id)))
+    } else if (anggotaId) {
       conditions.push(eq(peminjaman.anggotaId, Number(anggotaId)))
     }
 
@@ -57,7 +77,7 @@ router.get('/', async (req, res) => {
       .where(conditions.length ? and(...conditions) : undefined)
       .orderBy(sql`${peminjaman.id} desc`)
 
-    const today = new Date().toISOString().slice(0, 10)
+    const today = tanggalHariIniLokal()
 
     // status & keterlambatan dihitung di sini, bukan kolom asli di database
     const dataLengkap = rows.map((r) => {

@@ -9,7 +9,7 @@ const { wajibAdmin } = require('./auth')
 // GET profil admin yang sedang login
 router.get('/profil', wajibAdmin, async (req, res) => {
   try {
-    const [akun] = await db.select().from(adminAkun).where(eq(adminAkun.id, req.admin.id))
+    const [akun] = await db.select().from(adminAkun).where(eq(adminAkun.id, req.user.id))
     if (!akun) return res.status(404).json({ error: 'Akun tidak ditemukan' })
     const { passwordHash, ...tanpaPassword } = akun
     res.json(tanpaPassword)
@@ -22,7 +22,7 @@ router.get('/profil', wajibAdmin, async (req, res) => {
 // PUT update data profil (termasuk username)
 router.put('/profil', wajibAdmin, async (req, res) => {
   try {
-    const { namaLengkap, email, telepon, jabatan, nipNik, username } = req.body
+    const { namaLengkap, email, telepon, jabatan, nipNik, username } = req.body || {}
 
     if (!namaLengkap || !String(namaLengkap).trim()) {
       return res.status(400).json({ error: 'Nama wajib diisi' })
@@ -36,7 +36,7 @@ router.put('/profil', wajibAdmin, async (req, res) => {
     const [akunSekarang] = await db
       .select()
       .from(adminAkun)
-      .where(eq(adminAkun.id, req.admin.id))
+      .where(eq(adminAkun.id, req.user.id))
 
     if (!akunSekarang) {
       return res.status(404).json({ error: 'Akun tidak ditemukan' })
@@ -63,12 +63,16 @@ router.put('/profil', wajibAdmin, async (req, res) => {
         jabatan,
         nipNik,
       })
-      .where(eq(adminAkun.id, req.admin.id))
+      .where(eq(adminAkun.id, req.user.id))
       .returning()
 
     const { passwordHash, ...tanpaPassword } = updated
     res.json(tanpaPassword)
   } catch (err) {
+    // dua permintaan dengan username sama yang masuk bersamaan
+    if ((err.cause?.code || err.code) === '23505') {
+      return res.status(409).json({ error: 'Username sudah dipakai' })
+    }
     console.error(err)
     res.status(500).json({ error: 'Gagal menyimpan profil' })
   }
@@ -77,20 +81,26 @@ router.put('/profil', wajibAdmin, async (req, res) => {
 // PUT ganti password
 router.put('/password', wajibAdmin, async (req, res) => {
   try {
-    const { passwordLama, passwordBaru } = req.body
-    if (!passwordLama || !passwordBaru) {
+    const { passwordLama, passwordBaru } = req.body || {}
+    if (typeof passwordLama !== 'string' || typeof passwordBaru !== 'string' || !passwordLama || !passwordBaru) {
       return res.status(400).json({ error: 'Password lama dan baru wajib diisi' })
     }
-    if (passwordBaru.length < 8) {
-      return res.status(400).json({ error: 'Password baru minimal 8 karakter' })
+    // bcrypt hanya membaca 72 byte pertama, jadi batasi di sini
+    if (passwordBaru.length < 8 || Buffer.byteLength(passwordBaru) > 72) {
+      return res.status(400).json({ error: 'Password baru harus 8–72 karakter' })
+    }
+    if (passwordBaru === passwordLama) {
+      return res.status(400).json({ error: 'Password baru tidak boleh sama dengan password lama' })
     }
 
-    const [akun] = await db.select().from(adminAkun).where(eq(adminAkun.id, req.admin.id))
+    const [akun] = await db.select().from(adminAkun).where(eq(adminAkun.id, req.user.id))
+    if (!akun) return res.status(404).json({ error: 'Akun tidak ditemukan' })
+
     const cocok = await bcrypt.compare(passwordLama, akun.passwordHash)
     if (!cocok) return res.status(401).json({ error: 'Password lama salah' })
 
     const passwordHash = await bcrypt.hash(passwordBaru, 10)
-    await db.update(adminAkun).set({ passwordHash }).where(eq(adminAkun.id, req.admin.id))
+    await db.update(adminAkun).set({ passwordHash }).where(eq(adminAkun.id, req.user.id))
 
     res.json({ success: true })
   } catch (err) {

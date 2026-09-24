@@ -5,6 +5,8 @@ const { peminjaman, eksemplarBuku, buku, kategori, anggota } = require('../db/sc
 const { wajibLoginSiswa } = require('./authSiswa')
 const { hitungDenda, ambilPengaturanNotifikasi } = require('../utils/hitungDenda')
 const { sinkronkanStokBuku } = require('./buku') 
+const { prosesPengembalian } = require('../utils/pengembalian')
+const { ErrorBisnis } = require('../utils/errorBisnis')
 
 const router = Router()
 
@@ -106,80 +108,15 @@ router.get('/peminjaman-aktif', wajibLoginSiswa, async (req, res) => {
 // PATCH /dashboard-siswa/kembalikan/:id
 router.patch('/kembalikan/:id', wajibLoginSiswa, async (req, res) => {
   try {
-    const anggotaId = req.siswa.id
-    const { id } = req.params
-    const today = new Date().toISOString().slice(0, 10)
+    const id = Number(req.params.id)
+    if (!Number.isInteger(id)) return res.status(400).json({ message: 'ID tidak valid' })
 
-    // Ambil data peminjaman + snapshot denda + peran
-    const [row] = await db
-      .select({
-        id: peminjaman.id,
-        tanggalKembali: peminjaman.tanggalKembali,
-        eksemplarId: peminjaman.eksemplarId,
-        nominalDendaPerHari: peminjaman.nominalDendaPerHari,
-        dendaMaksimal: peminjaman.dendaMaksimal,
-        dendaGuruAktif: peminjaman.dendaGuruAktif,
-        masaTenggang: peminjaman.masaTenggang,
-        peran: anggota.peran,
-      })
-      .from(peminjaman)
-      .innerJoin(anggota, eq(peminjaman.anggotaId, anggota.id))
-      .where(and(
-        eq(peminjaman.id, Number(id)),
-        eq(peminjaman.anggotaId, anggotaId),
-        isNull(peminjaman.tanggalDikembalikan)
-      ))
+    const { updated, denda, bukuId } = await prosesPengembalian(id, { anggotaId: req.siswa.id })
+    if (bukuId) await sinkronkanStokBuku(bukuId)
 
-    if (!row) {
-      return res.status(404).json({ 
-        message: 'Data peminjaman tidak ditemukan atau sudah dikembalikan' 
-      })
-    }
-
-    // Hitung denda pakai snapshot yang tersimpan saat pinjam
-    const pengaturanDenda = {
-      aktif: (row.nominalDendaPerHari || 0) > 0,
-      nominalPerHari: row.nominalDendaPerHari || 0,
-      dendaMaksimal: row.dendaMaksimal || 0,
-      dendaGuruAktif: row.dendaGuruAktif ?? false,
-      masaTenggang: row.masaTenggang ?? 0,
-    }
-
-    const { denda } = hitungDenda({
-      tanggalKembali: row.tanggalKembali,
-      tanggalDikembalikan: today,
-      peran: row.peran,
-      pengaturanDenda,
-    })
-
-    // Update peminjaman
-    const [updated] = await db
-      .update(peminjaman)
-      .set({ 
-        tanggalDikembalikan: today, 
-        denda 
-      })
-      .where(eq(peminjaman.id, row.id))
-      .returning()
-
-    // Kembalikan status eksemplar menjadi tersedia
-    await db
-      .update(eksemplarBuku)
-      .set({ status: 'tersedia' })
-      .where(eq(eksemplarBuku.id, row.eksemplarId))
-
-    const [{ bukuId: bukuIdDikembalikan }] = await db
-      .select({ bukuId: eksemplarBuku.bukuId })
-      .from(eksemplarBuku)
-      .where(eq(eksemplarBuku.id, row.eksemplarId))
-    await sinkronkanStokBuku(bukuIdDikembalikan)
-
-    res.json({ 
-      message: 'Buku berhasil dikembalikan', 
-      data: updated,
-      denda 
-    })
+    res.json({ message: 'Buku berhasil dikembalikan', data: updated, denda })
   } catch (err) {
+    if (err instanceof ErrorBisnis) return res.status(err.status).json({ message: err.message })
     console.error(err)
     res.status(500).json({ message: 'Gagal mengembalikan buku' })
   }

@@ -1,11 +1,12 @@
-// Format tanggal HARI INI berdasarkan waktu LOKAL (bukan UTC),
-// supaya tidak mundur 1 hari di zona waktu WIB/WITA/WIT saat dikonversi ISO string.
+// Tanggal HARI INI di WIB (Asia/Jakarta), apa pun zona waktu mesin servernya.
+// Format 'en-CA' menghasilkan YYYY-MM-DD.
 function tanggalHariIniLokal() {
-  const now = new Date()
-  const yyyy = now.getFullYear()
-  const mm = String(now.getMonth() + 1).padStart(2, '0')
-  const dd = String(now.getDate()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}`
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
 }
 
 module.exports = { tanggalHariIniLokal }

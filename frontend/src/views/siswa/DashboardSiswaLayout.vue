@@ -155,6 +155,9 @@ function batalLogout() {
 
 function konfirmasiLogout() {
   showLogoutModal.value = false
+  localStorage.removeItem('token')
+  localStorage.removeItem('accessToken')
+  localStorage.removeItem('user')
   router.push('/')
 }
 

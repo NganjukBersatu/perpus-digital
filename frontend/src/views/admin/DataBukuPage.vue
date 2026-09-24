@@ -223,7 +223,10 @@ async function konfirmasiHapus() {
     const res = await fetch(`${API_URL}/${bukuToDelete.value.id}`, {
       method: 'DELETE',
     })
-    if (!res.ok) throw new Error('Gagal menghapus buku')
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || 'Gagal menghapus buku')
+    }
 
     showConfirmModal.value = false
     bukuToDelete.value = null
@@ -235,7 +238,7 @@ async function konfirmasiHapus() {
     }
   } catch (err) {
     console.error(err)
-    errorMessage.value = 'Gagal menghapus buku. Coba lagi.'
+    errorMessage.value = err.message || 'Gagal menghapus buku. Coba lagi.'
     showConfirmModal.value = false
     bukuToDelete.value = null
   }

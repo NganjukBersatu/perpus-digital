@@ -159,9 +159,17 @@ let searchBukuTerpopulerTimeout = null
 async function fetchKategoriBuku() {
   try {
     const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/buku/kategori`)
-    kategoriBukuList.value = await res.json()
+    const data = await res.json()
+
+    if (!res.ok || !Array.isArray(data)) {
+      console.error('Response kategori tidak valid:', data)
+      kategoriBukuList.value = []
+      return
+    }
+    kategoriBukuList.value = data
   } catch (err) {
     console.error('Gagal mengambil kategori buku', err)
+    kategoriBukuList.value = []
   }
 }
 
@@ -173,9 +181,17 @@ async function fetchBukuTerpopulerLengkap() {
       search: searchBukuTerpopuler.value,
     })
     const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/dashboard/buku-terpopuler-lengkap?${params}`)
-    bukuTerpopulerLengkap.value = await res.json()
+    const data = await res.json()
+
+    if (!res.ok || !Array.isArray(data)) {
+      console.error('Response tidak valid:', data)
+      bukuTerpopulerLengkap.value = []
+      return
+    }
+    bukuTerpopulerLengkap.value = data
   } catch (err) {
     console.error('Gagal mengambil buku terpopuler lengkap', err)
+    bukuTerpopulerLengkap.value = []
   }
 }
 
@@ -523,25 +539,33 @@ onMounted(async () => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(row, i) in peminjamanBelumKembaliFiltered" :key="row.id">
-              <td>{{ i + 1 }}</td>
-              <td>
-                <strong>{{ row.nama }}</strong><br />
-                <span class="muted">{{ row.kelas }}</span>
-              </td>
-              <td>{{ row.judulBuku }}</td>
-              <td>{{ row.tanggalPinjam }}</td>
-              <td>{{ row.tanggalKembali }}</td>
-              <td>{{ row.sisaHari }}</td>
-              <td>
-                <span class="badge" :class="row.status === 'Terlambat' ? 'badge-red' : 'badge-blue'">
-                  {{ row.status }}
-                </span>
-              </td>
-              <td>{{ row.denda > 0 ? `Rp${row.denda.toLocaleString('id-ID')}` : '-' }}</td>
-              <td><button class="kembali-btn" @click="kembalikanBuku(row.id)">Kembali</button></td>
-            </tr>
-          </tbody>
+  <tr v-for="(row, i) in peminjamanBelumKembaliFiltered" :key="row.id">
+    <td>{{ i + 1 }}</td>
+    <td>
+      <strong>{{ row.nama }}</strong><br />
+      <span class="muted">{{ row.kelas }}</span>
+    </td>
+    <td>{{ row.judulBuku }}</td>
+    <td>{{ row.tanggalPinjam }}</td>
+    <td>{{ row.tanggalKembali }}</td>
+    <td>{{ row.sisaHari }}</td>
+    <td>
+      <span class="badge" :class="row.status === 'Terlambat' ? 'badge-red' : 'badge-blue'">
+        {{ row.status }}
+      </span>
+    </td>
+    <td>{{ row.denda > 0 ? `Rp${row.denda.toLocaleString('id-ID')}` : '-' }}</td>
+    <td><button class="kembali-btn" @click="kembalikanBuku(row.id)">Kembali</button></td>
+  </tr>
+
+  <tr v-if="peminjamanBelumKembaliFiltered.length === 0">
+    <td colspan="9" class="muted" style="text-align:center; padding: 20px;">
+      {{ peminjamanBelumKembali.length === 0
+        ? 'Tidak ada peminjaman yang belum dikembalikan'
+        : 'Tidak ada data yang cocok dengan pencarian' }}
+    </td>
+  </tr>
+</tbody>
         </table>
       </section>
 

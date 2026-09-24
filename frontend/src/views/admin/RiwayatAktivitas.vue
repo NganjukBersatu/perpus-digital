@@ -284,6 +284,24 @@ tbody tr:hover { background: #f9fafb; }
 }
 .pages .page-num.active { background: #5b4dff; color: #fff; }
 .pages button:disabled { opacity: 0.4; cursor: default; }
+
+.select {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 28px 8px 12px;
+  font-size: 13px;
+  color: #000;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 8px center;
+}
+.select:focus {
+  border-color: #5b4dff;
+}
+
 .select-sm { min-width: auto; }
 
 .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; }
@@ -315,20 +333,21 @@ tbody tr:hover { background: #f9fafb; }
   .select {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  padding: 8px 12px;
+  padding: 8px 28px 8px 12px;
   font-size: 13px;
-  background: #fff;
   color: #000;
   outline: none;
   cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 8px center;
 }
-
 .select:focus {
   border-color: #5b4dff;
 }
-
 .select-sm {
-  min-width: 110px; 
+  min-width: 110px;
   width: auto;
 }
 

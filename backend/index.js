@@ -578,12 +578,12 @@ app.get("/api/dashboard/buku-terpopuler", async (req, res) => {
 app.get("/api/buku/kategori", async (req, res) => {
   try {
     const rows = await db.execute(sql`
-      select distinct kategori
-      from buku
-      where kategori is not null and kategori <> ''
-      order by kategori
+      select nama
+      from kategori
+      where nama is not null and nama <> ''
+      order by nama
     `)
-    res.json(rows.rows.map((r) => r.kategori))
+    res.json(rows.rows.map((r) => r.nama))
   } catch (err) {
     console.error(err)
     res.status(500).json({ message: "Gagal mengambil kategori buku" })
@@ -609,10 +609,11 @@ app.get("/api/dashboard/buku-terpopuler-lengkap", async (req, res) => {
     }
 
     let query = sql`
-      select b.judul as judul, b.kategori as kategori, count(p.id) as dipinjam
+      select b.judul as judul, k.nama as kategori, count(p.id) as dipinjam
       from peminjaman p
       join eksemplar_buku e on e.id = p.eksemplar_id
       join buku b on b.id = e.buku_id
+      left join kategori k on k.id = b.kategori_id
       where 1=1
     `
 
@@ -621,12 +622,13 @@ app.get("/api/dashboard/buku-terpopuler-lengkap", async (req, res) => {
     }
     if (kategori && kategori !== "Semua Kategori") {
       query = sql`${query} and b.kategori = ${String(kategori)}`
+      query = sql`${query} and k.nama = ${kategori}`
     }
     if (search) {
       query = sql`${query} and b.judul ilike ${"%" + escapeLike(search) + "%"}`
     }
 
-    query = sql`${query} group by b.id, b.judul, b.kategori order by dipinjam desc`
+    query = sql`${query} group by b.id, b.judul, k.nama order by dipinjam desc`
 
     const rows = await db.execute(query)
 

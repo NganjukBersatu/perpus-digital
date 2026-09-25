@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 const props = defineProps({
@@ -68,10 +68,6 @@ async function muatData() {
   }
 }
 
-onMounted(() => {
-  if (props.guru.id) muatData()
-})
-
 function formatTanggal(tanggal) {
   if (!tanggal) return '—'
   return new Date(tanggal).toLocaleDateString('id-ID', {
@@ -110,6 +106,14 @@ function goToKatalog() {
 function goToPeminjaman() {
   router.push('/guru/peminjaman')
 }
+
+watch(
+  () => props.guru.id,
+  (id) => {
+    if (id) muatData()
+  },
+  { immediate: true }
+)
 </script>
 
 <template>

@@ -7,6 +7,7 @@ import { useRouter, useRoute } from "vue-router"
 import IsbnOcr from "../../utils/isbn-ocr.js" // sesuaikan path relatif ke folder utils/ kamu
 import Tesseract from "tesseract.js"
 import { authHeaders, jsonHeaders } from "../../utils/auth"
+import { API } from "@/utils/api"
 
 const notFoundMessageRef = ref(null)
 const activeTab = ref("kamera")
@@ -50,7 +51,7 @@ async function cariJudulManual() {
   }
   isSearchingJudulManual.value = true
   try {
-    const res = await fetch(`/api/buku?q=${encodeURIComponent(q)}`)
+    const res = await fetch(`${API}/buku?q=${encodeURIComponent(q)}`)
     if (res.ok) hasilJudulManual.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -62,7 +63,7 @@ async function cariJudulManual() {
 async function pilihBukuDariJudul(bukuTerpilih) {
   scanError.value = ""
   try {
-    const res = await fetch(`/api/buku/${bukuTerpilih.id}/untuk-pinjam`)
+    const res = await fetch(`${API}/buku/${bukuTerpilih.id}/untuk-pinjam`)
     if (res.status === 404) {
       scanError.value = "Buku ini belum punya eksemplar yang bisa dipinjam."
       return
@@ -97,7 +98,7 @@ function resetPencarianJudulManual() {
 
 async function cariBuku(kodeBarcode) {
   try {
-    const res = await fetch(`/api/eksemplar-buku/${kodeBarcode}`, { headers: authHeaders() })
+    const res = await fetch(`${API}/eksemplar-buku/${kodeBarcode}`, { headers: authHeaders() })
     if (res.status === 404) {
       bookNotFound.value = true
       bookData.value = null
@@ -147,7 +148,7 @@ async function konfirmasiTambahKopiBaru() {
   isAddingKopiBaru.value = true
   scanError.value = ""
   try {
-    const res = await fetch(`/api/buku/${bookData.value.bukuId}/eksemplar`, {
+    const res = await fetch(`${API}/buku/${bookData.value.bukuId}/eksemplar`, {
       method: "POST",
       headers: jsonHeaders(),
       body: JSON.stringify({ barcode: barcode.value }),
@@ -195,7 +196,7 @@ async function cariBukuLama() {
   }
   isSearchingBuku.value = true
   try {
-    const res = await fetch(`/api/buku?q=${encodeURIComponent(q)}`, { headers: authHeaders() })
+    const res = await fetch(`${API}/buku?q=${encodeURIComponent(q)}`, { headers: authHeaders() })
     if (res.ok) hasilPencarianBuku.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -208,7 +209,7 @@ async function pilihBukuLamaDanSimpan(bukuTerpilih) {
   isAddingEksemplar.value = true
   scanError.value = ""
   try {
-    const res = await fetch(`/api/buku/${bukuTerpilih.id}/eksemplar`, {
+    const res = await fetch(`${API}/}/buku/${bukuTerpilih.id}/eksemplar`, {
       method: "POST",
       headers: jsonHeaders(),
       body: JSON.stringify({ barcode: barcode.value }),
@@ -297,7 +298,7 @@ const pengaturanPinjam = ref(null)
 
 async function ambilPengaturanPinjam() {
   try {
-    const res = await fetch("/api/pengaturan")
+    fetch(`${API}/pengaturan`)
     if (!res.ok) return
     const data = await res.json()
     pengaturanPinjam.value = data?.detail?.peminjaman || null
@@ -332,7 +333,7 @@ const filteredKelas = computed(() => {
 
 async function ambilDaftarKelas() {
   try {
-    const res = await fetch("/api/kelas", { headers: authHeaders() })
+    fetch(`${API}/kelas`, { headers: authHeaders() })
     if (res.ok) daftarKelas.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -607,7 +608,7 @@ function pulihkanIsbn(teks, maksHapus = 4) {
 
 async function isbnAdaDiKatalog(isbn) {
   try {
-    const res = await fetch(`/api/buku/isbn/${isbn}`, { headers: authHeaders() })
+    const res = await fetch(`${API}/buku/isbn/${isbn}`, { headers: authHeaders() })
     return res.ok
   } catch {
     return false
@@ -734,7 +735,7 @@ async function onScanSuccess(decodedText) {
 
 async function cariBukuByIsbn(isbn) {
   try {
-    const res = await fetch(`/api/buku/isbn/${isbn}`, { headers: authHeaders() })
+    const res = await fetch(`${API}/}/buku/isbn/${isbn}`, { headers: authHeaders() })
     if (res.status === 404) {
       bookNotFound.value = true
       bookData.value = null
@@ -810,7 +811,7 @@ async function simpanPeminjaman() {
   scanError.value = ""
 
   try {
-    const res = await fetch("/api/peminjaman", {
+    fetch(`${API}/peminjaman`, {
       method: "POST",
       headers: jsonHeaders(),
       body: JSON.stringify({
@@ -1520,7 +1521,7 @@ button, input, select { font: inherit; }
   border: 1px solid var(--border);
   border-radius: 16px;
   box-shadow: 0 8px 28px rgba(31, 56, 88, 0.06);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .progress {
@@ -1529,6 +1530,7 @@ button, input, select { font: inherit; }
   padding: 12px 20px;
   background: #fbfcfe;
   border-bottom: 1px solid var(--border);
+  border-radius: 15px 15px 0 0;   
 }
 
 .progress-item {
@@ -2355,7 +2357,7 @@ button, input, select { font: inherit; }
   z-index: 10;
   margin: 0;
   padding: 5px;
-  max-height: 200px;
+  max-height: 260px;   /* sebelumnya: 200px */
   overflow-y: auto;
   list-style: none;
   background: white;

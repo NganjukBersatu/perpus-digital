@@ -7,6 +7,7 @@ import { useRouter, useRoute } from "vue-router"
 import IsbnOcr from "../../utils/isbn-ocr.js" // sesuaikan path relatif ke folder utils/ kamu
 import Tesseract from "tesseract.js"
 import { authHeaders, jsonHeaders } from "../../utils/auth"
+import { API } from "@/utils/api"
 
 const API = import.meta.env.VITE_API_BASE_URL
 
@@ -210,7 +211,7 @@ async function pilihBukuLamaDanSimpan(bukuTerpilih) {
   isAddingEksemplar.value = true
   scanError.value = ""
   try {
-    const res = await fetch(`${API}/buku/${bukuTerpilih.id}/eksemplar`, {
+    const res = await fetch(`${API}/}/buku/${bukuTerpilih.id}/eksemplar`, {
       method: "POST",
       headers: jsonHeaders(),
       body: JSON.stringify({ barcode: barcode.value }),
@@ -735,7 +736,7 @@ async function onScanSuccess(decodedText) {
 
 async function cariBukuByIsbn(isbn) {
   try {
-    const res = await fetch(`${API}/buku/isbn/${isbn}`, { headers: authHeaders() })
+    const res = await fetch(`${API}/}/buku/isbn/${isbn}`, { headers: authHeaders() })
     if (res.status === 404) {
       bookNotFound.value = true
       bookData.value = null
@@ -1521,7 +1522,7 @@ button, input, select { font: inherit; }
   border: 1px solid var(--border);
   border-radius: 16px;
   box-shadow: 0 8px 28px rgba(31, 56, 88, 0.06);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .progress {
@@ -1530,6 +1531,7 @@ button, input, select { font: inherit; }
   padding: 12px 20px;
   background: #fbfcfe;
   border-bottom: 1px solid var(--border);
+  border-radius: 15px 15px 0 0;   
 }
 
 .progress-item {
@@ -2356,7 +2358,7 @@ button, input, select { font: inherit; }
   z-index: 10;
   margin: 0;
   padding: 5px;
-  max-height: 200px;
+  max-height: 260px;   /* sebelumnya: 200px */
   overflow-y: auto;
   list-style: none;
   background: white;

@@ -621,8 +621,7 @@ app.get("/api/dashboard/buku-terpopuler-lengkap", async (req, res) => {
       query = sql`${query} and p.tanggal_pinjam >= ${formatTanggalISO(startDate)}`
     }
     if (kategori && kategori !== "Semua Kategori") {
-      query = sql`${query} and b.kategori = ${String(kategori)}`
-      query = sql`${query} and k.nama = ${kategori}`
+      query = sql`${query} and k.nama = ${String(kategori)}`
     }
     if (search) {
       query = sql`${query} and b.judul ilike ${"%" + escapeLike(search) + "%"}`

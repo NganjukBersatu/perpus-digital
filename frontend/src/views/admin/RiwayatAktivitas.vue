@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { API } from '@/utils/api'
 
 
 const API_URL = `${import.meta.env.VITE_API_BASE_URL}/riwayat`

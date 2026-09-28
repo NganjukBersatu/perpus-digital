@@ -16,6 +16,8 @@ const showModal = ref(false)
 const modalMode = ref('tambah')
 const form = ref({ id: null, nama: '', nip: '', mapel: '', tanggalLahir: '' })
 const isSaving = ref(false)
+const showConfirmModal = ref(false)
+const guruToDelete = ref(null)
 
 const currentPage = ref(1)
 const perPage = ref(5)
@@ -149,19 +151,37 @@ async function simpan() {
   }
 }
 
-async function hapus(item) {
-  if (!confirm(`Hapus data guru "${item.nama}"?`)) return
+function hapus(item) {
+  guruToDelete.value = item
+  showConfirmModal.value = true
+}
+
+async function konfirmasiHapus() {
+  if (!guruToDelete.value) return
 
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/guru/${item.id}`, {
-            method: 'DELETE',
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/guru/${guruToDelete.value.id}`, {
+      method: 'DELETE',
     })
     if (!res.ok) throw new Error('Gagal menghapus')
+
     await muatData()
+
+    if (pagedDaftar.value.length === 0 && currentPage.value > 1) {
+      currentPage.value--
+    }
   } catch (err) {
     console.error(err)
-    alert('Gagal menghapus guru. Mungkin masih terkait peminjaman.')
+    errorMessage.value = 'Gagal menghapus guru. Mungkin masih terkait peminjaman.'
+  } finally {
+    showConfirmModal.value = false
+    guruToDelete.value = null
   }
+}
+
+function batalHapus() {
+  showConfirmModal.value = false
+  guruToDelete.value = null
 }
 
 function labelMapelTerpilih() {
@@ -349,6 +369,29 @@ onUnmounted(() => {
       </div>
     </div>
   </div>
+    <div v-if="showConfirmModal" class="modal-overlay" @click.self="batalHapus">
+      <div class="confirm-box">
+        <div class="confirm-icon">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 7h16" stroke-linecap="round" />
+            <path d="M10 11v6M14 11v6" stroke-linecap="round" />
+            <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
+            <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+          </svg>
+        </div>
+
+        <h3>Hapus Siswa?</h3>
+        <p>
+          Yakin ingin menghapus siswa
+          <strong>"{{ siswaToDelete?.nama }}"</strong>? Tindakan ini tidak dapat dibatalkan.
+        </p>
+
+        <div class="confirm-actions">
+          <button type="button" class="btn-secondary" @click="batalHapus">Batal</button>
+          <button type="button" class="btn-hapus-confirm" @click="konfirmasiHapus">Ya, Hapus</button>
+        </div>
+      </div>
+    </div>
 </div>
 </template>
 
@@ -492,6 +535,43 @@ tbody tr:hover { background: #f9fafb; }
   padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
 }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.confirm-box {
+  background: #fff;
+  border-radius: 14px;
+  width: 380px;
+  max-width: 92%;
+  padding: 28px 24px 24px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+  text-align: center;
+}
+.confirm-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #fee2e2;
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+.confirm-icon .icon-svg { width: 24px; height: 24px; }
+.confirm-box h3 { font-size: 16px; font-weight: 700; color: #1f2937; margin: 0 0 8px; }
+.confirm-box p { font-size: 13px; color: #6b7280; margin: 0 0 20px; line-height: 1.5; }
+.confirm-box p strong { color: #374151; }
+.confirm-actions { display: flex; justify-content: center; gap: 10px; }
+.btn-hapus-confirm {
+  border: 0;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 8px;
+  padding: 9px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-hapus-confirm:hover { background: #dc2626; }
 
 @media (max-width: 640px) {
   .page {

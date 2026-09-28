@@ -9,6 +9,8 @@ import Tesseract from "tesseract.js"
 import { authHeaders, jsonHeaders } from "../../utils/auth"
 import { API } from "@/utils/api"
 
+const API = import.meta.env.VITE_API_BASE_URL
+
 const notFoundMessageRef = ref(null)
 const activeTab = ref("kamera")
 const router = useRouter()
@@ -51,7 +53,7 @@ async function cariJudulManual() {
   }
   isSearchingJudulManual.value = true
   try {
-    const res = await fetch(`${API}/buku?q=${encodeURIComponent(q)}`)
+    const res = await fetch(`${API}/buku?q=${encodeURIComponent(q)}`, { headers: authHeaders() })
     if (res.ok) hasilJudulManual.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -63,7 +65,7 @@ async function cariJudulManual() {
 async function pilihBukuDariJudul(bukuTerpilih) {
   scanError.value = ""
   try {
-    const res = await fetch(`${API}/buku/${bukuTerpilih.id}/untuk-pinjam`)
+    const res = await fetch(`${API}/buku/${bukuTerpilih.id}/untuk-pinjam`, { headers: authHeaders() })
     if (res.status === 404) {
       scanError.value = "Buku ini belum punya eksemplar yang bisa dipinjam."
       return
@@ -298,7 +300,7 @@ const pengaturanPinjam = ref(null)
 
 async function ambilPengaturanPinjam() {
   try {
-    fetch(`${API}/pengaturan`)
+    const res = await fetch(`${API}/pengaturan`)
     if (!res.ok) return
     const data = await res.json()
     pengaturanPinjam.value = data?.detail?.peminjaman || null
@@ -333,7 +335,7 @@ const filteredKelas = computed(() => {
 
 async function ambilDaftarKelas() {
   try {
-    fetch(`${API}/kelas`, { headers: authHeaders() })
+    const res = await fetch(`${API}/kelas`, { headers: authHeaders() })
     if (res.ok) daftarKelas.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -727,7 +729,6 @@ async function onScanSuccess(decodedText) {
   // Kode toko/penerbit lain (walau sama-sama 13 digit) tetap dicari lewat kolom barcode eksemplar.
   if (/^(978|979)\d{10}$/.test(decodedText)) {
     await cariBukuByIsbn(decodedText)
-    if (!bookData.value) bookNotFound.value = true
   } else {
     await cariBuku(decodedText)
   }
@@ -811,7 +812,7 @@ async function simpanPeminjaman() {
   scanError.value = ""
 
   try {
-    fetch(`${API}/peminjaman`, {
+    const res = await fetch(`${API}/peminjaman`, {
       method: "POST",
       headers: jsonHeaders(),
       body: JSON.stringify({

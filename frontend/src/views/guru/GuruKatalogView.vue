@@ -2,6 +2,8 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { API } from '@/utils/api'
 
+const API = import.meta.env.VITE_API_BASE_URL
+
 const keyword = ref('')
 const kategoriAktif = ref('Semua')
 
@@ -56,7 +58,7 @@ function getCoverColor(kategori) {
 
 async function fetchKategori() {
   try {
-    const res = await fetch(`${API}/kategori`)
+const res = await fetch(`${API}/kategori`)
     if (!res.ok) throw new Error('Gagal mengambil kategori')
     const data = await res.json()
     kategoriList.value = ['Semua', ...data.map(k => k.nama)]

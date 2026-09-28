@@ -14,6 +14,8 @@ const kelasMenuOpen = ref(false)
 const showModal = ref(false)
 const modalMode = ref('tambah')
 const form = ref({ id: null, nama: '', kelas: '', nis: '', tanggalLahir: '' })
+const showConfirmModal = ref(false)
+const siswaToDelete = ref(null)
 
 const currentPage = ref(1)
 const perPage = ref(5)
@@ -35,7 +37,9 @@ const filteredSiswa = computed(() => {
     hasil = hasil.filter((s) => (s.nama || '').toLowerCase().includes(q))
   }
 
-  return hasil
+  return [...hasil].sort((a, b) =>
+    (a.nama || '').localeCompare(b.nama || '', 'id', { sensitivity: 'base' })
+  )
 })
 
 const totalData = computed(() => filteredSiswa.value.length)
@@ -132,15 +136,32 @@ async function simpanSiswa() {
   }
 }
 
-async function hapusSiswa(item) {
-  if (!confirm(`Hapus siswa ${item.nama}?`)) return
+function hapusSiswa(item) {
+  siswaToDelete.value = item
+  showConfirmModal.value = true
+}
+
+async function konfirmasiHapus() {
+  if (!siswaToDelete.value) return
 
   try {
-    await api.delete(`/siswa/${item.id}`)
-    daftarSiswa.value = daftarSiswa.value.filter(s => s.id !== item.id)
+    await api.delete(`/siswa/${siswaToDelete.value.id}`)
+    daftarSiswa.value = daftarSiswa.value.filter(s => s.id !== siswaToDelete.value.id)
+
+    if (currentPage.value > totalPages.value) {
+      currentPage.value = totalPages.value
+    }
   } catch (err) {
     errorMessage.value = 'Gagal menghapus siswa'
+  } finally {
+    showConfirmModal.value = false
+    siswaToDelete.value = null
   }
+}
+
+function batalHapus() {
+  showConfirmModal.value = false
+  siswaToDelete.value = null
 }
 </script>
 
@@ -275,25 +296,48 @@ async function hapusSiswa(item) {
         </div>
 
         <div class="form-group">
-  <label>Kelas</label>
-  <input type="text" v-model="form.kelas" placeholder="Contoh: XII-RPL 2" />
-</div>
+          <label>Kelas</label>
+          <input type="text" v-model="form.kelas" placeholder="Contoh: XII-RPL 2" />
+        </div>
 
-<div class="form-group">
-  <label>NIS</label>
-  <input type="text" v-model="form.nis" placeholder="Nomor Induk Siswa" />
-</div>
+        <div class="form-group">
+          <label>NIS</label>
+          <input type="text" v-model="form.nis" placeholder="Nomor Induk Siswa" />
+        </div>
 
-<div class="form-group">
-  <label>Tanggal Lahir</label>
-  <input type="date" v-model="form.tanggalLahir" />
-</div>
+        <div class="form-group">
+          <label>Tanggal Lahir</label>
+          <input type="date" v-model="form.tanggalLahir" />
+        </div>
 
         <div class="modal-actions">
           <button class="btn-secondary" @click="tutupModal">Batal</button>
           <button class="btn-primary" :disabled="isSaving" @click="simpanSiswa">
             {{ isSaving ? 'Menyimpan...' : 'Simpan' }}
           </button>
+        </div>
+      </div>
+    </div>
+        <div v-if="showConfirmModal" class="modal-overlay" @click.self="batalHapus">
+      <div class="confirm-box">
+        <div class="confirm-icon">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 7h16" stroke-linecap="round" />
+            <path d="M10 11v6M14 11v6" stroke-linecap="round" />
+            <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
+            <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+          </svg>
+        </div>
+
+        <h3>Hapus Siswa?</h3>
+        <p>
+          Yakin ingin menghapus siswa
+          <strong>"{{ siswaToDelete?.nama }}"</strong>? Tindakan ini tidak dapat dibatalkan.
+        </p>
+
+        <div class="confirm-actions">
+          <button type="button" class="btn-secondary" @click="batalHapus">Batal</button>
+          <button type="button" class="btn-hapus-confirm" @click="konfirmasiHapus">Ya, Hapus</button>
         </div>
       </div>
     </div>
@@ -439,6 +483,43 @@ tbody tr:hover { background: #f9fafb; }
   padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
 }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.confirm-box {
+  background: #fff;
+  border-radius: 14px;
+  width: 380px;
+  max-width: 92%;
+  padding: 28px 24px 24px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+  text-align: center;
+}
+.confirm-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #fee2e2;
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+.confirm-icon .icon-svg { width: 24px; height: 24px; }
+.confirm-box h3 { font-size: 16px; font-weight: 700; color: #1f2937; margin: 0 0 8px; }
+.confirm-box p { font-size: 13px; color: #6b7280; margin: 0 0 20px; line-height: 1.5; }
+.confirm-box p strong { color: #374151; }
+.confirm-actions { display: flex; justify-content: center; gap: 10px; }
+.btn-hapus-confirm {
+  border: 0;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 8px;
+  padding: 9px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-hapus-confirm:hover { background: #dc2626; }
 
 @media (max-width: 640px) {
   .page { padding: 14px; }

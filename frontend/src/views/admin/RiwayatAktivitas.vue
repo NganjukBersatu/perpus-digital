@@ -1,8 +1,8 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { API } from '@/utils/api'
 
-
-const API_URL = '/api/riwayat'
+const API_URL = `${API}/riwayat`
 
 const riwayatList = ref([])
 const isLoading = ref(false)

@@ -2,8 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { API } from '@/utils/api'
 
-
-const API_URL = `${import.meta.env.VITE_API_BASE_URL}/riwayat`
+const API_URL = `${API}/riwayat`
 
 const riwayatList = ref([])
 const isLoading = ref(false)
@@ -60,8 +59,11 @@ function labelTipe(tipe) {
 async function ambilData() {
   isLoading.value = true
   errorMessage.value = ''
-  try {  } catch (err) {
-    console.error('RIWAYAT ERROR:', err)
+  try {
+    const res = await fetch(API_URL)
+    if (!res.ok) throw new Error()
+    riwayatList.value = await res.json()
+  } catch (err) {
     errorMessage.value = 'Gagal memuat riwayat aktivitas. Pastikan backend aktif (node index.js).'
   } finally {
     isLoading.value = false

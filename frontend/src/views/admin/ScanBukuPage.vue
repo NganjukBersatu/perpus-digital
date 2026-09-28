@@ -9,8 +9,6 @@ import Tesseract from "tesseract.js"
 import { authHeaders, jsonHeaders } from "../../utils/auth"
 import { API } from "@/utils/api"
 
-const API = import.meta.env.VITE_API_BASE_URL
-
 const notFoundMessageRef = ref(null)
 const activeTab = ref("kamera")
 const router = useRouter()
@@ -53,7 +51,7 @@ async function cariJudulManual() {
   }
   isSearchingJudulManual.value = true
   try {
-    const res = await fetch(`${API}/buku?q=${encodeURIComponent(q)}`, { headers: authHeaders() })
+    const res = await fetch(`${API}/buku?q=${encodeURIComponent(q)}`)
     if (res.ok) hasilJudulManual.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -65,7 +63,7 @@ async function cariJudulManual() {
 async function pilihBukuDariJudul(bukuTerpilih) {
   scanError.value = ""
   try {
-    const res = await fetch(`${API}/buku/${bukuTerpilih.id}/untuk-pinjam`, { headers: authHeaders() })
+    const res = await fetch(`${API}/buku/${bukuTerpilih.id}/untuk-pinjam`)
     if (res.status === 404) {
       scanError.value = "Buku ini belum punya eksemplar yang bisa dipinjam."
       return
@@ -211,7 +209,7 @@ async function pilihBukuLamaDanSimpan(bukuTerpilih) {
   isAddingEksemplar.value = true
   scanError.value = ""
   try {
-    const res = await fetch(`${API}/}/buku/${bukuTerpilih.id}/eksemplar`, {
+    const res = await fetch(`${API}/buku/${bukuTerpilih.id}/eksemplar`, {
       method: "POST",
       headers: jsonHeaders(),
       body: JSON.stringify({ barcode: barcode.value }),
@@ -300,7 +298,7 @@ const pengaturanPinjam = ref(null)
 
 async function ambilPengaturanPinjam() {
   try {
-    const res = await fetch(`${API}/pengaturan`)
+    fetch(`${API}/pengaturan`)
     if (!res.ok) return
     const data = await res.json()
     pengaturanPinjam.value = data?.detail?.peminjaman || null
@@ -335,7 +333,7 @@ const filteredKelas = computed(() => {
 
 async function ambilDaftarKelas() {
   try {
-    const res = await fetch(`${API}/kelas`, { headers: authHeaders() })
+    fetch(`${API}/kelas`, { headers: authHeaders() })
     if (res.ok) daftarKelas.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -729,6 +727,7 @@ async function onScanSuccess(decodedText) {
   // Kode toko/penerbit lain (walau sama-sama 13 digit) tetap dicari lewat kolom barcode eksemplar.
   if (/^(978|979)\d{10}$/.test(decodedText)) {
     await cariBukuByIsbn(decodedText)
+    if (!bookData.value) bookNotFound.value = true
   } else {
     await cariBuku(decodedText)
   }
@@ -736,7 +735,7 @@ async function onScanSuccess(decodedText) {
 
 async function cariBukuByIsbn(isbn) {
   try {
-    const res = await fetch(`${API}/}/buku/isbn/${isbn}`, { headers: authHeaders() })
+    const res = await fetch(`${API}/buku/isbn/${isbn}`, { headers: authHeaders() })
     if (res.status === 404) {
       bookNotFound.value = true
       bookData.value = null
@@ -812,7 +811,7 @@ async function simpanPeminjaman() {
   scanError.value = ""
 
   try {
-    const res = await fetch(`${API}/peminjaman`, {
+    fetch(`${API}/peminjaman`, {
       method: "POST",
       headers: jsonHeaders(),
       body: JSON.stringify({

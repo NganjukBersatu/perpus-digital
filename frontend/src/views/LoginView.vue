@@ -43,7 +43,6 @@ const daftarForm = ref({ nama: '', nis: '', kelas: '', tanggalLahir: '' })
 const daftarError = ref('')
 const daftarMessage = ref('')
 const isDaftarLoading = ref(false)
-const daftarKelasOptions = ref([])
 
 const roleLabel = computed(() => {
   const found = roles.find(r => r.value === selectedRole.value)
@@ -204,17 +203,6 @@ async function bukaDaftarSiswa() {
   daftarForm.value = { nama: '', nis: '', kelas: '', tanggalLahir: '' }
   daftarError.value = ''
   daftarMessage.value = ''
-
-  if (daftarKelasOptions.value.length === 0) {
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/kelas`)
-      if (res.ok) {
-        daftarKelasOptions.value = await res.json()
-      }
-    } catch (err) {
-      console.error('Gagal memuat daftar kelas', err)
-    }
-  }
 }
 
 function kembaliKeLoginSiswa() {
@@ -407,12 +395,7 @@ async function handleDaftarSiswa() {
                     <rect x="3" y="4" width="18" height="16" rx="2" />
                     <path d="M3 9h18" />
                   </svg>
-                  <select v-model="daftarForm.kelas" required class="select-kelas">
-                    <option value="" disabled>Pilih kelas</option>
-                    <option v-for="k in daftarKelasOptions" :key="k" :value="k">
-                    {{ k }}
-                  </option>
-                </select>
+                  <input v-model="daftarForm.kelas" type="text" placeholder="Contoh: XII-RPL 2" maxlength="30" required />
                 </div>
               </div>
 
@@ -805,21 +788,6 @@ async function handleDaftarSiswa() {
   color-scheme: dark;
 }
 
-.select-kelas {
-  width: 100%;
-  padding: 11px 12px 11px 36px;
-  border-radius: 9px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background-color: rgba(255, 255, 255, 0.05);
-  color: #ffffff;
-  font-size: 13px;
-  outline: none;
-  appearance: none;
-}
-.select-kelas option {
-  background: #1e3a6e;
-  color: #ffffff;
-}
 .btn-login {
   width: 100%;
   margin-top: 8px;

@@ -2,6 +2,8 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { authHeaders } from '@/utils/auth'
 
+const API = import.meta.env.VITE_API_BASE_URL
+
 const daftar = ref([])
 const isLoading = ref(true)
 const errorMessage = ref('')
@@ -44,7 +46,8 @@ function resetPage() {
 
 async function muatPengaturanPeminjaman() {
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/pengaturan`)
+    const res = await fetch(`${API}/pengaturan`, { headers: authHeaders() })
+    if (!res.ok) return
     const json = await res.json()
     if (json.detail?.peminjaman) {
       pengaturanPinjam.value = {
@@ -63,35 +66,12 @@ async function muatData() {
   errorMessage.value = ''
 
   try {
-    const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/data-peminjaman`)
+    const url = new URL(`${API}/data-peminjaman`, window.location.origin)
 
-    if (searchQuery.value) {
-      url.searchParams.set(
-        'search',
-        searchQuery.value
-      )
-    }
-
-    if (statusFilter.value !== 'Semua') {
-      url.searchParams.set(
-        'status',
-        statusFilter.value
-      )
-    }
-
-    if (tanggalDari.value) {
-      url.searchParams.set(
-        'start',
-        tanggalDari.value
-      )
-    }
-
-    if (tanggalSampai.value) {
-      url.searchParams.set(
-        'end',
-        tanggalSampai.value
-      )
-    }
+    if (searchQuery.value) url.searchParams.set('search', searchQuery.value)
+    if (statusFilter.value !== 'Semua') url.searchParams.set('status', statusFilter.value)
+    if (tanggalDari.value) url.searchParams.set('start', tanggalDari.value)
+    if (tanggalSampai.value) url.searchParams.set('end', tanggalSampai.value)
 
     const res = await fetch(url, { headers: authHeaders() })
 
@@ -105,9 +85,7 @@ async function muatData() {
     resetPage()
   } catch (err) {
     console.error(err)
-
-    errorMessage.value =
-      'Gagal memuat data peminjaman. Pastikan backend aktif.'
+    errorMessage.value = 'Gagal memuat data peminjaman. Pastikan backend aktif.'
   } finally {
     isLoading.value = false
   }
@@ -160,39 +138,29 @@ function formatTanggal(tgl) {
 }
 
 async function tandaiDikembalikan(item) {
-  if (
-    !confirm(
-      `Tandai buku "${item.judulBuku}" sebagai sudah dikembalikan?`
-    )
-  ) {
+  if (!confirm(`Tandai buku "${item.judulBuku}" sebagai sudah dikembalikan?`)) {
     return
   }
 
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/peminjaman/${item.id}/kembalikan`, {
-        method: 'PATCH',
-        headers: authHeaders(),
-      }
-    )
+    const res = await fetch(`${API}/peminjaman/${item.id}/kembalikan`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+    })
 
     if (!res.ok) {
-      throw new Error(
-        'Gagal menandai pengembalian'
-      )
+      throw new Error('Gagal menandai pengembalian')
     }
 
     await muatData()
   } catch (err) {
     console.error(err)
-
-    alert(
-      'Gagal menandai buku sebagai dikembalikan. Coba lagi.'
-    )
+    alert('Gagal menandai buku sebagai dikembalikan. Coba lagi.')
   }
 }
 
 async function perpanjangPeminjaman(item) {
-  if (!pengaturanPinjam.value.bolehPerpanjang) return  // jaga-jaga, tombol harusnya sudah disabled
+  if (!pengaturanPinjam.value.bolehPerpanjang) return
 
   if (
     !confirm(
@@ -203,10 +171,13 @@ async function perpanjangPeminjaman(item) {
   }
 
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/peminjaman/${item.id}/perpanjang`, { method: 'PATCH' })
+    const res = await fetch(`${API}/peminjaman/${item.id}/perpanjang`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+    })
 
     if (!res.ok) {
-      const err = await res.json()
+      const err = await res.json().catch(() => ({}))
       throw new Error(err.message || 'Gagal memperpanjang')
     }
 

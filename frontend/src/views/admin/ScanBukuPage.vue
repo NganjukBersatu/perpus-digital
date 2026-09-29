@@ -342,7 +342,7 @@ async function ambilDaftarKelas() {
 
 async function ambilDaftarGuru() {
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/guru`)
+    const res = await fetch(`${API}/guru`, { headers: authHeaders() })
     if (res.ok) daftarGuru.value = await res.json()
   } catch (err) {
     console.error(err)

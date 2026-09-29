@@ -1,5 +1,8 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { authHeaders } from '@/utils/auth'
+
+const API = import.meta.env.VITE_API_BASE_URL
 
 const daftar = ref([])
 const isLoading = ref(true)
@@ -40,7 +43,7 @@ async function muatData() {
   errorMessage.value = ''
 
   try {
-    const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/denda`)
+    const url = new URL(`${API}/denda`, window.location.origin)
 
     if (searchQuery.value) {
       url.searchParams.set('search', searchQuery.value)
@@ -50,7 +53,7 @@ async function muatData() {
       url.searchParams.set('status', statusFilter.value)
     }
 
-    const res = await fetch(url)
+    const res = await fetch(url, { headers: authHeaders() })
 
     if (!res.ok) throw new Error('response not ok')
 
@@ -62,8 +65,7 @@ async function muatData() {
     resetPage()
   } catch (err) {
     console.error(err)
-    errorMessage.value =
-      'Gagal memuat data denda. Pastikan backend aktif.'
+    errorMessage.value = 'Gagal memuat data denda. Pastikan backend aktif.'
   } finally {
     isLoading.value = false
   }
@@ -110,10 +112,10 @@ async function konfirmasiTandaiDibayar() {
   isProcessing.value = true
 
   try {
-    const res = await fetch(
-      `${import.meta.env.VITE_API_BASE_URL}/denda/${itemAkanDibayar.value.id}/bayar`,
-      { method: 'PATCH' }
-    )
+    const res = await fetch(`${API}/denda/${itemAkanDibayar.value.id}/bayar`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+    })
 
     if (!res.ok) {
       throw new Error('Gagal menandai pembayaran')

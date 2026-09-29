@@ -1,6 +1,5 @@
 # Perpus_Digital
 
-> Perpustakaan Tanpa Batas, Literasi Tanpa Jarak
 
 Sistem perpustakaan sekolah berbasis web (responsif). Penjaga/admin memindai barcode buku lewat kamera untuk mencatat peminjaman, sedangkan siswa dan guru melihat katalog, pinjaman berjalan, dan riwayat dari HP masing-masing.
 

@@ -2,6 +2,10 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { logoutUser, getAdmin, authHeaders } from '@/utils/auth'
+import { usePengaturanDenda } from '@/composables/usePengaturanDenda'
+
+const { dendaAktif, muat } = usePengaturanDenda()
+onMounted(muat)
 
 const router = useRouter()
 
@@ -386,7 +390,7 @@ onBeforeUnmount(() => {
           </span>
         </router-link>
 
-        <router-link to="/admin/denda" class="nav-item" exact-active-class="active" title="denda" data-label="denda">
+        <router-link v-if="dendaAktif" to="/admin/denda" class="nav-item" exact-active-class="active" title="denda" data-label="denda">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10" />

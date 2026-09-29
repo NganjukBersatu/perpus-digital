@@ -27,6 +27,7 @@ import PeminjamanSiswaPage from '@/views/siswa/PeminjamanSiswaPage.vue'
 import PeminjamanGuruPage from '@/views/guru/PeminjamanGuruPage.vue'
 import RiwayatGuruPage from '@/views/guru/RiwayatGuruPage.vue'
 import ProfilGuruPage from '@/views/guru/ProfilGuruPage.vue'
+import { usePengaturanDenda } from '@/composables/usePengaturanDenda'
 
 const ComingSoon = {
   props: {
@@ -157,11 +158,16 @@ const router = createRouter({
           name: 'admin-data-peminjaman',
           component: DataPeminjaman,
         },
-        {
-          path: 'denda',
-          name: 'admin-denda',
-          component: Denda,
-        },
+       {
+  path: 'denda',
+  name: 'admin-denda',
+  component: Denda,
+  beforeEnter: async () => {
+    const { dendaAktif, muat } = usePengaturanDenda()
+    await muat()
+    if (!dendaAktif.value) return '/admin'
+  },
+},
         {
           path: 'laporan',
           name: 'admin-laporan',

@@ -2,8 +2,10 @@
 import { reactive, ref, onMounted, nextTick } from 'vue'
 import { authHeaders } from '@/utils/auth'
 import { useInfoPerpustakaan } from '@/composables/useInfoPerpustakaan'
+import { usePengaturanDenda } from '@/composables/usePengaturanDenda'
 
 const { setInfo } = useInfoPerpustakaan()
+const { dendaAktif } = usePengaturanDenda()
 
 const STORAGE_KEY = 'perpus_pengaturan'
 
@@ -92,6 +94,7 @@ async function loadSettings() {
     if (data.detail?.perpustakaan) Object.assign(form.perpustakaan, data.detail.perpustakaan)
     if (data.detail?.peminjaman) Object.assign(form.peminjaman, data.detail.peminjaman)
     if (data.detail?.denda) Object.assign(form.denda, data.detail.denda)
+    dendaAktif.value = form.denda.aktif
     if (data.detail?.notifikasi) Object.assign(form.notifikasi, data.detail.notifikasi)
 
     savedAt.value = data.updatedAt
@@ -161,6 +164,7 @@ async function saveSettings() {
 
     savedAt.value = new Date(data.updatedAt || Date.now()).toLocaleString('id-ID')
     showToast('Pengaturan berhasil disimpan')
+    dendaAktif.value = form.denda.aktif
 
     // Update state global supaya semua halaman (laporan, header, dll)
     // langsung lihat perubahan tanpa refresh.

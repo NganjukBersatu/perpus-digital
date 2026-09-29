@@ -1,6 +1,9 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { authHeaders, jsonHeaders } from '../../utils/auth' // sesuaikan path, sama seperti di halaman pinjam
+
+const API = import.meta.env.VITE_API_BASE_URL
 
 const route = useRoute()
 const router = useRouter()
@@ -53,9 +56,10 @@ async function muatData() {
   isLoading.value = true
   errorMessage.value = ''
   try {
-    const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/guru`)
+    // argumen kedua dipakai kalau API berupa path relatif (mis. "/api")
+    const url = new URL(`${API}/guru`, window.location.origin)
     if (searchQuery.value) url.searchParams.set('q', searchQuery.value)
-    const res = await fetch(url)
+    const res = await fetch(url, { headers: authHeaders() })
     if (!res.ok) throw new Error('response not ok')
     daftar.value = await res.json()
   } catch (err) {
@@ -77,7 +81,9 @@ function onSearchInput() {
 
 function bukaModalTambah(namaAwal = '') {
   modalMode.value = 'tambah'
-  form.value = { id: null, nama: namaAwal || '', nip: '', mapel: '', tanggalLahir: '' }
+  // @click="bukaModalTambah" mengirim event object, jadi pastikan hanya string yang dipakai
+  const nama = typeof namaAwal === 'string' ? namaAwal : ''
+  form.value = { id: null, nama, nip: '', mapel: '', tanggalLahir: '' }
   showModal.value = true
 }
 
@@ -106,20 +112,18 @@ async function simpan() {
   isSaving.value = true
   try {
     const isEdit = modalMode.value === 'edit'
-    const url = isEdit
-  ? `${import.meta.env.VITE_API_BASE_URL}/guru/${form.value.id}`
-  : `${import.meta.env.VITE_API_BASE_URL}/guru`
+    const url = isEdit ? `${API}/guru/${form.value.id}` : `${API}/guru`
 
     const res = await fetch(url, {
-  method: isEdit ? 'PUT' : 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    nama: form.value.nama,
-    nip: form.value.nip,
-    mapel: form.value.mapel,
-    tanggalLahir: form.value.tanggalLahir,
-  }),
-})
+      method: isEdit ? 'PUT' : 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        nama: form.value.nama,
+        nip: form.value.nip,
+        mapel: form.value.mapel,
+        tanggalLahir: form.value.tanggalLahir,
+      }),
+    })
 
     if (!res.ok) throw new Error('Gagal menyimpan')
 
@@ -134,8 +138,8 @@ async function simpan() {
           barcode: route.query.barcode || '',
           lanjut: 'pinjam',
           guruId: dataBaru.id,
-          guruNama: dataBaru.nama
-        }
+          guruNama: dataBaru.nama,
+        },
       })
       return
     }
@@ -153,8 +157,9 @@ async function hapus(item) {
   if (!confirm(`Hapus data guru "${item.nama}"?`)) return
 
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/guru/${item.id}`, {
-            method: 'DELETE',
+    const res = await fetch(`${API}/guru/${item.id}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
     })
     if (!res.ok) throw new Error('Gagal menghapus')
     await muatData()
@@ -184,7 +189,7 @@ onMounted(() => {
 
   // Jika datang dari form pinjam → langsung buka modal tambah
   if (route.query.from === 'pinjam' && route.query.nama) {
-    bukaModalTambah(route.query.nama)
+    bukaModalTambah(String(route.query.nama))
   }
 })
 
@@ -314,7 +319,7 @@ onUnmounted(() => {
       </select>
     </div>
 
-    <div v-if="showModal" class="modal-overlay" @click.self="tutupModal">
+        <div v-if="showModal" class="modal-overlay" @click.self="tutupModal">
       <div class="modal-card">
         <h2>{{ modalMode === 'edit' ? 'Edit Guru' : 'Tambah Guru' }}</h2>
 
@@ -329,16 +334,14 @@ onUnmounted(() => {
         </div>
 
         <div class="form-group">
-  <label>Mata Pelajaran <span class="optional">(opsional)</span></label>
-  <input type="text" v-model="form.mapel" placeholder="Contoh: Matematika, Bahasa Indonesia" />
-</div>
+          <label>Mata Pelajaran <span class="optional">(opsional)</span></label>
+          <input type="text" v-model="form.mapel" placeholder="Contoh: Matematika, Bahasa Indonesia" />
+        </div>
 
-<div class="form-group">
-  <label>Tanggal Lahir <span class="optional">(opsional)</span></label>
-  <input type="date" v-model="form.tanggalLahir" />
-</div>
-
-<div class="modal-actions">
+        <div class="form-group">
+          <label>Tanggal Lahir <span class="optional">(opsional)</span></label>
+          <input type="date" v-model="form.tanggalLahir" />
+        </div>
 
         <div class="modal-actions">
           <button class="btn-secondary" @click="tutupModal">Batal</button>
@@ -349,7 +352,6 @@ onUnmounted(() => {
       </div>
     </div>
   </div>
-</div>
 </template>
 
 <style scoped>

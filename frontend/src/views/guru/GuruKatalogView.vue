@@ -1,7 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-
-const API = import.meta.env.VITE_API_BASE_URL
+import { API } from '@/utils/api'
 
 const keyword = ref('')
 const kategoriAktif = ref('Semua')

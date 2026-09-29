@@ -621,8 +621,7 @@ app.get("/api/dashboard/buku-terpopuler-lengkap", async (req, res) => {
       query = sql`${query} and p.tanggal_pinjam >= ${formatTanggalISO(startDate)}`
     }
     if (kategori && kategori !== "Semua Kategori") {
-      query = sql`${query} and b.kategori = ${String(kategori)}`
-      query = sql`${query} and k.nama = ${kategori}`
+      query = sql`${query} and k.nama = ${String(kategori)}`
     }
     if (search) {
       query = sql`${query} and b.judul ilike ${"%" + escapeLike(search) + "%"}`
@@ -1016,6 +1015,20 @@ app.get("/api/dashboard/statistik-peminjaman", async (req, res) => {
     res.status(500).json({ message: "Gagal mengambil statistik peminjaman" })
   }
 })
+
+// Sajikan frontend hasil build (frontend/dist) dari service yang sama.
+// Route /api yang tidak dikenal tetap 404 JSON; sisanya jatuh ke index.html (SPA).
+const path = require("path")
+const fs = require("fs")
+const distDir = path.join(__dirname, "..", "frontend", "dist")
+if (fs.existsSync(path.join(distDir, "index.html"))) {
+  app.use(express.static(distDir))
+  app.use("/api", (req, res) => res.status(404).json({ message: "Endpoint tidak ditemukan" }))
+  app.use((req, res, next) => {
+    if (req.method !== "GET") return next()
+    res.sendFile(path.join(distDir, "index.html"))
+  })
+}
 
 // Penangan error terakhir (harus setelah semua route): JSON yang rusak dari klien
 // menghasilkan 400 yang rapi, bukan halaman error HTML.

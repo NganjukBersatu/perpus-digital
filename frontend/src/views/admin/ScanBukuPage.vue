@@ -7,8 +7,7 @@ import { useRouter, useRoute } from "vue-router"
 import IsbnOcr from "../../utils/isbn-ocr.js" // sesuaikan path relatif ke folder utils/ kamu
 import Tesseract from "tesseract.js"
 import { authHeaders, jsonHeaders } from "../../utils/auth"
-
-const API = import.meta.env.VITE_API_BASE_URL
+import { API } from "@/utils/api"
 
 const notFoundMessageRef = ref(null)
 const activeTab = ref("kamera")
@@ -52,7 +51,7 @@ async function cariJudulManual() {
   }
   isSearchingJudulManual.value = true
   try {
-    const res = await fetch(`${API}/buku?q=${encodeURIComponent(q)}`, { headers: authHeaders() })
+    const res = await fetch(`${API}/buku?q=${encodeURIComponent(q)}`)
     if (res.ok) hasilJudulManual.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -64,7 +63,7 @@ async function cariJudulManual() {
 async function pilihBukuDariJudul(bukuTerpilih) {
   scanError.value = ""
   try {
-    const res = await fetch(`${API}/buku/${bukuTerpilih.id}/untuk-pinjam`, { headers: authHeaders() })
+    const res = await fetch(`${API}/buku/${bukuTerpilih.id}/untuk-pinjam`)
     if (res.status === 404) {
       scanError.value = "Buku ini belum punya eksemplar yang bisa dipinjam."
       return
@@ -299,7 +298,7 @@ const pengaturanPinjam = ref(null)
 
 async function ambilPengaturanPinjam() {
   try {
-    const res = await fetch(`${API}/pengaturan`)
+    fetch(`${API}/pengaturan`)
     if (!res.ok) return
     const data = await res.json()
     pengaturanPinjam.value = data?.detail?.peminjaman || null
@@ -334,7 +333,7 @@ const filteredKelas = computed(() => {
 
 async function ambilDaftarKelas() {
   try {
-    const res = await fetch(`${API}/kelas`, { headers: authHeaders() })
+    fetch(`${API}/kelas`, { headers: authHeaders() })
     if (res.ok) daftarKelas.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -728,6 +727,7 @@ async function onScanSuccess(decodedText) {
   // Kode toko/penerbit lain (walau sama-sama 13 digit) tetap dicari lewat kolom barcode eksemplar.
   if (/^(978|979)\d{10}$/.test(decodedText)) {
     await cariBukuByIsbn(decodedText)
+    if (!bookData.value) bookNotFound.value = true
   } else {
     await cariBuku(decodedText)
   }
@@ -811,7 +811,7 @@ async function simpanPeminjaman() {
   scanError.value = ""
 
   try {
-    const res = await fetch(`${API}/peminjaman`, {
+    fetch(`${API}/peminjaman`, {
       method: "POST",
       headers: jsonHeaders(),
       body: JSON.stringify({
@@ -1521,7 +1521,7 @@ button, input, select { font: inherit; }
   border: 1px solid var(--border);
   border-radius: 16px;
   box-shadow: 0 8px 28px rgba(31, 56, 88, 0.06);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .progress {
@@ -1530,6 +1530,7 @@ button, input, select { font: inherit; }
   padding: 12px 20px;
   background: #fbfcfe;
   border-bottom: 1px solid var(--border);
+  border-radius: 15px 15px 0 0;   
 }
 
 .progress-item {
@@ -2356,7 +2357,7 @@ button, input, select { font: inherit; }
   z-index: 10;
   margin: 0;
   padding: 5px;
-  max-height: 200px;
+  max-height: 260px;   /* sebelumnya: 200px */
   overflow-y: auto;
   list-style: none;
   background: white;

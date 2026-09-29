@@ -699,6 +699,7 @@ function konfirmasiLogout() {
   flex-direction: column;
   min-width: 0;
   margin-left: 260px;
+  padding-top: 64px; 
   transition: margin-left 0.25s ease;
 }
 
@@ -708,7 +709,6 @@ function konfirmasiLogout() {
   flex: 1;
   min-width: 0;
   width: 100%;
-  padding-top: 64px;
 }
 
 .topbar {

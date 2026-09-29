@@ -299,7 +299,7 @@ const pengaturanPinjam = ref(null)
 
 async function ambilPengaturanPinjam() {
   try {
-    fetch(`${API}/pengaturan`)
+    const res = await fetch(`${API}/pengaturan`)
     if (!res.ok) return
     const data = await res.json()
     pengaturanPinjam.value = data?.detail?.peminjaman || null
@@ -334,7 +334,7 @@ const filteredKelas = computed(() => {
 
 async function ambilDaftarKelas() {
   try {
-    fetch(`${API}/kelas`, { headers: authHeaders() })
+    const res = await fetch(`${API}/kelas`, { headers: authHeaders() })
     if (res.ok) daftarKelas.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -817,8 +817,8 @@ async function simpanPeminjaman() {
   saveSuccess.value = false
   scanError.value = ""
 
-  try {
-    fetch(`${API}/peminjaman`, {
+    try {
+    const res = await fetch(`${API}/peminjaman`, {
       method: "POST",
       headers: jsonHeaders(),
       body: JSON.stringify({

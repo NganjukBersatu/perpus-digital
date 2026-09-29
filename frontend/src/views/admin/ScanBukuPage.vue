@@ -481,6 +481,18 @@ const zxingReader = new BrowserMultiFormatReader(zxingHints, {
   delayBetweenScanAttempts: 100,
 })
 
+const gambarHints = new Map()
+gambarHints.set(DecodeHintType.POSSIBLE_FORMATS, [
+  BarcodeFormat.EAN_13,
+  BarcodeFormat.EAN_8,
+  BarcodeFormat.UPC_A,
+  BarcodeFormat.UPC_E,
+  BarcodeFormat.CODE_128,
+  BarcodeFormat.CODE_39,
+])
+gambarHints.set(DecodeHintType.TRY_HARDER, true)
+const zxingGambarReader = new BrowserMultiFormatReader(gambarHints)
+
 function validasiChecksumEan13(kode) {
   if (!/^\d{13}$/.test(kode)) return false
   const digits = kode.split("").map(Number)
@@ -769,17 +781,29 @@ async function handleFileUpload(e) {
   const file = e.target.files[0]
   if (!file) return
   resetHasilPindai()
-  if (!scanner) scanner = new Html5Qrcode("reader")
+
+  const url = URL.createObjectURL(file)
+  let kode = ""
   try {
-    const decodedText = await scanner.scanFile(file, true)
-    barcode.value = decodedText.trim()
-    await cariBuku(barcode.value)
+    const hasil = await zxingGambarReader.decodeFromImageUrl(url)
+    kode = hasil.getText().trim()
   } catch (err) {
+    console.error("Gagal decode gambar:", err)
     scanError.value =
       "Barcode tidak terbaca dari gambar ini. Coba foto lain yang lebih jelas dan tidak buram."
+    return
   } finally {
+    URL.revokeObjectURL(url)
     e.target.value = ""
   }
+
+  // Checksum hanya dicek untuk kode 13 digit (EAN-13). Format lain langsung dipakai.
+  if (/^\d{13}$/.test(kode) && !validasiChecksumEan13(kode)) {
+    scanError.value = "Barcode terbaca tapi angkanya tidak valid. Coba foto ulang."
+    return
+  }
+
+  await onScanSuccess(kode) // otomatis: ISBN -> cariBukuByIsbn, lainnya -> cariBuku
 }
 
 // ===== PINJAMAN =====

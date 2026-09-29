@@ -682,7 +682,9 @@ watch(
   }
 
   .btn-return {
-    width: 100%;
+    width: 120px;
+    flex-shrink: 0;
+    text-align: center;
   }
 }
 </style>

@@ -2,7 +2,7 @@ const express = require('express')
 const router = express.Router()
 const jwt = require('jsonwebtoken')
 const { db } = require('../db/client')
-const { anggota, kelas: tabelKelas } = require('../db/schema')
+const { anggota } = require('../db/schema')
 const { eq, and } = require('drizzle-orm')
 const { loginLimiter, daftarLimiter } = require('../middleware/rateLimiter')
 const { normalisasiTanggal } = require('../utils/validasi')
@@ -76,7 +76,7 @@ router.post('/daftar', daftarLimiter, async (req, res) => {
 
     const namaBersih = String(nama ?? '').trim()
     const nisBersih = String(nis ?? '').trim()
-    const kelasBersih = String(kelas ?? '').trim()
+    const kelasBersih = String(kelas ?? '').trim().replace(/\s+/g, ' ').toUpperCase()
 
     if (!namaBersih) {
       return res.status(400).json({ error: 'Nama wajib diisi' })
@@ -94,17 +94,6 @@ router.post('/daftar', daftarLimiter, async (req, res) => {
     // batas panjang, karena endpoint ini publik
     if (namaBersih.length > 100 || nisBersih.length > 30 || kelasBersih.length > 30) {
       return res.status(400).json({ error: 'Data terlalu panjang' })
-    }
-
-    
-    // Kelas harus salah satu kelas yang ada di tabel kelas (bukan teks bebas)
-    const [kelasValid] = await db
-      .select({ namaKelas: tabelKelas.namaKelas })
-      .from(tabelKelas)
-      .where(eq(tabelKelas.namaKelas, kelasBersih))
-      .limit(1)
-    if (!kelasValid) {
-      return res.status(400).json({ error: 'Kelas tidak dikenal. Pilih kelas dari daftar.' })
     }
 
     const [nisSudahAda] = await db

@@ -177,6 +177,16 @@ function closeMobileMenu() {
   document.body.style.overflow = ''
 }
 
+function closeSidebarOutside(e) {
+  // Hanya berlaku di tampilan mobile
+  if (!window.matchMedia('(max-width: 768px)').matches) return
+
+  // Klik di dalam sidebar, tombol hamburger, atau modal: abaikan
+  if (e.target.closest('.sidebar, .hamburger, .modal-overlay')) return
+
+  if (mobileMenuOpen.value) closeMobileMenu()
+}
+
 const showLogoutModal = ref(false)
 
 function mintaLogout() {
@@ -251,6 +261,7 @@ function tutupSearchDelay() {
 onMounted(() => {
   fetchNotifikasi()
   window.addEventListener('click', closeNotifOutside)
+  window.addEventListener('click', closeSidebarOutside) 
   window.addEventListener('scroll', closeNotifOnScroll, { capture: true })
   sinkronkanDariServer()
   window.addEventListener('admin-profil-updated', onProfilUpdated)
@@ -264,6 +275,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('click', closeNotifOutside)
+  window.removeEventListener('click', closeSidebarOutside)
   window.removeEventListener('scroll', closeNotifOnScroll, { capture: true })
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   if (notifInterval) clearInterval(notifInterval)

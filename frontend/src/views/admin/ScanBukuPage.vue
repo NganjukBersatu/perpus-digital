@@ -271,6 +271,7 @@ const fileInput = ref(null)
 
 const availableCameras = ref([])
 const selectedCameraId = ref(null)
+const userPilihKamera = ref(false) // true kalau pengguna mengganti kamera lewat dropdown
 let scanner = null
 
 const scanVideoRef = ref(null)
@@ -447,7 +448,8 @@ async function siapkanDaftarKamera() {
     availableCameras.value = cams
     if (cams.length > 0 && !selectedCameraId.value) {
       const logitech = cams.find((k) => /logitech|c270|c310|c920|webcam/i.test(k.label))
-      selectedCameraId.value = logitech ? logitech.id : cams[0].id
+      const belakang = cams.find((k) => /back|rear|belakang|environment/i.test(k.label))
+      selectedCameraId.value = (logitech || belakang || cams[0]).id
     }
   } catch (err) {
     console.error(err)
@@ -500,44 +502,49 @@ async function mulaiPindai() {
   statusScan.value = "Kamera aktif — arahkan ke barcode"
   await new Promise((resolve) => setTimeout(resolve, 0))
 
-  try {
-    zxingControls = await zxingReader.decodeFromConstraints(
-      {
-        video: {
-          deviceId: { exact: selectedCameraId.value },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      },
-      scanVideoRef.value,
-      (result) => {
-        if (result) handleKodeTerbaca(result.getText())
-      }
-    )
-    mulaiFallbackOcr()
-  } catch (err) {
-    console.error("Gagal pakai deviceId exact, coba fallback facingMode:", err)
+  const constraintBelakang = {
+    video: {
+      facingMode: { ideal: "environment" },
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+    },
+  }
+  const constraintDeviceId = {
+    video: {
+      deviceId: { exact: selectedCameraId.value },
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+    },
+  }
+
+  // Kalau pengguna memilih kamera sendiri, hormati pilihannya.
+  // Kalau tidak, utamakan kamera belakang.
+  const urutan = userPilihKamera.value
+    ? [constraintDeviceId, constraintBelakang]
+    : [constraintBelakang, constraintDeviceId]
+
+  let berhasil = false
+  for (const constraint of urutan) {
     try {
       zxingControls = await zxingReader.decodeFromConstraints(
-        {
-          video: {
-            facingMode: { ideal: "environment" },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
-        },
+        constraint,
         scanVideoRef.value,
         (result) => {
           if (result) handleKodeTerbaca(result.getText())
         }
       )
-      mulaiFallbackOcr()
-    } catch (err2) {
-      console.error(err2)
-      scanError.value =
-        "Kamera tidak bisa diakses. Izinkan kamera di browser, lalu coba lagi."
-      isScanning.value = false
+      berhasil = true
+      break
+    } catch (err) {
+      console.error("Gagal membuka kamera dengan constraint ini, coba berikutnya:", err)
     }
+  }
+
+  if (berhasil) {
+    mulaiFallbackOcr()
+  } else {
+    scanError.value = "Kamera tidak bisa diakses. Izinkan kamera di browser, lalu coba lagi."
+    isScanning.value = false
   }
 }
 

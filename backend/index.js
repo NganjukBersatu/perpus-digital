@@ -216,7 +216,7 @@ app.post("/api/peminjaman", async (req, res) => {
         .select({ stokTersedia: sql`count(*)`.mapWith(Number) })
         .from(eksemplarBuku)
         .where(and(eq(eksemplarBuku.bukuId, ek.bukuId), eq(eksemplarBuku.status, "tersedia")))
-      const stokSebelum = stokTersedia + 0
+      const stokSebelum = stokTersedia + 1
       if (stokSebelum <= pengaturanPinjam.minStokPinjam) {
         throw new ErrorBisnis(
           400,

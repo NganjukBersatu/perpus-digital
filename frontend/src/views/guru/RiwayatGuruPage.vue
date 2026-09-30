@@ -361,7 +361,7 @@ function formatRupiah(angka) {
 
 .chip {
   border: none;
-  background: transparent;
+  background: #f1f5f9;
   color: #475569;
   padding: 6px 12px;
   border-radius: 999px;

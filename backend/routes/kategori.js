@@ -2,16 +2,17 @@ const express = require('express')
 const router = express.Router()
 const db = require('../db')
 const { kategori } = require('../db/schema')
-const { eq, ilike } = require('drizzle-orm')
+const { eq, and, ilike } = require('drizzle-orm')
 const { wajibLogin, wajibAdmin } = require('./auth')
 
 // GET semua kategori (opsional filter ?q=...)
 router.get('/', wajibLogin, async (req, res) => {
   try {
     const { q } = req.query
-    const rows = q
-      ? await db.select().from(kategori).where(ilike(kategori.nama, `%${q}%`)).orderBy(kategori.id)
-      : await db.select().from(kategori).orderBy(kategori.id)
+    const { sekolahId } = req.user
+    const rows = await db.select().from(kategori)
+      .where(q ? and(eq(kategori.sekolahId, sekolahId), ilike(kategori.nama, `%${q}%`)) : eq(kategori.sekolahId, sekolahId))
+      .orderBy(kategori.id)
     res.json(rows)
   } catch (err) {
     console.error(err)
@@ -27,7 +28,7 @@ router.post('/', wajibAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Nama kategori wajib diisi' })
     }
 
-    const [baru] = await db.insert(kategori).values({ nama: nama.trim(), deskripsi }).returning()
+    const [baru] = await db.insert(kategori).values({ nama: nama.trim(), deskripsi, sekolahId: req.user.sekolahId }).returning()
     res.status(201).json(baru)
   } catch (err) {
     console.error(err)
@@ -51,7 +52,7 @@ router.put('/:id', wajibAdmin, async (req, res) => {
     const [updated] = await db
       .update(kategori)
       .set({ nama: nama.trim(), deskripsi })
-      .where(eq(kategori.id, id))
+      .where(and(eq(kategori.id, id), eq(kategori.sekolahId, req.user.sekolahId)))
       .returning()
 
     if (!updated) return res.status(404).json({ error: 'Kategori tidak ditemukan' })
@@ -69,8 +70,8 @@ router.put('/:id', wajibAdmin, async (req, res) => {
 router.delete('/:id', wajibAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id)
-    const [deleted] = await db.delete(kategori).where(eq(kategori.id, id)).returning()
-
+    const [deleted] = await db.delete(kategori)
+      .where(and(eq(kategori.id, id), eq(kategori.sekolahId, req.user.sekolahId))).returning()
     if (!deleted) return res.status(404).json({ error: 'Kategori tidak ditemukan' })
     res.json({ success: true, deleted })
   } catch (err) {

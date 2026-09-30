@@ -9,7 +9,7 @@
  */
 
 const express = require('express');
-const { eq } = require('drizzle-orm');
+const { eq, and } = require('drizzle-orm');
 const router = express.Router();
 
 // Sesuaikan path ini dengan lokasi instance db & schema kamu yang sebenarnya
@@ -19,13 +19,14 @@ const { wajibAdmin } = require('./auth')
 router.get('/isbn/:isbn', wajibAdmin, async (req, res) => {
 
   const { isbn } = req.params;
+  const { sekolahId } = req.user;
 
   try {
     // 1. Cari buku berdasarkan ISBN
     const bukuRows = await db
       .select()
       .from(buku)
-      .where(eq(buku.isbn, isbn))
+      .where(and(eq(buku.sekolahId, sekolahId), eq(buku.isbn, isbn)))
       .limit(1);
 
     if (bukuRows.length === 0) {
@@ -38,7 +39,7 @@ router.get('/isbn/:isbn', wajibAdmin, async (req, res) => {
     const eksemplarRows = await db
       .select()
       .from(eksemplarBuku)
-      .where(eq(eksemplarBuku.bukuId, bukuData.id))
+      .where(and(eq(eksemplarBuku.bukuId, bukuData.id), eq(eksemplarBuku.sekolahId, sekolahId)))
       .orderBy(eksemplarBuku.id);
 
     if (eksemplarRows.length === 0) {

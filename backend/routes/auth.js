@@ -7,6 +7,7 @@ const { adminAkun, anggota } = require('../db/schema')
 const { eq, and } = require('drizzle-orm')
 const { loginLimiter } = require('../middleware/rateLimiter')
 const { normalisasiTanggal } = require('../utils/validasi')
+const { ambilSekolahAktif } = require('../utils/sekolah')
 
 // JWT_SECRET wajib di-set lewat file .env, tidak boleh diam-diam
 // pakai nilai bawaan yang keliatan di kode ini.
@@ -43,20 +44,39 @@ router.post('/login', loginLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Username atau password salah' })
     }
 
-    const token = jwt.sign({ id: akun.id, username: akun.username, role: 'admin' }, JWT_SECRET, SIGN_OPTS)
+    // sekolahId diambil dari akun, bukan dari form
+    const superadmin = akun.peran === 'superadmin'
+    let sek = null
+    if (!superadmin) {
+      sek = await ambilSekolahAktif(akun.sekolahId)
+      if (!sek) return res.status(403).json({ error: 'Sekolah tidak aktif' })
+    }
+    const role = superadmin ? 'superadmin' : 'admin'
+
+    const token = jwt.sign(
+      { id: akun.id, username: akun.username, role, sekolahId: akun.sekolahId ?? null },
+      JWT_SECRET,
+      SIGN_OPTS
+    )
 
     res.json({
       token,
-      role: 'admin',
+      role,
       nama: akun.namaLengkap,
+      sekolah: sek ? { id: sek.id, nama: sek.nama, logoUrl: sek.logoUrl } : null,
       admin: {
-        id: akun.id,
-        username: akun.username,
-        namaLengkap: akun.namaLengkap,
-        email: akun.email,
-        telepon: akun.telepon,
-        jabatan: akun.jabatan,
-        nipNik: akun.nipNik,
+        token,
+        role: 'admin',
+          nama: akun.namaLengkap,
+          admin: {
+          id: akun.id,
+          username: akun.username,
+          namaLengkap: akun.namaLengkap,
+          email: akun.email,
+          telepon: akun.telepon,
+          jabatan: akun.jabatan,
+          nipNik: akun.nipNik,
+        },
       },
     })
   } catch (err) {
@@ -79,10 +99,13 @@ router.post('/guru/login', loginLimiter, async (req, res) => {
       return res.status(400).json({ error: 'NIP dan password wajib diisi' })
     }
 
+    const sek = await ambilSekolahAktif(body.sekolahId)
+    if (!sek) return res.status(400).json({ error: 'Sekolah wajib dipilih' })
+
     const [guru] = await db
       .select()
       .from(anggota)
-      .where(and(eq(anggota.nip, nipBersih), eq(anggota.peran, 'guru')))
+      .where(and(eq(anggota.sekolahId, sek.id), eq(anggota.nip, nipBersih), eq(anggota.peran, 'guru')))
 
     // selalu jalankan bcrypt (lihat HASH_PALSU di atas)
     const cocok = await bcrypt.compare(password, guru?.password || HASH_PALSU)
@@ -94,7 +117,7 @@ router.post('/guru/login', loginLimiter, async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: guru.id, nip: guru.nip, role: 'guru', hgp: !!guru.harusGantiPassword },
+      { id: guru.id, nip: guru.nip, role: 'guru', hgp: !!guru.harusGantiPassword, sekolahId: guru.sekolahId },
       JWT_SECRET,
       SIGN_OPTS
     )
@@ -102,6 +125,7 @@ router.post('/guru/login', loginLimiter, async (req, res) => {
     res.json({
       token,
       role: 'guru',
+      sekolah: { id: sek.id, nama: sek.nama, logoUrl: sek.logoUrl },
       nama: guru.nama,
       guru: {
         id: guru.id,
@@ -136,10 +160,13 @@ router.post('/guru/lupa-password', loginLimiter, async (req, res) => {
       return res.status(400).json({ error: 'NIP dan tanggal lahir wajib diisi (format tanggal YYYY-MM-DD)' })
     }
 
+    const sek = await ambilSekolahAktif(body.sekolahId)
+    if (!sek) return res.status(400).json({ error: 'Sekolah wajib dipilih' })
+
     const [guru] = await db
       .select()
       .from(anggota)
-      .where(and(eq(anggota.nip, nipBersih), eq(anggota.peran, 'guru')))
+      .where(and(eq(anggota.sekolahId, sek.id), eq(anggota.nip, nipBersih), eq(anggota.peran, 'guru')))
 
     // satu respons untuk semua kegagalan: NIP tidak ada, tanggal lahir belum diisi, atau salah
     if (!guru || normalisasiTanggal(guru.tanggalLahir) !== tgl) {
@@ -151,7 +178,7 @@ router.post('/guru/lupa-password', loginLimiter, async (req, res) => {
     await db
       .update(anggota)
       .set({ password: passwordBaruHash, harusGantiPassword: true })
-      .where(eq(anggota.id, guru.id))
+      .where(and(eq(anggota.id, guru.id), eq(anggota.sekolahId, sek.id)))
 
     res.json({
       success: true,
@@ -163,8 +190,8 @@ router.post('/guru/lupa-password', loginLimiter, async (req, res) => {
   }
 })
 
-// Middleware untuk lindungi endpoint yang butuh login.
-function wajibLogin(req, res, next) {
+// Verifikasi token saja, tanpa cek peran. Dipakai wajibLogin dan wajibSuperAdmin.
+function verifikasiToken(req, res, next) {
   const authHeader = req.headers.authorization
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Belum login' })
@@ -175,11 +202,24 @@ function wajibLogin(req, res, next) {
   } catch {
     return res.status(401).json({ error: 'Sesi tidak valid, silakan login ulang' })
   }
+  // token lama (sebelum multi-sekolah) tidak punya sekolahId → paksa login ulang
+  if (payload.role !== 'superadmin' && !Number.isInteger(payload.sekolahId)) {
+    return res.status(401).json({ error: 'Sesi tidak valid, silakan login ulang' })
+  }
   req.user = payload
-  // Alias lama, dipertahankan sementara untuk route lain yang belum saya lihat
-  // (guru.js, laporan.js, dll). Hapus setelah `grep -rn "req\.admin" routes/` kosong.
+  // Alias lama, dipertahankan sementara. Hapus setelah `grep -rn "req\.admin" routes/` kosong.
   req.admin = payload
-  next() // di luar try, jadi error hilir tidak salah dilaporkan sebagai 401
+  next()
+}
+
+// Untuk semua endpoint data sekolah: semua peran KECUALI superadmin
+function wajibLogin(req, res, next) {
+  verifikasiToken(req, res, () => {
+    if (req.user.role === 'superadmin') {
+      return res.status(403).json({ error: 'Super admin tidak punya akses ke data sekolah' })
+    }
+    next()
+  })
 }
 
 function buatWajibGuru({ izinkanHarusGanti = false } = {}) {
@@ -210,6 +250,26 @@ function wajibAdmin(req, res, next) {
   })
 }
 
+
+function wajibSuperAdmin(req, res, next) {
+  verifikasiToken(req, res, () => {
+    if (req.user.role !== 'superadmin') {
+      return res.status(403).json({ error: 'Endpoint ini khusus untuk super admin' })
+    }
+    next()
+  })
+}
+
+// Untuk endpoint publik yang isinya bergantung sekolah:
+// kalau ada token valid, req.user diisi; kalau tidak, lanjut tanpa user.
+function opsionalLogin(req, res, next) {
+  const h = req.headers.authorization
+  if (h && h.startsWith('Bearer ')) {
+    try { req.user = jwt.verify(h.split(' ')[1], JWT_SECRET, VERIFY_OPTS) } catch {}
+  }
+  next()
+}
+
 // POST ganti password guru
 // Guru yang sedang login mengganti passwordnya sendiri.
 // Dipanggil baik saat wajib ganti password pertama kali, maupun ganti
@@ -228,11 +288,11 @@ router.post('/guru/ganti-password', wajibLoginGuruBolehGanti, async (req, res) =
     await db
       .update(anggota)
       .set({ password: hash, harusGantiPassword: false })
-      .where(eq(anggota.id, req.user.id))
+      .where(and(eq(anggota.id, req.user.id), eq(anggota.sekolahId, req.user.sekolahId)))
 
     // token lama masih membawa hgp:true, jadi terbitkan token baru
     const token = jwt.sign(
-      { id: req.user.id, nip: req.user.nip, role: 'guru', hgp: false },
+      { id: req.user.id, nip: req.user.nip, role: 'guru', hgp: false, sekolahId: req.user.sekolahId },
       JWT_SECRET,
       SIGN_OPTS
     )
@@ -243,4 +303,4 @@ router.post('/guru/ganti-password', wajibLoginGuruBolehGanti, async (req, res) =
   }
 })
 
-module.exports = { router, wajibLogin, wajibLoginGuru, wajibLoginGuruBolehGanti, wajibAdmin }
+module.exports = { router, wajibLogin, wajibLoginGuru, wajibLoginGuruBolehGanti, wajibAdmin, wajibSuperAdmin, opsionalLogin }

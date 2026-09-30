@@ -24,6 +24,7 @@ router.get('/', wajibAdmin, async (req, res) => {
       .innerJoin(anggota, eq(anggota.id, peminjaman.anggotaId))
       .innerJoin(eksemplarBuku, eq(eksemplarBuku.id, peminjaman.eksemplarId))
       .innerJoin(buku, eq(buku.id, eksemplarBuku.bukuId))
+      .where(eq(peminjaman.sekolahId, req.user.sekolahId))
       .orderBy(desc(peminjaman.id))
 
     // Ubah setiap baris peminjaman jadi 1-3 "event" aktivitas

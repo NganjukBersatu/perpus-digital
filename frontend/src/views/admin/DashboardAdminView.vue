@@ -1513,18 +1513,8 @@ span.reminder-badge.badge-red {
     width: 100%;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    border-collapse: collapse;
-  }
-
-  .table-card .data-table thead,
-  .table-card .data-table tbody {
-    display: table;
-    width: 100%;
-    table-layout: auto;
-  }
-
-  .table-card .data-table tr {
-    display: table-row;
+    border-collapse: separate;
+    border-spacing: 0;
   }
 
   .table-card .data-table th,
@@ -1536,6 +1526,34 @@ span.reminder-badge.badge-red {
 
   .table-card .data-table th {
     font-size: 10px;
+  }
+
+  /* Kolom No (ke-1) dan Peminjam (ke-2) tetap diam saat tabel digeser */
+  .table-card .data-table th:nth-child(1),
+  .table-card .data-table td:nth-child(1):not([colspan]) {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: #fff;
+    box-sizing: border-box;
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+  }
+
+  .table-card .data-table th:nth-child(2),
+  .table-card .data-table td:nth-child(2) {
+    position: sticky;
+    left: 40px; /* harus sama dengan lebar kolom No */
+    z-index: 2;
+    background: #fff;
+    box-shadow: 2px 0 4px rgba(15, 23, 42, 0.08);
+  }
+
+  /* header selalu di atas isi tabel */
+  .table-card .data-table th:nth-child(1),
+  .table-card .data-table th:nth-child(2) {
+    z-index: 3;
   }
 
   /* Search & filter */

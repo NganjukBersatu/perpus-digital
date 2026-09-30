@@ -2,13 +2,17 @@ const express = require('express')
 const router = express.Router()
 const { db } = require('../db/client')
 const { pengaturanPerpustakaan } = require('../db/schema')
-const { eq } = require('drizzle-orm')
-const { wajibAdmin } = require('./auth')
+const { eq, and } = require('drizzle-orm')
+const { wajibAdmin, opsionalLogin } = require('./auth')
+const { sekolahIdDari } = require('../utils/sekolah')
 
 // GET pengaturan (tidak perlu login — dipakai juga untuk tampil di sidebar sebelum login)
-router.get('/', async (req, res) => {
+router.get('/', opsionalLogin, async (req, res) => {
   try {
-    const [data] = await db.select().from(pengaturanPerpustakaan).limit(1)
+    const sekolahId = sekolahIdDari(req)
+    if (!sekolahId) return res.status(400).json({ error: 'sekolahId wajib diisi' })
+    const [data] = await db.select().from(pengaturanPerpustakaan)
+      .where(eq(pengaturanPerpustakaan.sekolahId, sekolahId)).limit(1)
     res.json(data || {
       namaSekolah: '',
       namaPerpustakaan: '',
@@ -89,7 +93,9 @@ router.put('/', wajibAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Nama sekolah minimal 3 karakter' })
     }
 
-    const [existing] = await db.select().from(pengaturanPerpustakaan).limit(1)
+    const { sekolahId } = req.user
+    const [existing] = await db.select().from(pengaturanPerpustakaan)
+      .where(eq(pengaturanPerpustakaan.sekolahId, sekolahId)).limit(1)
 
     const values = {
       namaSekolah: namaSekolah || '',
@@ -104,10 +110,10 @@ router.put('/', wajibAdmin, async (req, res) => {
       ;[updated] = await db
         .update(pengaturanPerpustakaan)
         .set(values)
-        .where(eq(pengaturanPerpustakaan.id, existing.id))
+        .where(and(eq(pengaturanPerpustakaan.id, existing.id), eq(pengaturanPerpustakaan.sekolahId, sekolahId)))
         .returning()
     } else {
-      ;[updated] = await db.insert(pengaturanPerpustakaan).values(values).returning()
+      ;[updated] = await db.insert(pengaturanPerpustakaan).values({ ...values, sekolahId }).returning()
     }
 
     res.json(updated)
@@ -118,9 +124,12 @@ router.put('/', wajibAdmin, async (req, res) => {
 })
 
 // GET info perpustakaan ringkas (untuk header aplikasi & kop laporan)
-router.get('/publik', async (req, res) => {
+router.get('/publik', opsionalLogin, async (req, res) => {
   try {
-    const [row] = await db.select().from(pengaturanPerpustakaan).limit(1)
+    const sekolahId = sekolahIdDari(req)
+    if (!sekolahId) return res.status(400).json({ error: 'sekolahId wajib diisi' })
+    const [row] = await db.select().from(pengaturanPerpustakaan)
+      .where(eq(pengaturanPerpustakaan.sekolahId, sekolahId)).limit(1)
 
     if (!row) {
       return res.json({

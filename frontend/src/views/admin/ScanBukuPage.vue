@@ -2292,7 +2292,8 @@ button, input, select { font: inherit; }
 .eksemplar-list__item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;            /* boleh turun baris */
+  gap: 4px 8px;
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -2314,6 +2315,7 @@ button, input, select { font: inherit; }
 .eksemplar-list__label {
   font-weight: 700;
   color: var(--navy);
+  white-space: nowrap;        /* "Eksemplar #12" tidak pecah jadi 2 baris */
 }
 .eksemplar-list__status {
   color: var(--muted);
@@ -2323,7 +2325,13 @@ button, input, select { font: inherit; }
   margin-left: auto;
   color: var(--muted);
   font-size: 10px !important;
+  white-space: nowrap;        /* angka barcode tidak terpotong */
+  word-break: normal;         /* menimpa break-all dari .mono */
 }
+  .eksemplar-list__barcode {
+    flex-basis: 100%;
+    margin-left: 16px;
+  }
 
 .kopi-baru-confirm { margin-top: 12px; }
 .kopi-baru-confirm__actions {

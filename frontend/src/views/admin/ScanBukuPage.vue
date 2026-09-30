@@ -450,6 +450,20 @@ const zxingReader = new BrowserMultiFormatReader(zxingHints, {
   delayBetweenScanAttempts: 100,
 })
 
+const warnAsli = console.warn
+
+function bisukanWarnZxing() {
+  console.warn = (...args) => {
+    const teks = args.map(String).join(" ")
+    if (teks.includes("non-ReaderException")) return
+    warnAsli.apply(console, args)
+  }
+}
+
+function pulihkanWarn() {
+  console.warn = warnAsli
+}
+
 function validasiChecksumEan13(kode) {
   if (!/^\d{13}$/.test(kode)) return false
   const digits = kode.split("").map(Number)
@@ -468,6 +482,7 @@ async function mulaiPindai() {
   }
 
   isScanning.value = true
+  bisukanWarnZxing()
   statusScan.value = "Kamera aktif — arahkan ke barcode"
   await new Promise((resolve) => setTimeout(resolve, 0))
 
@@ -505,6 +520,7 @@ async function mulaiPindai() {
       mulaiFallbackOcr()
     } catch (err2) {
       console.error(err2)
+       pulihkanWarn()    
       scanError.value =
         "Kamera tidak bisa diakses. Izinkan kamera di browser, lalu coba lagi."
       isScanning.value = false
@@ -683,6 +699,7 @@ async function bacaIsbnDariKamera() {
 
 async function hentikanPindai() {
   hentikanFallbackOcr()
+   pulihkanWarn()   
   if (zxingControls) {
     zxingControls.stop()
     zxingControls = null
@@ -917,17 +934,21 @@ onBeforeUnmount(() => {
               </div>
 
 <div v-show="isScanning" class="viewfinder">
-  <video ref="scanVideoRef" class="viewfinder-video" playsinline muted></video>
-  <div class="viewfinder__info">{{ statusScan }}</div>
-  <button
-    v-if="tampilkanTombolOcr"
-    class="secondary-button"
-    :disabled="sedangBacaIsbn"
-    @click="bacaIsbnDariKamera"
-  >
-    {{ sedangBacaIsbn ? "Membaca..." : "Baca angka ISBN" }}
-  </button>
-  <button class="secondary-button" @click="hentikanPindai">Batalkan</button>
+  <div class="viewfinder-stage">
+    <video ref="scanVideoRef" class="viewfinder-video" playsinline muted></video>
+    <div class="viewfinder__info">{{ statusScan }}</div>
+    <div class="viewfinder__actions">
+      <button
+        v-if="tampilkanTombolOcr"
+        class="secondary-button"
+        :disabled="sedangBacaIsbn"
+        @click="bacaIsbnDariKamera"
+      >
+        {{ sedangBacaIsbn ? "Membaca..." : "Baca angka ISBN" }}
+      </button>
+      <button class="secondary-button" @click="hentikanPindai">Batalkan</button>
+    </div>
+  </div>
 </div>
 </template>
 
@@ -1866,37 +1887,36 @@ button, input, select { font: inherit; }
 }
 .reader-hidden { display: none; }
 
-.viewfinder-video {
+.viewfinder-stage {
   position: relative;
   width: 100%;
-  max-height: 360px;
+  height: clamp(220px, calc(100vh - 340px), 420px);
   overflow: hidden;
   background: #071426;
-  display: block;
-  object-fit: contain;
-}
-.viewfinder-video :deep(video),
-.viewfinder-video :deep(canvas) {
-  width: 100% !important;
-  height: auto !important;
-  max-height: 360px;
-  object-fit: contain;
-  display: block;
 }
 
-.viewfinder__info {
+.viewfinder-video {
   position: absolute;
-  left: 50%;
-  top: 12px;
-  transform: translateX(-50%);
-  width: max-content;
-  max-width: 90%;
-  text-align: center;
-  padding: 6px 10px;
-  color: white;
-  background: rgba(7, 20, 38, 0.72);
-  border-radius: 999px;
-  font-size: 11px;
+  inset: 0;
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  max-height: none !important;
+  object-fit: cover !important;
+}
+
+.viewfinder__actions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 12px;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+.viewfinder__actions .secondary-button {
+  margin: 0;
+  background: rgba(7, 20, 38, 0.7);
 }
 
 .upload-zone {

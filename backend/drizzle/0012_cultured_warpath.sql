@@ -1,0 +1,1 @@
+ALTER TABLE "anggota" ADD COLUMN "harus_ganti_password" boolean DEFAULT true NOT NULL;

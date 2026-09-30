@@ -48,7 +48,7 @@ function simpanStatus(statusMap) {
 async function fetchNotifikasi() {
   notifLoading.value = true
   try {
-    const res = await fetch('http://localhost:3000/api/siswa/notifikasi', {
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/siswa/notifikasi`, {
       headers: { ...authHeaders() }
     })
     if (!res.ok) throw new Error('Gagal ambil notifikasi')
@@ -109,7 +109,7 @@ async function tandaiSudahDibaca(item) {
   simpanStatus(statusTersimpan)
 
   try {
-    await fetch(`http://localhost:3000/api/siswa/notifikasi/${item.id}/baca`, {
+    await fetch(`${import.meta.env.VITE_API_BASE_URL}/siswa/notifikasi/${item.id}/baca`, {
       method: 'PATCH',
       headers: { ...authHeaders() }
     })
@@ -143,6 +143,16 @@ function closeMobileMenu() {
   mobileMenuOpen.value = false
 }
 
+function closeSidebarOutside(e) {
+  // Hanya berlaku di tampilan mobile
+  if (!window.matchMedia('(max-width: 768px)').matches) return
+
+  // Klik di dalam sidebar, tombol hamburger, atau modal: abaikan
+  if (e.target.closest('.sidebar, .hamburger, .modal-overlay')) return
+
+  if (mobileMenuOpen.value) closeMobileMenu()
+}
+
 const showLogoutModal = ref(false)
 
 function mintaLogout() {
@@ -155,12 +165,16 @@ function batalLogout() {
 
 function konfirmasiLogout() {
   showLogoutModal.value = false
+  localStorage.removeItem('token')
+  localStorage.removeItem('accessToken')
+  localStorage.removeItem('user')
   router.push('/')
 }
 
 onMounted(() => {
   fetchNotifikasi()
   window.addEventListener('click', closeNotifOutside)
+  window.addEventListener('click', closeSidebarOutside) 
   window.addEventListener('scroll', closeNotifOnScroll, { capture: true })
   document.addEventListener('visibilitychange', handleVisibilityChange)
   notifInterval = setInterval(fetchNotifikasi, 30000)
@@ -168,6 +182,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('click', closeNotifOutside)
+  window.removeEventListener('click', closeSidebarOutside)
   window.removeEventListener('scroll', closeNotifOnScroll, { capture: true })
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   if (notifInterval) clearInterval(notifInterval)
@@ -201,7 +216,7 @@ onBeforeUnmount(() => {
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
               <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
-            <span class="nav-label">Beranda</span>
+            <span class="nav-label">Dashboard</span>
           </span>
         </router-link>
 
@@ -398,6 +413,7 @@ onBeforeUnmount(() => {
   font-family: 'Segoe UI', sans-serif;
   background: #f4f6fb;
   overflow-x: hidden;
+  overflow-x: clip;   
 }
 
 .icon { width: 18px; height: 18px; flex-shrink: 0; }
@@ -414,6 +430,7 @@ onBeforeUnmount(() => {
   top: 0;
   left: 0;
   height: 100vh;
+  height: 100dvh; 
   overflow: hidden;
   transition: transform 0.25s ease, width 0.25s ease;
   z-index: 50;
@@ -562,6 +579,8 @@ onBeforeUnmount(() => {
 
 .btn-logout {
   margin-top: 12px; 
+  flex-shrink: 0;
+  margin-bottom: env(safe-area-inset-bottom, 0px);
   background: transparent; 
   border: none; 
   color: #cbd5e1;
@@ -591,12 +610,14 @@ onBeforeUnmount(() => {
   margin-left: 260px;
   transition: margin-left 0.25s ease;
 }
-.main-expanded { margin-left: 76px; }
+
+.main-expanded .topbar { left: 76px; }
 
 .page-wrap {
   flex: 1;
   min-width: 0;
   width: 100%;
+  padding-top: 64px;
 }
 
 .topbar {
@@ -606,8 +627,10 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 12px;
   border-bottom: 1px solid #e5e7eb;
-  position: sticky;
+  position: fixed; 
   top: 0;
+  left: 260px;  
+  right: 0;
   z-index: 40;
 }
 
@@ -876,6 +899,7 @@ onBeforeUnmount(() => {
 
   .topbar {
     padding: 10px 12px;
+    left: 0 !important;
   }
 
   .user-meta,

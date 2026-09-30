@@ -17,9 +17,10 @@ async function muatInfo(force = false) {
   if (sudahDimuat && !force) return info.value
   if (promiseAktif) return promiseAktif
 
-  promiseAktif = (async () => {
+  const p = (async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/pengaturan/publik')
+      const BASE = import.meta.env.VITE_API_URL || ''
+      const res = await fetch(`${BASE}/api/pengaturan/publik`)
       if (res.ok) {
         const data = await res.json()
         Object.assign(info.value, data)
@@ -33,7 +34,8 @@ async function muatInfo(force = false) {
     return info.value
   })()
 
-  return promiseAktif
+  promiseAktif = p
+  return p
 }
 
 function setInfo(data = {}) {

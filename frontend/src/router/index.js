@@ -27,6 +27,7 @@ import PeminjamanSiswaPage from '@/views/siswa/PeminjamanSiswaPage.vue'
 import PeminjamanGuruPage from '@/views/guru/PeminjamanGuruPage.vue'
 import RiwayatGuruPage from '@/views/guru/RiwayatGuruPage.vue'
 import ProfilGuruPage from '@/views/guru/ProfilGuruPage.vue'
+import { usePengaturanDenda } from '@/composables/usePengaturanDenda'
 
 const ComingSoon = {
   props: {
@@ -48,9 +49,10 @@ const router = createRouter({
       name: 'login',
       component: LoginView
     },
-    {
+        {
       path: '/siswa',
       component: DashboardSiswaLayout,
+      meta: { requiresAuth: true, role: 'siswa' },
       children: [
         {
           path: '',
@@ -82,6 +84,7 @@ const router = createRouter({
     {
       path: '/guru',
       component: DashboardGuruLayout,
+      meta: { requiresAuth: true, role: 'guru' },
       children: [
         {
           path: '',
@@ -155,11 +158,16 @@ const router = createRouter({
           name: 'admin-data-peminjaman',
           component: DataPeminjaman,
         },
-        {
-          path: 'denda',
-          name: 'admin-denda',
-          component: Denda,
-        },
+       {
+  path: 'denda',
+  name: 'admin-denda',
+  component: Denda,
+  beforeEnter: async () => {
+    const { dendaAktif, muat } = usePengaturanDenda()
+    await muat()
+    if (!dendaAktif.value) return '/admin'
+  },
+},
         {
           path: 'laporan',
           name: 'admin-laporan',
@@ -182,25 +190,31 @@ const router = createRouter({
         }
       ]
     }
-  ]
+  ],
+  scrollBehavior() { 
+    return { top: 0 }
+  }
 })
 
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token') || localStorage.getItem('accessToken')
   const user = JSON.parse(localStorage.getItem('user') || 'null')
 
+  // 1. Halaman yang butuh login (requiresAuth), tapi belum ada token sama sekali
   if (to.meta.requiresAuth && !token) {
     next('/')
     return
   }
 
-  if (to.path.startsWith('/admin') && user?.role && user.role !== 'admin') {
+  // 2. Halaman yang butuh role tertentu, tapi role user tidak cocok
+  //    (satpam utama: menjaga /admin, /siswa, /guru dari saling nyasar)
+  if (to.meta.role && user?.role !== to.meta.role) {
     next('/')
     return
   }
 
-  // Guru yang masih wajib ganti password dikunci di halaman profil,
-  // tidak bisa pindah ke menu lain (kecuali logout ke halaman login).
+  // 3. Guru yang masih wajib ganti password dikunci di halaman profil,
+  //    tidak bisa pindah ke menu lain (kecuali logout ke halaman login).
   if (
     user?.role === 'guru' &&
     user?.harusGantiPassword &&

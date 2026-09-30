@@ -14,6 +14,11 @@ const kelasMenuOpen = ref(false)
 const showModal = ref(false)
 const modalMode = ref('tambah')
 const form = ref({ id: null, nama: '', kelas: '', nis: '', tanggalLahir: '' })
+const showConfirmModal = ref(false)
+const siswaToDelete = ref(null)
+
+const currentPage = ref(1)
+const perPage = ref(5)
 
 const kelasOptions = computed(() => {
   const semuaKelas = daftarSiswa.value.map(s => s.kelas).filter(Boolean)
@@ -21,22 +26,40 @@ const kelasOptions = computed(() => {
 })
 
 const filteredSiswa = computed(() => {
-  const base = !selectedKelas.value
-    ? daftarSiswa.value
-    : daftarSiswa.value.filter((s) => s.kelas === selectedKelas.value)
+  let hasil = daftarSiswa.value
 
-  // Tampilkan hanya 1 baris per nama (tidak peduli besar-kecil huruf/spasi)
-  const namaTerlihat = new Set()
-  const hasilUnik = []
-  for (const s of base) {
-    const kunci = (s.nama || '').trim().toLowerCase()
-    if (!namaTerlihat.has(kunci)) {
-      namaTerlihat.add(kunci)
-      hasilUnik.push(s)
-    }
+  if (selectedKelas.value) {
+    hasil = hasil.filter((s) => s.kelas === selectedKelas.value)
   }
-  return hasilUnik
+
+  const q = searchQuery.value.trim().toLowerCase()
+  if (q) {
+    hasil = hasil.filter((s) => (s.nama || '').toLowerCase().includes(q))
+  }
+
+  return [...hasil].sort((a, b) =>
+    (a.nama || '').localeCompare(b.nama || '', 'id', { sensitivity: 'base' })
+  )
 })
+
+const totalData = computed(() => filteredSiswa.value.length)
+const totalPages = computed(() => Math.max(1, Math.ceil(totalData.value / perPage.value)))
+
+const pagedSiswa = computed(() => {
+  const start = (currentPage.value - 1) * perPage.value
+  return filteredSiswa.value.slice(start, start + perPage.value)
+})
+
+const rangeText = computed(() => {
+  if (totalData.value === 0) return 'Menampilkan 0 data'
+  const start = (currentPage.value - 1) * perPage.value + 1
+  const end = Math.min(currentPage.value * perPage.value, totalData.value)
+  return `Menampilkan ${start} - ${end} dari ${totalData.value} data`
+})
+
+function resetPage() {
+  currentPage.value = 1
+}
 
 function labelKelasTerpilih() {
   return selectedKelas.value || 'Semua Kelas'
@@ -45,6 +68,7 @@ function labelKelasTerpilih() {
 function pilihKelas(kelas) {
   selectedKelas.value = kelas
   kelasMenuOpen.value = false
+  resetPage()
 }
 
 function tutupFilterMenu(e) {
@@ -112,15 +136,32 @@ async function simpanSiswa() {
   }
 }
 
-async function hapusSiswa(item) {
-  if (!confirm(`Hapus siswa ${item.nama}?`)) return
+function hapusSiswa(item) {
+  siswaToDelete.value = item
+  showConfirmModal.value = true
+}
+
+async function konfirmasiHapus() {
+  if (!siswaToDelete.value) return
 
   try {
-    await api.delete(`/siswa/${item.id}`)
-    daftarSiswa.value = daftarSiswa.value.filter(s => s.id !== item.id)
+    await api.delete(`/siswa/${siswaToDelete.value.id}`)
+    daftarSiswa.value = daftarSiswa.value.filter(s => s.id !== siswaToDelete.value.id)
+
+    if (currentPage.value > totalPages.value) {
+      currentPage.value = totalPages.value
+    }
   } catch (err) {
     errorMessage.value = 'Gagal menghapus siswa'
+  } finally {
+    showConfirmModal.value = false
+    siswaToDelete.value = null
   }
+}
+
+function batalHapus() {
+  showConfirmModal.value = false
+  siswaToDelete.value = null
 }
 </script>
 
@@ -153,7 +194,7 @@ async function hapusSiswa(item) {
           v-model="searchQuery"
           class="search"
           placeholder="Cari nama siswa..."
-          @input="onSearchInput"
+          @input="resetPage"
         />
       </div>
 
@@ -191,8 +232,8 @@ async function hapusSiswa(item) {
 </tr>
         </thead>
         <tbody>
-          <tr v-for="(item, i) in filteredSiswa" :key="item.id">
-  <td>{{ i + 1 }}</td>
+  <tr v-for="(item, i) in pagedSiswa" :key="item.id">
+  <td>{{ (currentPage - 1) * perPage + i + 1 }}</td>
   <td class="judul">{{ item.nama }}</td>
   <td>{{ item.kelas || '-' }}</td>
   <td>{{ item.nis || '-' }}</td>
@@ -211,6 +252,40 @@ async function hapusSiswa(item) {
       </table>
     </div>
 
+    <div class="pagination">
+      <span class="range">{{ rangeText }}</span>
+
+      <div class="pages">
+        <button type="button" :disabled="currentPage === 1" @click="currentPage--">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 6l-6 6 6 6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+
+        <button
+          v-for="n in totalPages"
+          :key="n"
+          type="button"
+          class="page-num"
+          :class="{ active: currentPage === n }"
+          @click="currentPage = n"
+        >
+          {{ n }}
+        </button>
+
+        <button type="button" :disabled="currentPage === totalPages" @click="currentPage++">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </div>
+
+      <select v-model.number="perPage" class="select select-sm" @change="resetPage">
+        <option :value="5">5 / halaman</option>
+        <option :value="10">10 / halaman</option>
+      </select>
+    </div>
+
     <div v-if="showModal" class="modal-overlay" @click.self="tutupModal">
       <div class="modal-card">
         <h2>{{ modalMode === 'edit' ? 'Edit Siswa' : 'Tambah Siswa' }}</h2>
@@ -221,25 +296,48 @@ async function hapusSiswa(item) {
         </div>
 
         <div class="form-group">
-  <label>Kelas</label>
-  <input type="text" v-model="form.kelas" placeholder="Contoh: XII-RPL 2" />
-</div>
+          <label>Kelas</label>
+          <input type="text" v-model="form.kelas" placeholder="Contoh: XII-RPL 2" />
+        </div>
 
-<div class="form-group">
-  <label>NIS</label>
-  <input type="text" v-model="form.nis" placeholder="Nomor Induk Siswa" />
-</div>
+        <div class="form-group">
+          <label>NIS</label>
+          <input type="text" v-model="form.nis" placeholder="Nomor Induk Siswa" />
+        </div>
 
-<div class="form-group">
-  <label>Tanggal Lahir</label>
-  <input type="date" v-model="form.tanggalLahir" />
-</div>
+        <div class="form-group">
+          <label>Tanggal Lahir</label>
+          <input type="date" v-model="form.tanggalLahir" />
+        </div>
 
         <div class="modal-actions">
           <button class="btn-secondary" @click="tutupModal">Batal</button>
           <button class="btn-primary" :disabled="isSaving" @click="simpanSiswa">
             {{ isSaving ? 'Menyimpan...' : 'Simpan' }}
           </button>
+        </div>
+      </div>
+    </div>
+        <div v-if="showConfirmModal" class="modal-overlay" @click.self="batalHapus">
+      <div class="confirm-box">
+        <div class="confirm-icon">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 7h16" stroke-linecap="round" />
+            <path d="M10 11v6M14 11v6" stroke-linecap="round" />
+            <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
+            <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+          </svg>
+        </div>
+
+        <h3>Hapus Siswa?</h3>
+        <p>
+          Yakin ingin menghapus siswa
+          <strong>"{{ siswaToDelete?.nama }}"</strong>? Tindakan ini tidak dapat dibatalkan.
+        </p>
+
+        <div class="confirm-actions">
+          <button type="button" class="btn-secondary" @click="batalHapus">Batal</button>
+          <button type="button" class="btn-hapus-confirm" @click="konfirmasiHapus">Ya, Hapus</button>
         </div>
       </div>
     </div>
@@ -347,6 +445,25 @@ tbody tr:hover { background: #f9fafb; }
 
 .empty { text-align: center; color: #9ca3af; padding: 24px; }
 
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 4px 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+.pages { display: flex; align-items: center; gap: 6px; }
+.pages button {
+  min-width: 32px; height: 32px; border: 0; background: transparent;
+  border-radius: 8px; cursor: pointer; color: #4b5563;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.pages .page-num.active { background: #5b4dff; color: #fff; }
+.pages button:disabled { opacity: 0.4; cursor: default; }
+.select-sm { min-width: auto; }
+
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
   display: flex; align-items: center; justify-content: center; z-index: 100;
@@ -367,6 +484,43 @@ tbody tr:hover { background: #f9fafb; }
 }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 
+.confirm-box {
+  background: #fff;
+  border-radius: 14px;
+  width: 380px;
+  max-width: 92%;
+  padding: 28px 24px 24px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+  text-align: center;
+}
+.confirm-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #fee2e2;
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+.confirm-icon .icon-svg { width: 24px; height: 24px; }
+.confirm-box h3 { font-size: 16px; font-weight: 700; color: #1f2937; margin: 0 0 8px; }
+.confirm-box p { font-size: 13px; color: #6b7280; margin: 0 0 20px; line-height: 1.5; }
+.confirm-box p strong { color: #374151; }
+.confirm-actions { display: flex; justify-content: center; gap: 10px; }
+.btn-hapus-confirm {
+  border: 0;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 8px;
+  padding: 9px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-hapus-confirm:hover { background: #dc2626; }
+
 @media (max-width: 640px) {
   .page { padding: 14px; }
   .header { flex-direction: column; align-items: stretch; gap: 12px; }
@@ -386,5 +540,33 @@ tbody tr:hover { background: #f9fafb; }
   .modal-card h2 { font-size: 16px; }
   .modal-actions { margin-top: 14px; }
   .btn-secondary, .btn-primary { padding: 10px 16px; }
+  .pagination {
+    flex-direction: row;       
+    flex-wrap: wrap;          
+    justify-content: center;  
+    align-items: center;
+    gap: 12px;
+    padding-top: 16px;
+  }
+
+  .range {
+    width: 100%;               
+    text-align: center;
+    font-size: 12px;
+    margin-bottom: 4px;        
+  }
+
+  .pages {
+    justify-content: center;
+    width: auto;               
+  }
+
+  .select-sm {
+    width: auto;               
+    min-width: 110px;         
+    margin-left: 0;
+    margin-top: 0;            
+    align-self: center;
+  }
 }
 </style>

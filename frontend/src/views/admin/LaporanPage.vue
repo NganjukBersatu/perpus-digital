@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useInfoPerpustakaan } from '@/composables/useInfoPerpustakaan'
 
-const API_URL = 'http://localhost:3000/api/laporan'
+const API_URL = `${import.meta.env.VITE_API_BASE_URL}/laporan`
 
 const hariIni = new Date().toISOString().slice(0, 10)
 const awalBulan = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10)

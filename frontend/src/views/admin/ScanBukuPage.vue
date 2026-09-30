@@ -6,6 +6,8 @@ import { DecodeHintType, BarcodeFormat } from "@zxing/library"
 import { useRouter, useRoute } from "vue-router"
 import IsbnOcr from "../../utils/isbn-ocr.js" // sesuaikan path relatif ke folder utils/ kamu
 import Tesseract from "tesseract.js"
+import { authHeaders, jsonHeaders } from "../../utils/auth"
+import { API } from "@/utils/api"
 
 const notFoundMessageRef = ref(null)
 const activeTab = ref("kamera")
@@ -49,7 +51,7 @@ async function cariJudulManual() {
   }
   isSearchingJudulManual.value = true
   try {
-    const res = await fetch(`/api/buku?q=${encodeURIComponent(q)}`)
+    const res = await fetch(`${API}/buku?q=${encodeURIComponent(q)}`)
     if (res.ok) hasilJudulManual.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -61,7 +63,7 @@ async function cariJudulManual() {
 async function pilihBukuDariJudul(bukuTerpilih) {
   scanError.value = ""
   try {
-    const res = await fetch(`/api/buku/${bukuTerpilih.id}/untuk-pinjam`)
+    const res = await fetch(`${API}/buku/${bukuTerpilih.id}/untuk-pinjam`)
     if (res.status === 404) {
       scanError.value = "Buku ini belum punya eksemplar yang bisa dipinjam."
       return
@@ -96,7 +98,7 @@ function resetPencarianJudulManual() {
 
 async function cariBuku(kodeBarcode) {
   try {
-    const res = await fetch(`/api/eksemplar-buku/${kodeBarcode}`)
+    const res = await fetch(`${API}/eksemplar-buku/${kodeBarcode}`, { headers: authHeaders() })
     if (res.status === 404) {
       bookNotFound.value = true
       bookData.value = null
@@ -146,9 +148,9 @@ async function konfirmasiTambahKopiBaru() {
   isAddingKopiBaru.value = true
   scanError.value = ""
   try {
-    const res = await fetch(`/api/buku/${bookData.value.bukuId}/eksemplar`, {
+    const res = await fetch(`${API}/buku/${bookData.value.bukuId}/eksemplar`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonHeaders(),
       body: JSON.stringify({ barcode: barcode.value }),
     })
     if (!res.ok) throw new Error("Gagal menambah eksemplar")
@@ -194,7 +196,7 @@ async function cariBukuLama() {
   }
   isSearchingBuku.value = true
   try {
-    const res = await fetch(`/api/buku?q=${encodeURIComponent(q)}`)
+    const res = await fetch(`${API}/buku?q=${encodeURIComponent(q)}`, { headers: authHeaders() })
     if (res.ok) hasilPencarianBuku.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -207,9 +209,9 @@ async function pilihBukuLamaDanSimpan(bukuTerpilih) {
   isAddingEksemplar.value = true
   scanError.value = ""
   try {
-    const res = await fetch(`/api/buku/${bukuTerpilih.id}/eksemplar`, {
+    const res = await fetch(`${API}/buku/${bukuTerpilih.id}/eksemplar`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonHeaders(),
       body: JSON.stringify({ barcode: barcode.value }),
     })
     if (!res.ok) throw new Error("Gagal menambah eksemplar")
@@ -269,6 +271,7 @@ const fileInput = ref(null)
 
 const availableCameras = ref([])
 const selectedCameraId = ref(null)
+const userPilihKamera = ref(false) // true kalau pengguna mengganti kamera lewat dropdown
 let scanner = null
 
 const scanVideoRef = ref(null)
@@ -291,6 +294,32 @@ const peminjam = ref({
 
 const daftarGuru = ref([])
 
+// ⬇️ TAMBAHAN: state pengaturan peminjaman (durasiSiswa & durasiGuru)
+const pengaturanPinjam = ref(null)
+
+async function ambilPengaturanPinjam() {
+  try {
+    const res = await fetch(`${API}/pengaturan`)
+    if (!res.ok) return
+    const data = await res.json()
+    pengaturanPinjam.value = data?.detail?.peminjaman || null
+  } catch (err) {
+    console.error(err)
+  }
+}
+
+// hitung otomatis tanggal kembali
+const tanggalKembaliOtomatis = computed(() => {
+  if (!peminjam.value.tanggalPinjam) return ""
+  const durasi =
+    tipePeminjam.value === "guru"
+      ? (pengaturanPinjam.value?.durasiGuru ?? 14)
+      : (pengaturanPinjam.value?.durasiSiswa ?? 7)
+  const tgl = new Date(peminjam.value.tanggalPinjam)
+  tgl.setDate(tgl.getDate() + durasi)
+  return tgl.toISOString().slice(0, 10)
+})
+
 // ===== COMBOBOX KELAS =====
 const daftarKelas = ref([])
 const kelasQuery = ref("")
@@ -305,7 +334,7 @@ const filteredKelas = computed(() => {
 
 async function ambilDaftarKelas() {
   try {
-    const res = await fetch("/api/kelas")
+    const res = await fetch(`${API}/kelas`, { headers: authHeaders() })
     if (res.ok) daftarKelas.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -314,7 +343,7 @@ async function ambilDaftarKelas() {
 
 async function ambilDaftarGuru() {
   try {
-    const res = await fetch("http://localhost:3000/api/guru")
+    const res = await fetch(`${API}/guru`, { headers: authHeaders() })
     if (res.ok) daftarGuru.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -419,7 +448,8 @@ async function siapkanDaftarKamera() {
     availableCameras.value = cams
     if (cams.length > 0 && !selectedCameraId.value) {
       const logitech = cams.find((k) => /logitech|c270|c310|c920|webcam/i.test(k.label))
-      selectedCameraId.value = logitech ? logitech.id : cams[0].id
+      const belakang = cams.find((k) => /back|rear|belakang|environment/i.test(k.label))
+      selectedCameraId.value = (logitech || belakang || cams[0]).id
     }
   } catch (err) {
     console.error(err)
@@ -431,6 +461,7 @@ onMounted(async () => {
   siapkanDaftarKamera()
   ambilDaftarKelas()
   ambilDaftarGuru()
+  ambilPengaturanPinjam() 
   await lanjutDariQuery()
 })
 
@@ -486,32 +517,32 @@ async function mulaiPindai() {
   statusScan.value = "Kamera aktif — arahkan ke barcode"
   await new Promise((resolve) => setTimeout(resolve, 0))
 
-  try {
-    zxingControls = await zxingReader.decodeFromConstraints(
-      {
-        video: {
-          deviceId: { exact: selectedCameraId.value },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      },
-      scanVideoRef.value,
-      (result) => {
-        if (result) handleKodeTerbaca(result.getText())
-      }
-    )
-    mulaiFallbackOcr()
-  } catch (err) {
-    console.error("Gagal pakai deviceId exact, coba fallback facingMode:", err)
+  const constraintBelakang = {
+    video: {
+      facingMode: { ideal: "environment" },
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+    },
+  }
+  const constraintDeviceId = {
+    video: {
+      deviceId: { exact: selectedCameraId.value },
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+    },
+  }
+
+  // Kalau pengguna memilih kamera sendiri, hormati pilihannya.
+  // Kalau tidak, utamakan kamera belakang.
+  const urutan = userPilihKamera.value
+    ? [constraintDeviceId, constraintBelakang]
+    : [constraintBelakang, constraintDeviceId]
+
+  let berhasil = false
+  for (const constraint of urutan) {
     try {
       zxingControls = await zxingReader.decodeFromConstraints(
-        {
-          video: {
-            facingMode: { ideal: "environment" },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
-        },
+        constraint,
         scanVideoRef.value,
         (result) => {
           if (result) handleKodeTerbaca(result.getText())
@@ -525,6 +556,13 @@ async function mulaiPindai() {
         "Kamera tidak bisa diakses. Izinkan kamera di browser, lalu coba lagi."
       isScanning.value = false
     }
+  }
+
+  if (berhasil) {
+    mulaiFallbackOcr()
+  } else {
+    scanError.value = "Kamera tidak bisa diakses. Izinkan kamera di browser, lalu coba lagi."
+    isScanning.value = false
   }
 }
 
@@ -595,7 +633,7 @@ function pulihkanIsbn(teks, maksHapus = 4) {
 
 async function isbnAdaDiKatalog(isbn) {
   try {
-    const res = await fetch(`/api/buku/isbn/${isbn}`)
+    const res = await fetch(`${API}/buku/isbn/${isbn}`, { headers: authHeaders() })
     return res.ok
   } catch {
     return false
@@ -723,7 +761,7 @@ async function onScanSuccess(decodedText) {
 
 async function cariBukuByIsbn(isbn) {
   try {
-    const res = await fetch(`/api/buku/isbn/${isbn}`)
+    const res = await fetch(`${API}/buku/isbn/${isbn}`, { headers: authHeaders() })
     if (res.status === 404) {
       bookNotFound.value = true
       bookData.value = null
@@ -750,17 +788,29 @@ async function handleFileUpload(e) {
   const file = e.target.files[0]
   if (!file) return
   resetHasilPindai()
-  if (!scanner) scanner = new Html5Qrcode("reader")
+
+  const url = URL.createObjectURL(file)
+  let kode = ""
   try {
-    const decodedText = await scanner.scanFile(file, true)
-    barcode.value = decodedText.trim()
-    await cariBuku(barcode.value)
+    const hasil = await zxingGambarReader.decodeFromImageUrl(url)
+    kode = hasil.getText().trim()
   } catch (err) {
+    console.error("Gagal decode gambar:", err)
     scanError.value =
       "Barcode tidak terbaca dari gambar ini. Coba foto lain yang lebih jelas dan tidak buram."
+    return
   } finally {
+    URL.revokeObjectURL(url)
     e.target.value = ""
   }
+
+  // Checksum hanya dicek untuk kode 13 digit (EAN-13). Format lain langsung dipakai.
+  if (/^\d{13}$/.test(kode) && !validasiChecksumEan13(kode)) {
+    scanError.value = "Barcode terbaca tapi angkanya tidak valid. Coba foto ulang."
+    return
+  }
+
+  await onScanSuccess(kode) // otomatis: ISBN -> cariBukuByIsbn, lainnya -> cariBuku
 }
 
 // ===== PINJAMAN =====
@@ -789,8 +839,8 @@ async function simpanPeminjaman() {
     }
   }
 
-  if (!peminjam.value.tanggalPinjam || !peminjam.value.tanggalKembali) {
-    scanError.value = "Tanggal pinjam dan tanggal kembali wajib diisi."
+  if (!peminjam.value.tanggalPinjam) {
+    scanError.value = "Tanggal pinjam wajib diisi."
     return
   }
 
@@ -798,22 +848,31 @@ async function simpanPeminjaman() {
   saveSuccess.value = false
   scanError.value = ""
 
-  try {
-    const res = await fetch("/api/peminjaman", {
+    try {
+    const res = await fetch(`${API}/peminjaman`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonHeaders(),
       body: JSON.stringify({
         eksemplarId: bookData.value.eksemplarId,
         nama: peminjam.value.nama,
         kelas: tipePeminjam.value === "siswa" ? peminjam.value.kelas : null,
         tanggalPinjam: peminjam.value.tanggalPinjam,
-        tanggalKembali: peminjam.value.tanggalKembali,
+        tanggalKembali: peminjam.value.tanggalKembali || undefined,
         tipePeminjam: tipePeminjam.value,
         anggotaId: tipePeminjam.value === "guru" ? peminjam.value.anggotaId : null,
       }),
     })
 
-    if (!res.ok) throw new Error("Gagal menyimpan peminjaman")
+    if (!res.ok) {
+      // Ambil pesan asli dari backend
+      let pesanBackend = "Gagal menyimpan peminjaman"
+      try {
+        const errBody = await res.json()
+        pesanBackend = errBody.message || errBody.error || pesanBackend
+      } catch { /* biarkan pakai pesan default */ }
+      throw new Error(pesanBackend)
+    }
+
     saveSuccess.value = true
     resetForm()
     if (kembaliKeDataBuku.value) {
@@ -822,7 +881,7 @@ async function simpanPeminjaman() {
     }
   } catch (err) {
     console.error(err)
-    scanError.value = "Gagal menyimpan data peminjaman. Coba lagi."
+    scanError.value = err.message || "Gagal menyimpan data peminjaman. Coba lagi."
   } finally {
     isSaving.value = false
   }
@@ -1413,10 +1472,23 @@ onBeforeUnmount(() => {
             </label>
 
             <label class="field">
-              <span>Tanggal kembali</span>
+              <span>
+                Tanggal kembali
+                <small class="field-note">(kosongkan untuk pakai durasi otomatis)</small>
+              </span>
               <div class="input-wrapper">
-                <input v-model="peminjam.tanggalKembali" type="date" required />
+                <input
+                  v-model="peminjam.tanggalKembali"
+                  type="date"
+                  :min="peminjam.tanggalPinjam"
+                />
               </div>
+              <small
+                v-if="!peminjam.tanggalKembali && tanggalKembaliOtomatis"
+                class="field-hint"
+              >
+                Otomatis: {{ tanggalKembaliOtomatis }} ({{ tipePeminjam === 'guru' ? pengaturanPinjam?.durasiGuru ?? 14 : pengaturanPinjam?.durasiSiswa ?? 7 }} hari)
+              </small>
             </label>
           </div>
 
@@ -1491,7 +1563,7 @@ button, input, select { font: inherit; }
   border: 1px solid var(--border);
   border-radius: 16px;
   box-shadow: 0 8px 28px rgba(31, 56, 88, 0.06);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .progress {
@@ -1500,6 +1572,7 @@ button, input, select { font: inherit; }
   padding: 12px 20px;
   background: #fbfcfe;
   border-bottom: 1px solid var(--border);
+  border-radius: 15px 15px 0 0;   
 }
 
 .progress-item {
@@ -2297,6 +2370,26 @@ button, input, select { font: inherit; }
   box-shadow: 0 0 0 3px rgba(40, 100, 232, 0.1);
 }
 
+.input-readonly {
+  background: #eef2f7 !important;
+  color: #718096 !important;
+  cursor: not-allowed;
+}
+
+.field-note {
+  font-weight: 400;
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #718096;
+  line-height: 1.4;
+}
+
 .kelas-dropdown {
   position: absolute;
   top: calc(100% + 4px);
@@ -2305,7 +2398,7 @@ button, input, select { font: inherit; }
   z-index: 10;
   margin: 0;
   padding: 5px;
-  max-height: 200px;
+  max-height: 260px;   /* sebelumnya: 200px */
   overflow-y: auto;
   list-style: none;
   background: white;

@@ -57,7 +57,7 @@ function showToast(text, tipe = '') {
 async function loadProfile() {
   isLoading.value = true
   try {
-    const res = await fetch('http://localhost:3000/api/admin/profil', {
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/admin/profil`, {
       headers: { ...authHeaders() },
     })
     if (!res.ok) throw new Error('Gagal memuat profil')
@@ -88,7 +88,7 @@ async function saveProfile() {
   }
   isSaving.value = true
   try {
-    const res = await fetch('http://localhost:3000/api/admin/profil', {
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/admin/profil`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({
@@ -146,7 +146,7 @@ async function changePassword() {
   }
 
   try {
-    const res = await fetch('http://localhost:3000/api/admin/password', {
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/admin/password`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({

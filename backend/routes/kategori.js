@@ -3,9 +3,10 @@ const router = express.Router()
 const db = require('../db')
 const { kategori } = require('../db/schema')
 const { eq, ilike } = require('drizzle-orm')
+const { wajibLogin, wajibAdmin } = require('./auth')
 
 // GET semua kategori (opsional filter ?q=...)
-router.get('/', async (req, res) => {
+router.get('/', wajibLogin, async (req, res) => {
   try {
     const { q } = req.query
     const rows = q
@@ -19,10 +20,10 @@ router.get('/', async (req, res) => {
 })
 
 // POST tambah kategori baru
-router.post('/', async (req, res) => {
+router.post('/', wajibAdmin, async (req, res) => {
   try {
     const { nama, deskripsi } = req.body
-    if (!nama || !nama.trim()) {
+    if (typeof nama !== 'string' || !nama.trim()) {
       return res.status(400).json({ error: 'Nama kategori wajib diisi' })
     }
 
@@ -31,7 +32,7 @@ router.post('/', async (req, res) => {
   } catch (err) {
     console.error(err)
     // kode 23505 = unique violation di Postgres (nama duplikat)
-    if (err.code === '23505') {
+    if ((err?.cause?.code || err?.code) === '23505') {
       return res.status(409).json({ error: 'Nama kategori sudah digunakan' })
     }
     res.status(500).json({ error: 'Gagal menambah kategori' })
@@ -39,11 +40,11 @@ router.post('/', async (req, res) => {
 })
 
 // PUT edit kategori
-router.put('/:id', async (req, res) => {
+router.put('/:id', wajibAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id)
     const { nama, deskripsi } = req.body
-    if (!nama || !nama.trim()) {
+    if (typeof nama !== 'string' || !nama.trim()) {
       return res.status(400).json({ error: 'Nama kategori wajib diisi' })
     }
 
@@ -57,7 +58,7 @@ router.put('/:id', async (req, res) => {
     res.json(updated)
   } catch (err) {
     console.error(err)
-    if (err.code === '23505') {
+    if ((err?.cause?.code || err?.code) === '23505') {
       return res.status(409).json({ error: 'Nama kategori sudah digunakan' })
     }
     res.status(500).json({ error: 'Gagal mengubah kategori' })
@@ -65,7 +66,7 @@ router.put('/:id', async (req, res) => {
 })
 
 // DELETE kategori
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', wajibAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id)
     const [deleted] = await db.delete(kategori).where(eq(kategori.id, id)).returning()
@@ -74,6 +75,9 @@ router.delete('/:id', async (req, res) => {
     res.json({ success: true, deleted })
   } catch (err) {
     console.error(err)
+    if ((err?.cause?.code || err?.code) === '23503') {
+      return res.status(409).json({ error: 'Kategori tidak bisa dihapus karena masih dipakai oleh buku' })
+    }
     res.status(500).json({ error: 'Gagal menghapus kategori' })
   }
 })

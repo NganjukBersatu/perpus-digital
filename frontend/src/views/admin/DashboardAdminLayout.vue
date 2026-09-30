@@ -2,6 +2,10 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { logoutUser, getAdmin, authHeaders } from '@/utils/auth'
+import { usePengaturanDenda } from '@/composables/usePengaturanDenda'
+
+const { dendaAktif, muat } = usePengaturanDenda()
+onMounted(muat)
 
 const router = useRouter()
 
@@ -24,7 +28,7 @@ function onProfilUpdated(e) {
 
 async function sinkronkanDariServer() {
   try {
-    const res = await fetch('http://localhost:3000/api/admin/profil', {
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/admin/profil`, {
       headers: { ...authHeaders() },
     })
     if (!res.ok) return
@@ -44,7 +48,7 @@ const totalNotifikasi = computed(() => {
   return notifikasi.value.terlambat.jumlah + notifikasi.value.jatuhTempoHariIni.jumlah
 })
 
-const NOTIF_STORAGE_KEY = 'notifikasi_waktu_terakhir'
+const NOTIF_STORAGE_KEY = `notifikasi_admin_${getAdmin()?.id || 'guest'}`
 
 function muatWaktuTersimpan() {
   try {
@@ -69,7 +73,7 @@ let jumlahTerakhirDiketahui = null
 
 async function fetchNotifikasi() {
   try {
-    const res = await fetch('http://localhost:3000/api/dashboard/notifikasi')
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/dashboard/notifikasi`)
     const data = await res.json()
     const sekarang = new Date().toISOString()
 
@@ -169,10 +173,22 @@ const mobileMenuOpen = ref(false)
 
 function toggleMobileMenu() {
   mobileMenuOpen.value = !mobileMenuOpen.value
+  document.body.style.overflow = mobileMenuOpen.value ? 'hidden' : ''
 }
 
 function closeMobileMenu() {
   mobileMenuOpen.value = false
+  document.body.style.overflow = ''
+}
+
+function closeSidebarOutside(e) {
+  // Hanya berlaku di tampilan mobile
+  if (!window.matchMedia('(max-width: 768px)').matches) return
+
+  // Klik di dalam sidebar, tombol hamburger, atau modal: abaikan
+  if (e.target.closest('.sidebar, .hamburger, .modal-overlay')) return
+
+  if (mobileMenuOpen.value) closeMobileMenu()
 }
 
 const showLogoutModal = ref(false)
@@ -215,7 +231,7 @@ function onSearchInput() {
 
   searchTimeout = setTimeout(async () => {
     try {
-      const res = await fetch(`http://localhost:3000/api/search?q=${encodeURIComponent(q)}`)
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/search?q=${encodeURIComponent(q)}`)
       searchResults.value = await res.json()
       searchOpen.value = true
     } catch (err) {
@@ -249,6 +265,7 @@ function tutupSearchDelay() {
 onMounted(() => {
   fetchNotifikasi()
   window.addEventListener('click', closeNotifOutside)
+  window.addEventListener('click', closeSidebarOutside) 
   window.addEventListener('scroll', closeNotifOnScroll, { capture: true })
   sinkronkanDariServer()
   window.addEventListener('admin-profil-updated', onProfilUpdated)
@@ -262,6 +279,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('click', closeNotifOutside)
+  window.removeEventListener('click', closeSidebarOutside)
   window.removeEventListener('scroll', closeNotifOnScroll, { capture: true })
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   if (notifInterval) clearInterval(notifInterval)
@@ -372,7 +390,7 @@ onBeforeUnmount(() => {
           </span>
         </router-link>
 
-        <router-link to="/admin/denda" class="nav-item" exact-active-class="active" title="denda" data-label="denda">
+        <router-link v-if="dendaAktif" to="/admin/denda" class="nav-item" exact-active-class="active" title="denda" data-label="denda">
           <span class="nav-item-left">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10" />
@@ -632,9 +650,10 @@ onBeforeUnmount(() => {
   position: fixed;
   top: 0; left: 0;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   transition: transform 0.25s ease;
-  z-index: 50;
+  z-index: 60;
 }
 
 .sidebar-closed {
@@ -1132,12 +1151,23 @@ onBeforeUnmount(() => {
     margin-left: 0;
   }
 
-  /* backdrop gelap saat sidebar mobile terbuka */
-  .sidebar-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 45;
+  /* pastikan topbar tidak bocor di atas sidebar saat menu mobile terbuka */
+  .topbar {
+    z-index: 30;
+  }
+
+  /* rapikan nav agar tidak menyisakan ruang kosong besar sebelum tombol logout */
+  .sidebar.mobile-open {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+  }
+  .sidebar.mobile-open .nav {
+    flex: 1 1 auto;
+    justify-content: flex-start;
+  }
+  .sidebar.mobile-open .btn-logout {
+    margin-top: auto;
   }
 
   /* rapikan topbar di layar sempit */

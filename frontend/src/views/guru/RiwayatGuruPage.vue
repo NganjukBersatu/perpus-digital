@@ -357,9 +357,6 @@ function formatRupiah(angka) {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-  background: #f1f5f9;
-  padding: 4px;
-  border-radius: 999px;
 }
 
 .chip {
@@ -373,10 +370,9 @@ function formatRupiah(angka) {
 }
 
 .chip.active {
-  background: #fff;
+  background: #eef2ff;
   color: #4f46e5;
   font-weight: 600;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
 .search-box {

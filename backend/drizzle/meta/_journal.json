@@ -92,6 +92,13 @@
       "when": 1789953905132,
       "tag": "0012_cultured_warpath",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1790755544267,
+      "tag": "0013_minor_silhouette",
+      "breakpoints": true
     }
   ]
 }

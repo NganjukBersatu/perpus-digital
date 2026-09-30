@@ -2,11 +2,13 @@ const express = require('express')
 const router = express.Router()
 const db = require('../db')
 const { eksemplarBuku, buku } = require('../db/schema')
-const { eq, ilike } = require('drizzle-orm')
+const { eq, and, ilike } = require('drizzle-orm')
+const { wajibLogin } = require('./auth')
 
-router.get('/:barcode', async (req, res) => {
+router.get('/:barcode', wajibLogin, async (req, res) => {
   try {
     const { barcode } = req.params
+    const { sekolahId } = req.user
 
     const cocok = await db
       .select({
@@ -19,7 +21,7 @@ router.get('/:barcode', async (req, res) => {
       })
       .from(eksemplarBuku)
       .innerJoin(buku, eq(eksemplarBuku.bukuId, buku.id))
-      .where(ilike(eksemplarBuku.barcode, `${barcode}%`))
+      .where(and(eq(eksemplarBuku.sekolahId, sekolahId), ilike(eksemplarBuku.barcode, `${barcode}%`)))
 
     if (cocok.length === 0) {
       return res.status(404).json({ message: 'Buku tidak ditemukan' })
@@ -34,7 +36,7 @@ router.get('/:barcode', async (req, res) => {
         status: eksemplarBuku.status,
       })
       .from(eksemplarBuku)
-      .where(eq(eksemplarBuku.bukuId, bukuId))
+      .where(and(eq(eksemplarBuku.bukuId, bukuId), eq(eksemplarBuku.sekolahId, sekolahId)))
       .orderBy(eksemplarBuku.id)
 
     const dipilih = cocok.find((r) => r.status === 'tersedia') || cocok[0]

@@ -23,7 +23,7 @@ router.get('/', wajibLogin, async (req, res) => {
 
     const { search = '', status = 'Semua', start, end, anggotaId } = req.query
 
-    const conditions = []
+    const conditions = [eq(peminjaman.sekolahId, req.user.sekolahId)]
 
     if (search) {
       conditions.push(

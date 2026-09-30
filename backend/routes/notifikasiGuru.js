@@ -36,7 +36,7 @@ function pasangRouteNotifikasiGuru(app, wajibLoginGuru) {
           )
         )
 
-      const aturan = await ambilAturanNotifikasi()
+      const aturan = await ambilAturanNotifikasi(req.user.sekolahId)
       const notifikasi = []
 
       for (const item of daftarPinjam) {

@@ -8,6 +8,7 @@ const { normalisasiTanggal } = require('../utils/validasi')
 
 router.get('/', wajibAdmin, async (req, res) => {
   try {
+    const { sekolahId } = req.user
     const dari = normalisasiTanggal(req.query.dari)
     const sampai = normalisasiTanggal(req.query.sampai)
     if (!dari || !sampai) {
@@ -32,7 +33,7 @@ router.get('/', wajibAdmin, async (req, res) => {
       .innerJoin(anggota, eq(anggota.id, peminjaman.anggotaId))
       .innerJoin(eksemplarBuku, eq(eksemplarBuku.id, peminjaman.eksemplarId))
       .innerJoin(buku, eq(buku.id, eksemplarBuku.bukuId))
-      .where(and(gte(peminjaman.tanggalPinjam, dari), lte(peminjaman.tanggalPinjam, sampai)))
+      .where(and(eq(peminjaman.sekolahId, sekolahId), gte(peminjaman.tanggalPinjam, dari), lte(peminjaman.tanggalPinjam, sampai)))
       .orderBy(desc(peminjaman.tanggalPinjam))
 
     const ringkasan = {
@@ -46,7 +47,8 @@ router.get('/', wajibAdmin, async (req, res) => {
       totalDenda: rows.reduce((sum, r) => sum + (r.denda || 0), 0),
     }
 
-    const [infoPerpus] = await db.select().from(pengaturanPerpustakaan).limit(1)
+    const [infoPerpus] = await db.select().from(pengaturanPerpustakaan)
+      .where(eq(pengaturanPerpustakaan.sekolahId, sekolahId)).limit(1)
     const infoPerpustakaan = {
       namaSekolah: infoPerpus?.namaSekolah || '',
       namaPerpustakaan: infoPerpus?.namaPerpustakaan || '',

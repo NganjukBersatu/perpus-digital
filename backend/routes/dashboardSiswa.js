@@ -27,7 +27,7 @@ router.get('/stats', wajibLoginSiswa, async (req, res) => {
       .from(peminjaman)
       .where(and(eq(peminjaman.anggotaId, anggotaId), isNull(peminjaman.tanggalDikembalikan)))
 
-    const pengaturanNotif = await ambilPengaturanNotifikasi(db)  
+    const pengaturanNotif = await ambilPengaturanNotifikasi(db, req.siswa.sekolahId)
     const batasHari = pengaturanNotif.hariSebelumJatuhTempo ?? 3
 
     const today = new Date()
@@ -111,7 +111,7 @@ router.patch('/kembalikan/:id', wajibLoginSiswa, async (req, res) => {
     const id = Number(req.params.id)
     if (!Number.isInteger(id)) return res.status(400).json({ message: 'ID tidak valid' })
 
-    const { updated, denda, bukuId } = await prosesPengembalian(id, { anggotaId: req.siswa.id })
+    const { updated, denda, bukuId } = await prosesPengembalian(id, { anggotaId: req.siswa.id, sekolahId: req.siswa.sekolahId })
     if (bukuId) await sinkronkanStokBuku(bukuId)
 
     res.json({ message: 'Buku berhasil dikembalikan', data: updated, denda })

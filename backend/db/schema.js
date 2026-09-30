@@ -9,14 +9,26 @@ const {
   jsonb,
   boolean,
   index,
+  unique,
 } = require("drizzle-orm/pg-core")
 
 // ============================================================
 // 1. TABEL YANG TIDAK PUNYA FK (didefinisikan paling atas)
 // ============================================================
+const sekolah = pgTable("sekolah", {
+  id: serial("id").primaryKey(),
+  nama: varchar("nama", { length: 255 }).notNull(),
+  npsn: varchar("npsn", { length: 20 }).unique(),
+  alamat: text("alamat"),
+  logoUrl: text("logo_url"),
+  aktif: boolean("aktif").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+})
 
 const adminAkun = pgTable("admin_akun", {
   id: serial("id").primaryKey(),
+  sekolahId: integer("sekolah_id").references(() => sekolah.id, { onDelete: "restrict" }),
+  peran: varchar("peran", { length: 20 }).notNull().default("admin_sekolah"), // superadmin | admin_sekolah
   username: varchar("username", { length: 50 }).notNull().unique(),
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
   namaLengkap: varchar("nama_lengkap", { length: 255 }).notNull(),
@@ -29,6 +41,7 @@ const adminAkun = pgTable("admin_akun", {
 
 const pengaturanPerpustakaan = pgTable("pengaturan_perpustakaan", {
   id: serial("id").primaryKey(),
+  sekolahId: integer("sekolah_id").references(() => sekolah.id, { onDelete: "restrict" }).unique(),
   namaSekolah: varchar("nama_sekolah", { length: 255 }).notNull().default(""),
   namaPerpustakaan: varchar("nama_perpustakaan", { length: 255 }).notNull().default(""),
   alamat: text("alamat"),
@@ -38,33 +51,43 @@ const pengaturanPerpustakaan = pgTable("pengaturan_perpustakaan", {
 
 const kategori = pgTable("kategori", {
   id: serial("id").primaryKey(),
-  nama: varchar("nama", { length: 100 }).unique().notNull(),
+  sekolahId: integer("sekolah_id").references(() => sekolah.id, { onDelete: "restrict" }),
+  nama: varchar("nama", { length: 100 }).notNull(),
   deskripsi: text("deskripsi"),
   createdAt: timestamp("created_at").defaultNow(),
-})
+}, (table) => ({
+  namaUnik: unique("kategori_nama_sekolah_unique").on(table.sekolahId, table.nama),
+}))
 
 const kelas = pgTable("kelas", {
   id: serial("id").primaryKey(),
-  namaKelas: varchar("nama_kelas", { length: 50 }).unique().notNull(),
-})
+  sekolahId: integer("sekolah_id").references(() => sekolah.id, { onDelete: "restrict" }),
+  namaKelas: varchar("nama_kelas", { length: 50 }).notNull(),
+}, (table) => ({
+  namaKelasUnik: unique("kelas_nama_sekolah_unique").on(table.sekolahId, table.namaKelas),
+}))
 
 const anggota = pgTable("anggota", {
   id: serial("id").primaryKey(),
+  sekolahId: integer("sekolah_id").references(() => sekolah.id, { onDelete: "restrict" }),
   nama: varchar("nama", { length: 255 }).notNull(),
   kelas: varchar("kelas", { length: 50 }),
 
   // Untuk Siswa
-  nis: varchar("nis", { length: 30 }).unique(),
+  nis: varchar("nis", { length: 30 }),
   tanggalLahir: date("tanggal_lahir"),
 
   // Untuk Guru
-  nip: varchar("nip", { length: 50 }).unique(),
+  nip: varchar("nip", { length: 50 }),
   password: varchar("password", { length: 255 }),
 
   mapel: varchar("mapel", { length: 100 }),
   peran: varchar("peran", { length: 20 }).notNull().default("siswa"), // siswa | guru | admin
   harusGantiPassword: boolean('harus_ganti_password').notNull().default(true),
 }, (table) => ({
+  sekolahIdIdx: index("anggota_sekolah_id_idx").on(table.sekolahId),
+  nisUnik: unique("anggota_nis_sekolah_unique").on(table.sekolahId, table.nis),
+  nipUnik: unique("anggota_nip_sekolah_unique").on(table.sekolahId, table.nip),
   peranIdx: index("anggota_peran_idx").on(table.peran),
   namaIdx: index("anggota_nama_idx").on(table.nama),
 }))
@@ -77,6 +100,7 @@ const anggota = pgTable("anggota", {
 //    (kategori jadi null) supaya koleksi buku tidak ikut hilang.
 const buku = pgTable("buku", {
   id: serial("id").primaryKey(),
+  sekolahId: integer("sekolah_id").references(() => sekolah.id, { onDelete: "restrict" }),
   judul: varchar("judul", { length: 255 }).notNull(),
   penulis: varchar("penulis", { length: 255 }),
   penerbit: varchar("penerbit", { length: 255 }),
@@ -90,6 +114,7 @@ const buku = pgTable("buku", {
   status: varchar("status", { length: 20 }).default("Tersedia"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
+  sekolahIdIdx: index("buku_sekolah_id_idx").on(table.sekolahId),
   kategoriIdIdx: index("buku_kategori_id_idx").on(table.kategoriId),
   judulIdx: index("buku_judul_idx").on(table.judul),
   isbnIdx: index("buku_isbn_idx").on(table.isbn),
@@ -99,13 +124,16 @@ const buku = pgTable("buku", {
 //    Kalau buku dihapus, semua eksemplarnya ikut terhapus otomatis.
 const eksemplarBuku = pgTable("eksemplar_buku", {
   id: serial("id").primaryKey(),
+  sekolahId: integer("sekolah_id").references(() => sekolah.id, { onDelete: "restrict" }),
   bukuId: integer("buku_id")
     .notNull()
     .references(() => buku.id, { onDelete: "cascade" }),
-  barcode: varchar("barcode", { length: 50 }).unique().notNull(),
+  barcode: varchar("barcode", { length: 50 }).notNull(),
   status: varchar("status", { length: 20 }).default("tersedia"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
+  sekolahIdIdx: index("eksemplar_buku_sekolah_id_idx").on(table.sekolahId),
+  barcodeUnik: unique("eksemplar_barcode_sekolah_unique").on(table.sekolahId, table.barcode),  
   bukuIdIdx: index("eksemplar_buku_buku_id_idx").on(table.bukuId),
   statusIdx: index("eksemplar_buku_status_idx").on(table.status),
 }))
@@ -115,6 +143,7 @@ const eksemplarBuku = pgTable("eksemplar_buku", {
 //    yang punya riwayat peminjaman TIDAK BISA dihapus sembarangan.
 const peminjaman = pgTable("peminjaman", {
   id: serial("id").primaryKey(),
+  sekolahId: integer("sekolah_id").references(() => sekolah.id, { onDelete: "restrict" }),
   nama: varchar("nama", { length: 255 }),
   kelas: varchar("kelas", { length: 50 }),
   eksemplarId: integer("eksemplar_id")
@@ -135,6 +164,7 @@ const peminjaman = pgTable("peminjaman", {
   masaTenggang: integer("masa_tenggang").default(0),
   jumlahPerpanjangan: integer("jumlah_perpanjangan").default(0),
 }, (table) => ({
+  sekolahIdIdx: index("peminjaman_sekolah_id_idx").on(table.sekolahId),
   eksemplarIdIdx: index("peminjaman_eksemplar_id_idx").on(table.eksemplarId),
   anggotaIdIdx: index("peminjaman_anggota_id_idx").on(table.anggotaId),
   tanggalPinjamIdx: index("peminjaman_tanggal_pinjam_idx").on(table.tanggalPinjam),
@@ -143,6 +173,7 @@ const peminjaman = pgTable("peminjaman", {
 }))
 
 module.exports = {
+  sekolah,
   adminAkun,
   pengaturanPerpustakaan,
   kategori,

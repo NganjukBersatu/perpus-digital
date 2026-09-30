@@ -10,6 +10,7 @@ const { normalisasiTanggal } = require('../utils/validasi')
 // GET semua guru (opsional search nama)
 router.get('/', wajibAdmin, async (req, res) => {
   try {
+    const { sekolahId } = req.user
     const { q } = req.query
 
     const rows = await db
@@ -24,6 +25,7 @@ router.get('/', wajibAdmin, async (req, res) => {
   .from(anggota)
       .where(
         and(
+          eq(anggota.sekolahId, sekolahId),
           eq(anggota.peran, 'guru'),
           q ? ilike(anggota.nama, `%${q}%`) : undefined
         )
@@ -42,6 +44,7 @@ router.get('/', wajibAdmin, async (req, res) => {
 // diwajibkan ganti password saat login pertama kali (harusGantiPassword).
 router.post('/', wajibAdmin, async (req, res) => {
   try {
+    const { sekolahId } = req.user
     const { nama, nip, mapel, tanggalLahir } = req.body || {}
 
     const namaBersih = String(nama ?? '').trim()
@@ -67,7 +70,7 @@ router.post('/', wajibAdmin, async (req, res) => {
     const [nipSudahAda] = await db
       .select({ id: anggota.id })
       .from(anggota)
-      .where(eq(anggota.nip, nipBersih))
+      .where(and(eq(anggota.sekolahId, sekolahId), eq(anggota.nip, nipBersih)))
       .limit(1)
 
     if (nipSudahAda) {
@@ -79,6 +82,7 @@ router.post('/', wajibAdmin, async (req, res) => {
     const [baru] = await db
       .insert(anggota)
       .values({
+        sekolahId,
         nama: namaBersih,
         nip: nipBersih,
         mapel: mapel ? String(mapel).trim() : null,
@@ -105,6 +109,7 @@ router.post('/', wajibAdmin, async (req, res) => {
 // PUT edit guru
 router.put('/:id', wajibAdmin, async (req, res) => {
   try {
+    const { sekolahId } = req.user
     const id = Number(req.params.id)
     if (!Number.isInteger(id)) {
       return res.status(400).json({ error: 'ID tidak valid' })
@@ -130,7 +135,7 @@ router.put('/:id', wajibAdmin, async (req, res) => {
       const [bentrok] = await db
         .select({ id: anggota.id })
         .from(anggota)
-        .where(and(eq(anggota.nip, nipBersih), ne(anggota.id, id)))
+        .where(and(eq(anggota.sekolahId, sekolahId), eq(anggota.nip, nipBersih), ne(anggota.id, id)))
         .limit(1)
       if (bentrok) return res.status(409).json({ error: 'NIP ini sudah dipakai' })
 
@@ -158,7 +163,7 @@ router.put('/:id', wajibAdmin, async (req, res) => {
     const [updated] = await db
       .update(anggota)
       .set(nilai)
-      .where(and(eq(anggota.id, id), eq(anggota.peran, 'guru')))
+      .where(and(eq(anggota.id, id), eq(anggota.peran, 'guru'), eq(anggota.sekolahId, sekolahId)))
       .returning()
 
     if (!updated) return res.status(404).json({ error: 'Guru tidak ditemukan' })
@@ -177,6 +182,7 @@ router.put('/:id', wajibAdmin, async (req, res) => {
 // DELETE guru (beserta riwayat peminjamannya)
 router.delete('/:id', wajibAdmin, async (req, res) => {
   try {
+    const { sekolahId } = req.user
     const id = Number(req.params.id)
     if (!Number.isInteger(id)) {
       return res.status(400).json({ error: 'ID tidak valid' })
@@ -185,7 +191,7 @@ router.delete('/:id', wajibAdmin, async (req, res) => {
     const [cek] = await db
       .select({ id: anggota.id })
       .from(anggota)
-      .where(and(eq(anggota.id, id), eq(anggota.peran, 'guru')))
+      .where(and(eq(anggota.id, id), eq(anggota.peran, 'guru'), eq(anggota.sekolahId, sekolahId)))
       .limit(1)
 
     if (!cek) {
@@ -198,7 +204,7 @@ router.delete('/:id', wajibAdmin, async (req, res) => {
     const [masihPinjam] = await db
       .select({ id: peminjaman.id })
       .from(peminjaman)
-      .where(and(eq(peminjaman.anggotaId, id), isNull(peminjaman.tanggalDikembalikan)))
+      .where(and(eq(peminjaman.anggotaId, id), eq(peminjaman.sekolahId, sekolahId), isNull(peminjaman.tanggalDikembalikan)))
       .limit(1)
 
     if (masihPinjam) {
@@ -209,10 +215,10 @@ router.delete('/:id', wajibAdmin, async (req, res) => {
 
     // Riwayat dan akun dihapus dalam satu transaksi: berhasil semua atau batal semua
     const deleted = await db.transaction(async (tx) => {
-      await tx.delete(peminjaman).where(eq(peminjaman.anggotaId, id))
+      await tx.delete(peminjaman).where(and(eq(peminjaman.anggotaId, id), eq(peminjaman.sekolahId, sekolahId)))
       const [hasil] = await tx
         .delete(anggota)
-        .where(and(eq(anggota.id, id), eq(anggota.peran, 'guru')))
+        .where(and(eq(anggota.id, id), eq(anggota.peran, 'guru'), eq(anggota.sekolahId, sekolahId)))
         .returning()
       return hasil
     })

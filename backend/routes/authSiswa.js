@@ -6,6 +6,7 @@ const { anggota } = require('../db/schema')
 const { eq, and } = require('drizzle-orm')
 const { loginLimiter, daftarLimiter } = require('../middleware/rateLimiter')
 const { normalisasiTanggal } = require('../utils/validasi')
+const { ambilSekolahAktif } = require('../utils/sekolah')
 
 const JWT_SECRET = process.env.JWT_SECRET
 if (!JWT_SECRET) {
@@ -30,10 +31,14 @@ router.post('/login', loginLimiter, async (req, res) => {
       return res.status(400).json({ error: 'NIS dan tanggal lahir wajib diisi (format tanggal YYYY-MM-DD)' })
     }
 
+    const sek = await ambilSekolahAktif(body.sekolahId)
+    if (!sek) return res.status(400).json({ error: 'Sekolah wajib dipilih' })
+
     const [siswa] = await db
       .select()
       .from(anggota)
       .where(and(
+        eq(anggota.sekolahId, sek.id),
         eq(anggota.nis, nisBersih),
         eq(anggota.tanggalLahir, tgl),
         eq(anggota.peran, 'siswa')
@@ -43,11 +48,12 @@ router.post('/login', loginLimiter, async (req, res) => {
       return res.status(401).json({ error: 'NIS atau tanggal lahir salah' })
     }
 
-    const token = jwt.sign({ id: siswa.id, role: 'siswa' }, JWT_SECRET, SIGN_OPTS)
+    const token = jwt.sign({ id: siswa.id, role: 'siswa', sekolahId: siswa.sekolahId }, JWT_SECRET, SIGN_OPTS)
 
     res.json({
       token,
       role: 'siswa',
+      sekolah: { id: sek.id, nama: sek.nama, logoUrl: sek.logoUrl },
       siswa: {
         id: siswa.id,
         nama: siswa.nama,
@@ -73,6 +79,8 @@ router.post('/login', loginLimiter, async (req, res) => {
 router.post('/daftar', daftarLimiter, async (req, res) => {
   try {
     const { nama, nis, kelas, tanggalLahir } = req.body || {}
+    const sek = await ambilSekolahAktif(req.body?.sekolahId)
+    if (!sek) return res.status(400).json({ error: 'Sekolah wajib dipilih' })
 
     const namaBersih = String(nama ?? '').trim()
     const nisBersih = String(nis ?? '').trim()
@@ -99,7 +107,7 @@ router.post('/daftar', daftarLimiter, async (req, res) => {
     const [nisSudahAda] = await db
       .select({ id: anggota.id })
       .from(anggota)
-      .where(eq(anggota.nis, nisBersih))
+      .where(and(eq(anggota.sekolahId, sek.id), eq(anggota.nis, nisBersih)))
       .limit(1)
 
     if (nisSudahAda) {
@@ -109,6 +117,7 @@ router.post('/daftar', daftarLimiter, async (req, res) => {
     const [baru] = await db
       .insert(anggota)
       .values({
+        sekolahId: sek.id,
         nama: namaBersih,
         nis: nisBersih,
         kelas: kelasBersih,
@@ -151,6 +160,9 @@ function wajibLoginSiswa(req, res, next) {
   }
   if (payload.role !== 'siswa') {
     return res.status(403).json({ error: 'Akses ditolak' })
+  }
+    if (!Number.isInteger(payload.sekolahId)) {
+    return res.status(401).json({ error: 'Sesi tidak valid, silakan login ulang' })
   }
   req.siswa = payload
   next() // di luar try, jadi error hilir tidak salah dilaporkan sebagai 401

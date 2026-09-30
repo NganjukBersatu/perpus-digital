@@ -12,7 +12,7 @@ router.get('/', wajibAdmin, async (req, res) => {
   try {
     const { search = '', status = 'Semua' } = req.query
 
-    const conditions = [gt(peminjaman.denda, 0)]
+    const conditions = [gt(peminjaman.denda, 0), eq(peminjaman.sekolahId, req.user.sekolahId)]
 
     if (search) {
       conditions.push(
@@ -78,7 +78,7 @@ router.patch('/:id/bayar', wajibAdmin, async (req, res) => {
     const [cek] = await db
       .select({ denda: peminjaman.denda, statusDenda: peminjaman.statusDenda })
       .from(peminjaman)
-      .where(eq(peminjaman.id, Number(id)))
+      .where(and(eq(peminjaman.id, Number(id)), eq(peminjaman.sekolahId, req.user.sekolahId)))
 
     if (!cek) {
       return res.status(404).json({ message: 'Data peminjaman tidak ditemukan' })
@@ -93,7 +93,7 @@ router.patch('/:id/bayar', wajibAdmin, async (req, res) => {
     await db
       .update(peminjaman)
       .set({ statusDenda: 'sudah_dibayar', tanggalBayarDenda: today })
-      .where(eq(peminjaman.id, Number(id)))
+      .where(and(eq(peminjaman.id, Number(id)), eq(peminjaman.sekolahId, req.user.sekolahId)))
 
     res.json({ message: 'Denda berhasil ditandai sudah dibayar' })
   } catch (err) {

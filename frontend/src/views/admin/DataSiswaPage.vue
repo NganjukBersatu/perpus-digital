@@ -73,6 +73,15 @@ function pilihKelas(kelas) {
 
 function tutupFilterMenu(e) {
   if (!e.target.closest?.('.filter-dropdown')) kelasMenuOpen.value = false
+  if (!e.target.closest?.('.perpage-dropdown')) perPageMenuOpen.value = false
+}
+
+const perPageMenuOpen = ref(false)
+
+function pilihPerPage(nilai) {
+  perPage.value = nilai
+  perPageMenuOpen.value = false
+  resetPage()
 }
 
 onMounted(async () => {
@@ -280,10 +289,25 @@ function batalHapus() {
         </button>
       </div>
 
-      <select v-model.number="perPage" class="select select-sm" @change="resetPage">
-        <option :value="5">5 / halaman</option>
-        <option :value="10">10 / halaman</option>
-      </select>
+      <div class="perpage-dropdown">
+        <button
+          type="button"
+          class="perpage-dropdown-btn"
+          @click.stop="perPageMenuOpen = !perPageMenuOpen"
+        >
+          {{ perPage }} / halaman
+        </button>
+        <ul v-if="perPageMenuOpen" class="perpage-dropdown-list">
+          <li
+            v-for="n in [5, 10]"
+            :key="n"
+            :class="{ aktif: perPage === n }"
+            @click="pilihPerPage(n)"
+          >
+            {{ n }} / halaman
+          </li>
+        </ul>
+      </div>
     </div>
 
     <div v-if="showModal" class="modal-overlay" @click.self="tutupModal">
@@ -345,7 +369,7 @@ function batalHapus() {
 </template>
 
 <style scoped>
-.page { padding: 24px; background: #f8f9fb; min-height: 100vh; font-family: sans-serif; }
+.page { padding: 24px; background: #f8f9fb; min-height: 100vh; font-family: sans-serif;  max-width: 100%; overflow-x: clip; }
 
 .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
 .header h1 { font-size: 20px; font-weight: 700; color: #1f2937; margin: 0; }
@@ -397,7 +421,7 @@ function batalHapus() {
 .filter-dropdown-list li:hover,
 .filter-dropdown-list li.aktif { background: #dbeafe; }
 
-.table-wrap { background: #fff; border-radius: 12px; overflow-x: auto; overflow-y: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); -webkit-overflow-scrolling: touch; }
+.table-wrap { background: #fff; border-radius: 12px; overflow-x: auto; overflow-y: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06); -webkit-overflow-scrolling: touch;  width: 0; min-width: 100%;}
 
 table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 560px; }
 th, td {
@@ -463,6 +487,52 @@ tbody tr:hover { background: #f9fafb; }
 .pages .page-num.active { background: #5b4dff; color: #fff; }
 .pages button:disabled { opacity: 0.4; cursor: default; }
 .select-sm { min-width: auto; }
+
+.perpage-dropdown {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.perpage-dropdown-btn {
+  font-family: inherit;
+  font-size: 13px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 28px 8px 10px;
+  color: #000;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 8px center;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Buka ke BAWAH */
+.perpage-dropdown-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: auto;
+  min-width: 100%;
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  z-index: 40;
+}
+
+.perpage-dropdown-list li {
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.perpage-dropdown-list li:hover,
+.perpage-dropdown-list li.aktif {
+  background: #dbeafe;
+}
 
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);

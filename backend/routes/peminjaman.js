@@ -1,15 +1,20 @@
 const { Router } = require("express")
-const { asc } = require("drizzle-orm")
+const { asc, eq } = require("drizzle-orm")
 const { db } = require("../db/client")
 const { kelas } = require("../db/schema")
+const { opsionalLogin } = require("./auth")
+const { sekolahIdDari } = require("../utils/sekolah")
 
 const router = Router()
 
-router.get("/kelas", async (req, res) => {
+router.get("/kelas", opsionalLogin, async (req, res) => {
   try {
+    const sekolahId = sekolahIdDari(req)
+    if (!sekolahId) return res.status(400).json({ message: "sekolahId wajib diisi" })
     const rows = await db
       .select({ namaKelas: kelas.namaKelas })
       .from(kelas)
+      .where(eq(kelas.sekolahId, sekolahId))
       .orderBy(asc(kelas.namaKelas))
 
     const daftarKelas = rows.map((row) => row.namaKelas)

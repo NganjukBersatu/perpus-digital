@@ -761,6 +761,8 @@ onUnmounted(() => {
     background: #f8f9fb; 
     min-height: 100vh; 
     font-family: sans-serif; 
+    max-width: 100%;
+    overflow-x: clip;
 }
 
 .header { 
@@ -804,6 +806,8 @@ onUnmounted(() => {
     box-shadow: 0 1px 3px rgba(0,0,0,0.06); 
     max-width: 100%;
     -webkit-overflow-scrolling: touch;
+    width: 0;
+    min-width: 100%;
 }
 
 .table-wrap::-webkit-scrollbar {
@@ -1202,10 +1206,10 @@ tbody tr:hover { background: #f9fafb; }
   white-space: nowrap;
 }
 
-/* Buka ke ATAS supaya tidak menutupi tabel */
+/* Buka ke BAWAH */
 .perpage-dropdown-list {
   position: absolute;
-  bottom: calc(100% + 4px);
+  top: calc(100% + 4px);
   left: 0;
   right: auto;
   min-width: 100%;

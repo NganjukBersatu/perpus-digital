@@ -3,7 +3,10 @@ const { eq, isNull, and, sql, desc } = require('drizzle-orm')
 const { db } = require('../db/client')
 const { peminjaman, eksemplarBuku, buku, kategori, anggota } = require('../db/schema')
 const { wajibLoginSiswa } = require('./authSiswa')
-const { hitungDenda } = require('../utils/hitungDenda')
+const { hitungDenda, ambilPengaturanNotifikasi } = require('../utils/hitungDenda')
+const { sinkronkanStokBuku } = require('./buku') 
+const { prosesPengembalian } = require('../utils/pengembalian')
+const { ErrorBisnis } = require('../utils/errorBisnis')
 
 const router = Router()
 
@@ -24,12 +27,18 @@ router.get('/stats', wajibLoginSiswa, async (req, res) => {
       .from(peminjaman)
       .where(and(eq(peminjaman.anggotaId, anggotaId), isNull(peminjaman.tanggalDikembalikan)))
 
+    const pengaturanNotif = await ambilPengaturanNotifikasi(db)  
+    const batasHari = pengaturanNotif.hariSebelumJatuhTempo ?? 3
+
     const today = new Date()
+    today.setHours(0, 0, 0, 0) 
+
     const hampirJatuhTempo = belumKembali.filter(row => {
       if (!row.tanggalKembali) return false
       const due = new Date(row.tanggalKembali)
-      const diffDays = (due - today) / (1000 * 60 * 60 * 24)
-      return diffDays <= 3 && diffDays >= 0
+      due.setHours(0, 0, 0, 0) 
+      const diffDays = Math.round((due - today) / (1000 * 60 * 60 * 24)) 
+      return diffDays >= 0 && diffDays <= batasHari 
     }).length
 
     res.json({
@@ -55,7 +64,8 @@ router.get('/peminjaman-aktif', wajibLoginSiswa, async (req, res) => {
       judul: buku.judul,
       kategori: kategori.nama,
       nominalDendaPerHari: peminjaman.nominalDendaPerHari,
-      dendaMaksimal: peminjaman.dendaMaksimal
+      dendaMaksimal: peminjaman.dendaMaksimal,
+      masaTenggang: peminjaman.masaTenggang,   
     })
       .from(peminjaman)
       .innerJoin(eksemplarBuku, eq(peminjaman.eksemplarId, eksemplarBuku.id))
@@ -72,18 +82,22 @@ router.get('/peminjaman-aktif', wajibLoginSiswa, async (req, res) => {
       batas.setHours(0, 0, 0, 0)
       const hariTerlambat = Math.max(0, Math.round((today - batas) / (1000 * 60 * 60 * 24)))
 
+      const masaTenggang = row.masaTenggang || 0
+      const hariKenaDenda = Math.max(0, hariTerlambat - masaTenggang)
+
       let denda = 0
-      if (hariTerlambat > 0) {
+      if (hariKenaDenda > 0) {
         const tarif = row.nominalDendaPerHari || 0
-        denda = hariTerlambat * tarif
+        denda = hariKenaDenda * tarif
         if (row.dendaMaksimal > 0) {
           denda = Math.min(denda, row.dendaMaksimal)
         }
       }
 
-      return { ...row, hariTerlambat, denda }
+      return { ...row, hariTerlambat, hariKenaDenda, denda } 
     })
 
+    
     res.json(hasil)
   } catch (err) {
     console.error(err)
@@ -94,74 +108,15 @@ router.get('/peminjaman-aktif', wajibLoginSiswa, async (req, res) => {
 // PATCH /dashboard-siswa/kembalikan/:id
 router.patch('/kembalikan/:id', wajibLoginSiswa, async (req, res) => {
   try {
-    const anggotaId = req.siswa.id
-    const { id } = req.params
-    const today = new Date().toISOString().slice(0, 10)
+    const id = Number(req.params.id)
+    if (!Number.isInteger(id)) return res.status(400).json({ message: 'ID tidak valid' })
 
-    // Ambil data peminjaman + snapshot denda + peran
-    const [row] = await db
-      .select({
-        id: peminjaman.id,
-        tanggalKembali: peminjaman.tanggalKembali,
-        eksemplarId: peminjaman.eksemplarId,
-        nominalDendaPerHari: peminjaman.nominalDendaPerHari,
-        dendaMaksimal: peminjaman.dendaMaksimal,
-        dendaGuruAktif: peminjaman.dendaGuruAktif,
-        masaTenggang: peminjaman.masaTenggang,
-        peran: anggota.peran,
-      })
-      .from(peminjaman)
-      .innerJoin(anggota, eq(peminjaman.anggotaId, anggota.id))
-      .where(and(
-        eq(peminjaman.id, Number(id)),
-        eq(peminjaman.anggotaId, anggotaId),
-        isNull(peminjaman.tanggalDikembalikan)
-      ))
+    const { updated, denda, bukuId } = await prosesPengembalian(id, { anggotaId: req.siswa.id })
+    if (bukuId) await sinkronkanStokBuku(bukuId)
 
-    if (!row) {
-      return res.status(404).json({ 
-        message: 'Data peminjaman tidak ditemukan atau sudah dikembalikan' 
-      })
-    }
-
-    // Hitung denda pakai snapshot yang tersimpan saat pinjam
-    const pengaturanDenda = {
-      aktif: (row.nominalDendaPerHari || 0) > 0,
-      nominalPerHari: row.nominalDendaPerHari || 0,
-      dendaMaksimal: row.dendaMaksimal || 0,
-      dendaGuruAktif: row.dendaGuruAktif ?? false,
-      masaTenggang: row.masaTenggang ?? 0,
-    }
-
-    const { denda } = hitungDenda({
-      tanggalKembali: row.tanggalKembali,
-      tanggalDikembalikan: today,
-      peran: row.peran,
-      pengaturanDenda,
-    })
-
-    // Update peminjaman
-    const [updated] = await db
-      .update(peminjaman)
-      .set({ 
-        tanggalDikembalikan: today, 
-        denda 
-      })
-      .where(eq(peminjaman.id, row.id))
-      .returning()
-
-    // Kembalikan status eksemplar menjadi tersedia
-    await db
-      .update(eksemplarBuku)
-      .set({ status: 'tersedia' })
-      .where(eq(eksemplarBuku.id, row.eksemplarId))
-
-    res.json({ 
-      message: 'Buku berhasil dikembalikan', 
-      data: updated,
-      denda 
-    })
+    res.json({ message: 'Buku berhasil dikembalikan', data: updated, denda })
   } catch (err) {
+    if (err instanceof ErrorBisnis) return res.status(err.status).json({ message: err.message })
     console.error(err)
     res.status(500).json({ message: 'Gagal mengembalikan buku' })
   }
@@ -182,7 +137,8 @@ router.get('/riwayat', wajibLoginSiswa, async (req, res) => {
       statusDenda: peminjaman.statusDenda,
       judul: buku.judul,
       penulis: buku.penulis,
-      kategori: kategori.nama
+      kategori: kategori.nama,
+      masaTenggang: peminjaman.masaTenggang,
     })
       .from(peminjaman)
       .innerJoin(eksemplarBuku, eq(peminjaman.eksemplarId, eksemplarBuku.id))
@@ -191,16 +147,33 @@ router.get('/riwayat', wajibLoginSiswa, async (req, res) => {
       .where(eq(peminjaman.anggotaId, anggotaId))
       .orderBy(desc(peminjaman.id))
 
-    const today = new Date().toISOString().slice(0, 10)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
 
     const hasil = data.map(row => {
+      const masaTenggang = row.masaTenggang || 0
       let status
+
       if (row.tanggalDikembalikan) {
-        status = row.tanggalDikembalikan > row.tanggalKembali ? 'Terlambat' : 'Dikembalikan'
-      } else if (row.tanggalKembali < today) {
-        status = 'Terlambat'
+        // Sudah dikembalikan → hitung apakah telat > masa tenggang
+        const due = new Date(row.tanggalKembali)
+        const kembali = new Date(row.tanggalDikembalikan)
+        due.setHours(0, 0, 0, 0)
+        kembali.setHours(0, 0, 0, 0)
+        const telat = Math.max(0, Math.round((kembali - due) / (1000 * 60 * 60 * 24)))
+        status = telat > masaTenggang ? 'Terlambat' : 'Dikembalikan'
       } else {
-        status = 'Dipinjam'
+        const due = new Date(row.tanggalKembali)
+        due.setHours(0, 0, 0, 0)
+        const telat = Math.max(0, Math.round((today - due) / (1000 * 60 * 60 * 24)))
+
+        if (telat > masaTenggang) {
+          status = 'Terlambat'
+        } else if (telat > 0) {
+          status = 'Masa Tenggang'
+        } else {
+          status = 'Dipinjam'
+        }
       }
       return { ...row, status }
     })

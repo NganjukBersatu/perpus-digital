@@ -1,6 +1,9 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { authHeaders, jsonHeaders } from '../../utils/auth' // sesuaikan path, sama seperti di halaman pinjam
+
+const API = import.meta.env.VITE_API_BASE_URL
 
 const route = useRoute()
 const router = useRouter()
@@ -14,8 +17,13 @@ const mapelMenuOpen = ref(false)
 
 const showModal = ref(false)
 const modalMode = ref('tambah')
-const form = ref({ id: null, nama: '', nip: '', mapel: '' })
+const form = ref({ id: null, nama: '', nip: '', mapel: '', tanggalLahir: '' })
 const isSaving = ref(false)
+const showConfirmModal = ref(false)
+const guruToDelete = ref(null)
+
+const currentPage = ref(1)
+const perPage = ref(5)
 
 const mapelOptions = computed(() => {
   const semua = daftar.value.map((g) => g.mapel).filter(Boolean)
@@ -27,13 +35,33 @@ const filteredDaftar = computed(() => {
   return daftar.value.filter((g) => g.mapel === selectedMapel.value)
 })
 
+const totalData = computed(() => filteredDaftar.value.length)
+const totalPages = computed(() => Math.max(1, Math.ceil(totalData.value / perPage.value)))
+
+const pagedDaftar = computed(() => {
+  const start = (currentPage.value - 1) * perPage.value
+  return filteredDaftar.value.slice(start, start + perPage.value)
+})
+
+const rangeText = computed(() => {
+  if (totalData.value === 0) return 'Menampilkan 0 data'
+  const start = (currentPage.value - 1) * perPage.value + 1
+  const end = Math.min(currentPage.value * perPage.value, totalData.value)
+  return `Menampilkan ${start} - ${end} dari ${totalData.value} data`
+})
+
+function resetPage() {
+  currentPage.value = 1
+}
+
 async function muatData() {
   isLoading.value = true
   errorMessage.value = ''
   try {
-    const url = new URL('http://localhost:3000/api/guru')
+    // argumen kedua dipakai kalau API berupa path relatif (mis. "/api")
+    const url = new URL(`${API}/guru`, window.location.origin)
     if (searchQuery.value) url.searchParams.set('q', searchQuery.value)
-    const res = await fetch(url)
+    const res = await fetch(url, { headers: authHeaders() })
     if (!res.ok) throw new Error('response not ok')
     daftar.value = await res.json()
   } catch (err) {
@@ -47,12 +75,17 @@ async function muatData() {
 let searchTimeout = null
 function onSearchInput() {
   clearTimeout(searchTimeout)
-  searchTimeout = setTimeout(muatData, 350)
+  searchTimeout = setTimeout(() => {
+    muatData()
+    resetPage()
+  }, 350)
 }
 
 function bukaModalTambah(namaAwal = '') {
   modalMode.value = 'tambah'
-  form.value = { id: null, nama: namaAwal || '', nip: '', mapel: '' }
+  // @click="bukaModalTambah" mengirim event object, jadi pastikan hanya string yang dipakai
+  const nama = typeof namaAwal === 'string' ? namaAwal : ''
+  form.value = { id: null, nama, nip: '', mapel: '', tanggalLahir: '' }
   showModal.value = true
 }
 
@@ -63,6 +96,7 @@ function bukaModalEdit(item) {
     nama: item.nama || '',
     nip: item.nip || '',
     mapel: item.mapel || '',
+    tanggalLahir: item.tanggalLahir || '',
   }
   showModal.value = true
 }
@@ -80,17 +114,16 @@ async function simpan() {
   isSaving.value = true
   try {
     const isEdit = modalMode.value === 'edit'
-    const url = isEdit
-      ? `http://localhost:3000/api/guru/${form.value.id}`
-      : 'http://localhost:3000/api/guru'
+    const url = isEdit ? `${API}/guru/${form.value.id}` : `${API}/guru`
 
     const res = await fetch(url, {
       method: isEdit ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: jsonHeaders(),
       body: JSON.stringify({
         nama: form.value.nama,
         nip: form.value.nip,
         mapel: form.value.mapel,
+        tanggalLahir: form.value.tanggalLahir,
       }),
     })
 
@@ -107,8 +140,8 @@ async function simpan() {
           barcode: route.query.barcode || '',
           lanjut: 'pinjam',
           guruId: dataBaru.id,
-          guruNama: dataBaru.nama
-        }
+          guruNama: dataBaru.nama,
+        },
       })
       return
     }
@@ -122,19 +155,38 @@ async function simpan() {
   }
 }
 
-async function hapus(item) {
-  if (!confirm(`Hapus data guru "${item.nama}"?`)) return
+function hapus(item) {
+  guruToDelete.value = item
+  showConfirmModal.value = true
+}
+
+async function konfirmasiHapus() {
+  if (!guruToDelete.value) return
 
   try {
-    const res = await fetch(`http://localhost:3000/api/guru/${item.id}`, {
+    const res = await fetch(`${API}/guru/${item.id}`, {
       method: 'DELETE',
+      headers: authHeaders(),
     })
     if (!res.ok) throw new Error('Gagal menghapus')
+
     await muatData()
+
+    if (pagedDaftar.value.length === 0 && currentPage.value > 1) {
+      currentPage.value--
+    }
   } catch (err) {
     console.error(err)
-    alert('Gagal menghapus guru. Mungkin masih terkait peminjaman.')
+    errorMessage.value = 'Gagal menghapus guru. Mungkin masih terkait peminjaman.'
+  } finally {
+    showConfirmModal.value = false
+    guruToDelete.value = null
   }
+}
+
+function batalHapus() {
+  showConfirmModal.value = false
+  guruToDelete.value = null
 }
 
 function labelMapelTerpilih() {
@@ -144,6 +196,7 @@ function labelMapelTerpilih() {
 function pilihMapel(mapel) {
   selectedMapel.value = mapel
   mapelMenuOpen.value = false
+  resetPage()
 }
 
 function tutupFilterMenu(e) {
@@ -156,7 +209,7 @@ onMounted(() => {
 
   // Jika datang dari form pinjam → langsung buka modal tambah
   if (route.query.from === 'pinjam' && route.query.nama) {
-    bukaModalTambah(route.query.nama)
+    bukaModalTambah(String(route.query.nama))
   }
 })
 
@@ -232,27 +285,61 @@ onUnmounted(() => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(item, i) in filteredDaftar" :key="item.id">
-            <td>{{ i + 1 }}</td>
-            <td class="judul">{{ item.nama }}</td>
-            <td>{{ item.nip || '-' }}</td>
-            <td>{{ item.mapel || '-' }}</td>
-            <td class="aksi-cell">
-              <button class="detail-btn" @click="bukaModalEdit(item)">Edit</button>
-              <button class="detail-btn detail-btn-danger" @click="hapus(item)">Hapus</button>
-            </td>
-          </tr>
-          <tr v-if="!isLoading && filteredDaftar.length === 0">
-            <td colspan="5" class="empty">Belum ada data guru. Tambahkan guru pertama.</td>
-          </tr>
-          <tr v-if="isLoading">
-            <td colspan="5" class="empty">Memuat data...</td>
-          </tr>
-        </tbody>
+  <tr v-for="(item, i) in pagedDaftar" :key="item.id">
+    <td>{{ (currentPage - 1) * perPage + i + 1 }}</td>
+    <td class="judul">{{ item.nama }}</td>
+    <td>{{ item.nip || '-' }}</td>
+    <td>{{ item.mapel || '-' }}</td>
+    <td class="aksi-cell">
+      <button class="detail-btn" @click="bukaModalEdit(item)">Edit</button>
+      <button class="detail-btn detail-btn-danger" @click="hapus(item)">Hapus</button>
+    </td>
+  </tr>
+  <tr v-if="!isLoading && filteredDaftar.length === 0">
+    <td colspan="5" class="empty">Belum ada data guru. Tambahkan guru pertama.</td>
+  </tr>
+  <tr v-if="isLoading">
+    <td colspan="5" class="empty">Memuat data...</td>
+  </tr>
+</tbody>
       </table>
     </div>
 
-    <div v-if="showModal" class="modal-overlay" @click.self="tutupModal">
+    <div class="pagination">
+      <span class="range">{{ rangeText }}</span>
+
+      <div class="pages">
+        <button type="button" :disabled="currentPage === 1" @click="currentPage--">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 6l-6 6 6 6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+
+        <button
+          v-for="n in totalPages"
+          :key="n"
+          type="button"
+          class="page-num"
+          :class="{ active: currentPage === n }"
+          @click="currentPage = n"
+        >
+          {{ n }}
+        </button>
+
+        <button type="button" :disabled="currentPage === totalPages" @click="currentPage++">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </div>
+
+      <select v-model.number="perPage" class="select select-sm" @change="resetPage">
+        <option :value="5">5 / halaman</option>
+        <option :value="10">10 / halaman</option>
+      </select>
+    </div>
+
+        <div v-if="showModal" class="modal-overlay" @click.self="tutupModal">
       <div class="modal-card">
         <h2>{{ modalMode === 'edit' ? 'Edit Guru' : 'Tambah Guru' }}</h2>
 
@@ -271,6 +358,11 @@ onUnmounted(() => {
           <input type="text" v-model="form.mapel" placeholder="Contoh: Matematika, Bahasa Indonesia" />
         </div>
 
+        <div class="form-group">
+          <label>Tanggal Lahir <span class="optional">(opsional)</span></label>
+          <input type="date" v-model="form.tanggalLahir" />
+        </div>
+
         <div class="modal-actions">
           <button class="btn-secondary" @click="tutupModal">Batal</button>
           <button class="btn-primary" :disabled="isSaving" @click="simpan">
@@ -280,6 +372,29 @@ onUnmounted(() => {
       </div>
     </div>
   </div>
+    <div v-if="showConfirmModal" class="modal-overlay" @click.self="batalHapus">
+      <div class="confirm-box">
+        <div class="confirm-icon">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 7h16" stroke-linecap="round" />
+            <path d="M10 11v6M14 11v6" stroke-linecap="round" />
+            <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
+            <path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+          </svg>
+        </div>
+
+        <h3>Hapus Siswa?</h3>
+        <p>
+          Yakin ingin menghapus siswa
+          <strong>"{{ siswaToDelete?.nama }}"</strong>? Tindakan ini tidak dapat dibatalkan.
+        </p>
+
+        <div class="confirm-actions">
+          <button type="button" class="btn-secondary" @click="batalHapus">Batal</button>
+          <button type="button" class="btn-hapus-confirm" @click="konfirmasiHapus">Ya, Hapus</button>
+        </div>
+      </div>
+    </div>
 </template>
 
 <style scoped>
@@ -383,6 +498,25 @@ tbody tr:hover { background: #f9fafb; }
 
 .empty { text-align: center; color: #9ca3af; padding: 24px; }
 
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 4px 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+.pages { display: flex; align-items: center; gap: 6px; }
+.pages button {
+  min-width: 32px; height: 32px; border: 0; background: transparent;
+  border-radius: 8px; cursor: pointer; color: #4b5563;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.pages .page-num.active { background: #5b4dff; color: #fff; }
+.pages button:disabled { opacity: 0.4; cursor: default; }
+.select-sm { min-width: auto; }
+
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
   display: flex; align-items: center; justify-content: center; z-index: 100;
@@ -403,6 +537,43 @@ tbody tr:hover { background: #f9fafb; }
   padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
 }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.confirm-box {
+  background: #fff;
+  border-radius: 14px;
+  width: 380px;
+  max-width: 92%;
+  padding: 28px 24px 24px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+  text-align: center;
+}
+.confirm-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #fee2e2;
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+.confirm-icon .icon-svg { width: 24px; height: 24px; }
+.confirm-box h3 { font-size: 16px; font-weight: 700; color: #1f2937; margin: 0 0 8px; }
+.confirm-box p { font-size: 13px; color: #6b7280; margin: 0 0 20px; line-height: 1.5; }
+.confirm-box p strong { color: #374151; }
+.confirm-actions { display: flex; justify-content: center; gap: 10px; }
+.btn-hapus-confirm {
+  border: 0;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 8px;
+  padding: 9px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-hapus-confirm:hover { background: #dc2626; }
 
 @media (max-width: 640px) {
   .page {
@@ -542,7 +713,35 @@ tbody tr:hover { background: #f9fafb; }
   .btn-secondary,
   .btn-primary {
     padding: 10px 16px;
+
+  }
+    .pagination {
+    flex-direction: row; 
+    flex-wrap: wrap;     
+    justify-content: center; 
+    align-items: center;
+    gap: 12px;
+    padding-top: 16px;
+  }
+
+  .range {
+    width: 100%;         
+    text-align: center;
+    font-size: 12px;
+    margin-bottom: 4px;  
+  }
+
+  .pages {
+    justify-content: center;
+    width: auto;         
+  }
+
+  .select-sm {
+    width: auto;         
+    min-width: 110px;    
+    margin-left: 0;      
   }
 }
+
 
 </style>

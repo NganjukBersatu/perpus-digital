@@ -7,13 +7,21 @@ const defaultAturan = {
   notifikasiJatuhTempoHariIni: true,
 }
 
-// SEMENTARA: paksa 7 hari untuk tes
+const { db } = require('../db/client')
+const { ambilPengaturanNotifikasi } = require('../utils/hitungDenda')
+
 async function ambilAturanNotifikasi() {
-  return {
-    pengingatJatuhTempo: true,
-    hariSebelumJatuhTempo: 7,
-    notifikasiTerlambat: true,
-    notifikasiJatuhTempoHariIni: true,
+  try {
+    const dariDb = await ambilPengaturanNotifikasi(db)
+    return {
+      pengingatJatuhTempo: dariDb.pengingatJatuhTempo ?? defaultAturan.pengingatJatuhTempo,
+      hariSebelumJatuhTempo: dariDb.hariSebelumJatuhTempo ?? defaultAturan.hariSebelumJatuhTempo,
+      notifikasiTerlambat: dariDb.notifikasiTerlambat ?? defaultAturan.notifikasiTerlambat,
+      notifikasiJatuhTempoHariIni: dariDb.notifikasiJatuhTempoHariIni ?? defaultAturan.notifikasiJatuhTempoHariIni,
+    }
+  } catch (err) {
+    console.error('Gagal ambil aturan notifikasi, pakai default:', err)
+    return { ...defaultAturan }
   }
 }
 
@@ -34,27 +42,31 @@ function bangunNotifikasiPinjaman(item, aturan, opsi = {}) {
 
   if (selisihHari < 0 && hariTerlambatEfektif > 0 && aturan.notifikasiTerlambat) {
     let pesan = `"${item.judul}" terlambat ${hariTerlambatEfektif} hari`
+
     if (dendaBerlaku) {
       let estimasi = hariTerlambatEfektif * (item.nominalDendaPerHari || 0)
       if (item.dendaMaksimal > 0 && estimasi > item.dendaMaksimal) {
         estimasi = item.dendaMaksimal
       }
-      pesan += `. Estimasi denda Rp${estimasi.toLocaleString('id-ID')}`
+      if (estimasi > 0) {
+        pesan += `. Estimasi denda Rp${estimasi.toLocaleString('id-ID')}`
+      }
     }
+
     hasil.push({
       id: `terlambat-${item.id}`,
-      tipe: 'terlambat',
+      tipe: 'terlambat',                   
       judul: 'Buku terlambat dikembalikan',
-      pesan,
+      pesan
     })
-  } else if (selisihHari < 0 && aturan.notifikasiTerlambat) {
+  } else if (selisihHari < 0 && hariTerlambatEfektif <= 0 && aturan.pengingatJatuhTempo) {
     hasil.push({
       id: `tenggang-${item.id}`,
       tipe: 'jatuh_tempo',
       judul: 'Masih dalam masa tenggang',
       pesan: `"${item.judul}" sudah lewat jatuh tempo, segera kembalikan sebelum masa tenggang habis`,
     })
-  } else if (selisihHari === 0 && aturan.notifikasiJatuhTempoHariIni) {
+  } else if (selisihHari === 0 && aturan.notifikasiJatuhTempoHariIni && aturan.pengingatJatuhTempo) {
     hasil.push({
       id: `hari-ini-${item.id}`,
       tipe: 'jatuh_tempo',
@@ -71,20 +83,6 @@ function bangunNotifikasiPinjaman(item, aturan, opsi = {}) {
       tipe: 'jatuh_tempo',
       judul: 'Buku hampir jatuh tempo',
       pesan: `"${item.judul}" jatuh tempo dalam ${selisihHari} hari`,
-    })
-  }
-
-  if (
-    aturan.notifikasiTerlambat &&
-    dendaBerlaku &&
-    item.statusDenda === 'belum_dibayar' &&
-    Number(item.denda) > 0
-  ) {
-    hasil.push({
-      id: `denda-${item.id}`,
-      tipe: 'terlambat',
-      judul: 'Denda belum dibayar',
-      pesan: `Denda untuk "${item.judul}" sebesar Rp${Number(item.denda).toLocaleString('id-ID')} belum dibayar`,
     })
   }
 

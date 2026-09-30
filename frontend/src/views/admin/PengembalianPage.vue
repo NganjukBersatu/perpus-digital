@@ -20,6 +20,19 @@ const statusOptions = [
 ]
 const statusMenuOpen = ref(false)
 
+const perPageMenuOpen = ref(false)
+
+function labelPerPageTerpilih() {
+  return `${limit.value} / halaman`
+}
+
+function pilihPerPage(nilai) {
+  limit.value = nilai
+  perPageMenuOpen.value = false
+  page.value = 1
+  fetchData()
+}
+
 function labelStatusTerpilih() {
   return statusOptions.find((s) => s.value === status.value)?.label || 'Semua Status'
 }
@@ -31,7 +44,9 @@ function pilihStatus(value) {
 
 function tutupStatusMenu(e) {
   if (!e.target.closest?.('.status-dropdown')) statusMenuOpen.value = false
+  if (!e.target.closest?.('.perpage-dropdown')) perPageMenuOpen.value = false
 }
+
 const filterDari = ref('')
 const filterSampai = ref('')
 const showDateFilter = ref(false)
@@ -53,12 +68,12 @@ const loadingTerlambat = ref(false)
 const tarifDendaPerHari = 0
 
 const fetchSummary = async () => {
-  const res = await axios.get('http://localhost:3000/api/pengembalian/summary')
+  const res = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/pengembalian/summary`)
   summary.value = res.data
 }
 
 const fetchData = async () => {
-  const res = await axios.get('http://localhost:3000/api/pengembalian', {
+  const res = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/pengembalian`, {
     params: {
       search: search.value,
       status: status.value,
@@ -122,7 +137,7 @@ const kolomExport = [
 ]
 
 const ambilSemuaDataExport = async () => {
-  const res = await axios.get('http://localhost:3000/api/pengembalian', {
+  const res = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/pengembalian`, {
     params: {
       search: search.value,
       status: status.value,
@@ -250,7 +265,7 @@ const bukaDetailHariIni = async () => {
   showDetailHariIni.value = true
   loadingHariIni.value = true
   try {
-    const res = await axios.get('http://localhost:3000/api/pengembalian', {
+    const res = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/pengembalian`, {
       params: {
         search: '',
         status: 'Semua',
@@ -274,7 +289,7 @@ const tutupDetailHariIni = () => {
 }
 
 const ambilSemuaPengembalian = async () => {
-  const res = await axios.get('http://localhost:3000/api/pengembalian', {
+ const res = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/pengembalian`, {
     params: {
       search: '',
       status: 'Semua',
@@ -592,11 +607,25 @@ watch(page, fetchData)
           </svg>
         </button>
       </div>
-      <select v-model="limit" class="select">
-        <option :value="5">5 / halaman</option>
-        <option :value="10">10 / halaman</option>
-        <option :value="20">20 / halaman</option>
-      </select>
+      <div class="perpage-dropdown">
+        <button
+          type="button"
+          class="perpage-dropdown-btn"
+          @click.stop="perPageMenuOpen = !perPageMenuOpen"
+        >
+          {{ labelPerPageTerpilih() }}
+        </button>
+        <ul v-if="perPageMenuOpen" class="perpage-dropdown-list">
+          <li
+            v-for="n in [5, 10, 20]"
+            :key="n"
+            :class="{ aktif: limit === n }"
+            @click="pilihPerPage(n)"
+          >
+            {{ n }} / halaman
+          </li>
+        </ul>
+      </div>
     </div>
 
     <div
@@ -672,161 +701,118 @@ watch(page, fetchData)
       </div>
     </div>
 
-    <!-- (2) PENGEMBALIAN HARI INI -->
-    <div
-      v-if="showDetailHariIni"
-      class="modal-overlay"
-      @click.self="tutupDetailHariIni"
-    >
-      <div class="modal-hari-ini" role="dialog">
-        <div class="modal-header">
-          <div>
-            <h2>Pengembalian Hari Ini</h2>
-            <p class="subtitle">{{ tanggalHariIni }} · {{ dataHariIni.length }} buku</p>
-          </div>
-          <button class="modal-close" type="button" @click="tutupDetailHariIni">×</button>
+<!-- (2) PENGEMBALIAN HARI INI -->
+<div
+  v-if="showDetailHariIni"
+  class="modal-overlay"
+  @click.self="tutupDetailHariIni"
+>
+  <div class="modal-export modal-detail-compact" role="dialog">
+    <div class="modal-header">
+      <div>
+        <h2>Pengembalian Hari Ini</h2>
+        <p class="subtitle">{{ tanggalHariIni }} · {{ dataHariIni.length }} buku</p>
+      </div>
+      <button class="modal-close" type="button" @click="tutupDetailHariIni">×</button>
+    </div>
+
+    <div class="modal-body modal-body-scroll-compact">
+      <p v-if="loadingHariIni" class="empty">Memuat data...</p>
+      <p v-else-if="dataHariIni.length === 0" class="empty">
+        Belum ada buku yang dikembalikan hari ini.
+      </p>
+
+      <div
+        v-for="row in dataHariIni"
+        v-else
+        :key="row.id"
+        class="detail-row"
+      >
+        <div class="detail-row-main">
+          <p class="nama">{{ row.judulBuku }}</p>
+          <p class="kelas">{{ row.namaPeminjam }} · {{ row.kelasPeminjam || '-' }}</p>
         </div>
-
-        <div class="modal-body modal-body-scroll">
-          <p v-if="loadingHariIni" class="empty">Memuat data...</p>
-          <p v-else-if="dataHariIni.length === 0" class="empty">
-            Belum ada buku yang dikembalikan hari ini.
-          </p>
-
-          <article
-            v-for="row in dataHariIni"
-            v-else
-            :key="row.id"
-            class="hari-ini-item"
-          >
-            <div class="hari-ini-top">
-              <div>
-                <p class="nama">{{ row.judulBuku }}</p>
-                <p class="kelas">{{ row.penulisBuku }}</p>
-              </div>
-              <span :class="['badge', row.status === 'Terlambat' ? 'badge-red' : 'badge-green']">
-                {{ row.status }}
-              </span>
-            </div>
-
-            <div class="hari-ini-grid">
-              <div>
-                <p class="mini-label">Peminjam</p>
-                <p>{{ row.namaPeminjam }}</p>
-              </div>
-              <div>
-                <p class="mini-label">Kelas</p>
-                <p>{{ row.kelasPeminjam || '-' }}</p>
-              </div>
-              <div>
-                <p class="mini-label">Tanggal Pinjam</p>
-                <p>{{ formatTanggal(row.tanggalPinjam) }}</p>
-              </div>
-              <div>
-                <p class="mini-label">Batas Kembali</p>
-                <p>{{ formatTanggal(row.batasKembali) }}</p>
-              </div>
-              <div>
-                <p class="mini-label">Dikembalikan</p>
-                <p>{{ formatTanggal(row.tanggalDikembalikan) }}</p>
-              </div>
-              <div>
-                <p class="mini-label">Keterlambatan</p>
-                <p>{{ row.keterlambatan || '-' }}</p>
-              </div>
-              <div>
-                <p class="mini-label">Denda</p>
-                <p>{{ formatRp(row.denda) }}</p>
-              </div>
-            </div>
-          </article>
-        </div>
+        <span :class="['badge', row.status === 'Terlambat' ? 'badge-red' : 'badge-green']">
+          {{ row.status }}
+        </span>
       </div>
     </div>
+  </div>
+</div>
 
     <!-- (3) TEPAT WAKTU -->
-    <div
-      v-if="showDetailTepatWaktu"
-      class="modal-overlay"
-      @click.self="tutupDetailTepatWaktu"
-    >
-      <div class="modal-hari-ini" role="dialog">
-        <div class="modal-header">
-          <div>
-            <h2>Pengembalian Tepat Waktu</h2>
-            <p class="subtitle">{{ dataTepatWaktu.length }} data telah ditemukan</p>
-          </div>
-          <button class="modal-close" type="button" @click="tutupDetailTepatWaktu">×</button>
-        </div>
-
-        <div class="modal-body modal-body-scroll">
-          <p v-if="loadingTepatWaktu" class="empty">Memuat data...</p>
-          <p v-else-if="dataTepatWaktu.length === 0" class="empty">
-            Belum ada pengembalian tepat waktu.
-          </p>
-
-          <article
-            v-for="row in dataTepatWaktu"
-            v-else
-            :key="row.id"
-            class="hari-ini-item"
-          >
-            <p class="nama">{{ row.namaPeminjam }}</p>
-            <p class="kelas">{{ row.kelasPeminjam || '-' }}</p>
-            <p class="judul-buku">{{ row.judulBuku }}</p>
-            <p class="kelas">{{ rentangPinjam(row) }}</p>
-            <p class="denda-teks">Denda : {{ formatRp(0) }}</p>
-          </article>
-        </div>
+<div
+  v-if="showDetailTepatWaktu"
+  class="modal-overlay"
+  @click.self="tutupDetailTepatWaktu"
+>
+  <div class="modal-export modal-detail-compact" role="dialog">
+    <div class="modal-header">
+      <div>
+        <h2>Pengembalian Tepat Waktu</h2>
+        <p class="subtitle">{{ dataTepatWaktu.length }} data telah ditemukan</p>
       </div>
+      <button class="modal-close" type="button" @click="tutupDetailTepatWaktu">×</button>
     </div>
 
-    <!-- (4) TERLAMBAT -->
-    <div
-      v-if="showDetailTerlambat"
-      class="modal-overlay"
-      @click.self="tutupDetailTerlambat"
-    >
-      <div class="modal-hari-ini" role="dialog">
-        <div class="modal-header">
-          <div>
-            <h2>Pengembalian Terlambat</h2>
-            <p class="subtitle">{{ dataTerlambat.length }} data telah ditemukan</p>
-          </div>
-          <button class="modal-close" type="button" @click="tutupDetailTerlambat">×</button>
-        </div>
+    <div class="modal-body modal-body-scroll-compact">
+      <p v-if="loadingTepatWaktu" class="empty">Memuat data...</p>
+      <p v-else-if="dataTepatWaktu.length === 0" class="empty">
+        Belum ada pengembalian tepat waktu.
+      </p>
 
-        <div class="modal-body modal-body-scroll">
-          <p v-if="loadingTerlambat" class="empty">Memuat data...</p>
-          <p v-else-if="dataTerlambat.length === 0" class="empty">
-            Tidak ada data pengembalian terlambat.
-          </p>
-
-          <div v-else class="table-wrap table-in-modal">
-            <table>
-              <thead>
-                <tr>
-                  <th>Nama</th>
-                  <th>Kelas</th>
-                  <th>Judul</th>
-                  <th>Keterlambatan</th>
-                  <th>Denda</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in dataTerlambat" :key="row.id">
-                  <td>{{ row.namaPeminjam }}</td>
-                  <td>{{ row.kelasPeminjam || '-' }}</td>
-                  <td>{{ row.judulBuku }}</td>
-                  <td>{{ parseHariTerlambat(row) }} hari</td>
-                  <td>{{ formatRp(hitungDenda(row)) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+      <div
+        v-for="row in dataTepatWaktu"
+        v-else
+        :key="row.id"
+        class="detail-row"
+      >
+        <div class="detail-row-main">
+          <p class="nama">{{ row.namaPeminjam }}</p>
+          <p class="kelas">{{ row.judulBuku }} · {{ rentangPinjam(row) }}</p>
         </div>
+        <span class="denda-teks">{{ formatRp(0) }}</span>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- (4) TERLAMBAT -->
+<div
+  v-if="showDetailTerlambat"
+  class="modal-overlay"
+  @click.self="tutupDetailTerlambat"
+>
+  <div class="modal-export modal-detail-compact" role="dialog">
+    <div class="modal-header">
+      <div>
+        <h2>Pengembalian Terlambat</h2>
+        <p class="subtitle">{{ dataTerlambat.length }} data telah ditemukan</p>
+      </div>
+      <button class="modal-close" type="button" @click="tutupDetailTerlambat">×</button>
+    </div>
+
+    <div class="modal-body modal-body-scroll-compact">
+      <p v-if="loadingTerlambat" class="empty">Memuat data...</p>
+      <p v-else-if="dataTerlambat.length === 0" class="empty">
+        Tidak ada data pengembalian terlambat.
+      </p>
+
+      <div
+        v-for="row in dataTerlambat"
+        v-else
+        :key="row.id"
+        class="detail-row"
+      >
+        <div class="detail-row-main">
+          <p class="nama">{{ row.namaPeminjam }}</p>
+          <p class="kelas">{{ row.judulBuku }} · {{ parseHariTerlambat(row) }} hari terlambat</p>
+        </div>
+        <span class="denda-teks">{{ formatRp(hitungDenda(row)) }}</span>
+      </div>
+    </div>
+  </div>
+</div>
   </div>
 </template>
 
@@ -1061,6 +1047,12 @@ watch(page, fetchData)
     border-radius: 8px; 
     padding: 8px 10px; 
     font-size: 13px; 
+    direction: rtl;
+}
+
+.select option {
+    direction: ltr;        /* ⬅️ isi opsi tetap normal kiri-ke-kanan */
+    text-align: left;
 }
 
 .status-dropdown {
@@ -1105,6 +1097,52 @@ watch(page, fetchData)
 
 .status-dropdown-list li:hover,
 .status-dropdown-list li.aktif {
+  background: #dbeafe;
+}
+
+.perpage-dropdown {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.perpage-dropdown-btn {
+  font-family: inherit;
+  font-size: 13px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 28px 8px 10px;
+  color: #000;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 8px center;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Buka ke ATAS supaya tidak menutupi tabel */
+.perpage-dropdown-list {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  right: auto;
+  min-width: 100%;
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  z-index: 40;
+}
+
+.perpage-dropdown-list li {
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.perpage-dropdown-list li:hover,
+.perpage-dropdown-list li.aktif {
   background: #dbeafe;
 }
 
@@ -1319,7 +1357,47 @@ thead th:nth-child(2) {
   font-size: 13px;
   color: #374151;
 }
+.modal-detail-compact {
+  width: 100%;
+  max-width: 460px;
+}
 
+.modal-body-scroll-compact {
+  overflow-y: auto;
+  max-height: 60vh;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.detail-row-main .nama {
+  margin: 0;
+  font-weight: 600;
+  font-size: 13px;
+  color: #111827;
+}
+
+.detail-row-main .kelas {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.detail-row .denda-teks {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+}
 .modal-hari-ini {
   width: min(920px, 96vw);
   max-height: 85vh;
@@ -1614,20 +1692,72 @@ thead th:nth-child(2) {
     max-width: 120px;
   }
 
-  /* footer & pagination */
+   /* ===== FOOTER & PAGINATION MOBILE ===== */
+    /* ===== FOOTER & PAGINATION MOBILE (SEJAJAR) ===== */
   .footer {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;       /* Susun horizontal */
+    flex-wrap: wrap;           /* Izinkan turun baris jika sempit */
+    justify-content: center;   /* Pusatkan semua elemen */
+    align-items: center;
     gap: 10px;
     text-align: center;
+    padding: 16px 12px;
+  }
+
+  .footer > span {
+    width: 100%;               /* Teks ambil satu baris penuh (baris 1) */
+    text-align: center;
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 4px;
   }
 
   .pagination {
+    display: flex;
+    flex-direction: row;
     justify-content: center;
+    align-items: center;
+    gap: 6px;
+    width: auto;               /* Ukuran normal */
   }
 
-  .footer .select {
+  .pagination button {
+    min-width: 32px;
+    height: 32px;
+    padding: 4px 8px;
+  }
+
+  /* Dropdown "5 / halaman" — card rapi sejajar dengan tombol */
+  .footer > .select,
+  .footer .select.select-sm {
+    width: auto !important;
+    min-width: 120px !important;
+    max-width: 160px !important;
+    margin: 0 !important;      /* Hilangkan margin auto */
+    display: inline-block !important;
+    border: 1px solid #e5e7eb !important;
+    border-radius: 8px !important;
+    padding: 8px 12px !important;
+    background-color: #fff !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) !important;
+    font-size: 13px !important;
+    box-sizing: border-box !important;
+  }
+
+    .footer .perpage-dropdown {
     width: 100%;
+  }
+
+  .perpage-dropdown-btn {
+    width: 100%;
+    text-align: left;
+  }
+
+  .perpage-dropdown-list {
+    left: 0;
+    right: 0;
+    width: 100%;
+    min-width: 0;
   }
 }
 </style>

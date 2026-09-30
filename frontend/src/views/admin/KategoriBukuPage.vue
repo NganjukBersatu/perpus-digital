@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 
 
-const API_URL = 'http://localhost:3000/api/kategori'
+const API_URL = `${import.meta.env.VITE_API_BASE_URL}/kategori`
 
 const kategoriList = ref([])
 const isLoading = ref(false)
@@ -20,6 +20,9 @@ const showDeleteModal = ref(false)
 const itemToDelete = ref(null)
 const isDeleting = ref(false)
 
+const currentPage = ref(1)
+const perPage = ref(5)
+
 const filteredKategori = computed(() => {
   const q = searchQuery.value.toLowerCase().trim()
   if (!q) return kategoriList.value
@@ -28,6 +31,25 @@ const filteredKategori = computed(() => {
     (k.deskripsi && k.deskripsi.toLowerCase().includes(q))
   )
 })
+
+const totalData = computed(() => filteredKategori.value.length)
+const totalPages = computed(() => Math.max(1, Math.ceil(totalData.value / perPage.value)))
+
+const pagedKategori = computed(() => {
+  const start = (currentPage.value - 1) * perPage.value
+  return filteredKategori.value.slice(start, start + perPage.value)
+})
+
+const rangeText = computed(() => {
+  if (totalData.value === 0) return 'Menampilkan 0 data'
+  const start = (currentPage.value - 1) * perPage.value + 1
+  const end = Math.min(currentPage.value * perPage.value, totalData.value)
+  return `Menampilkan ${start} - ${end} dari ${totalData.value} data`
+})
+
+function resetPage() {
+  currentPage.value = 1
+}
 
 function tampilkanPesan(tipe, pesan) {
   if (tipe === 'error') {
@@ -180,6 +202,7 @@ onMounted(ambilData)
           v-model="searchQuery"
           class="search"
           placeholder="Cari nama kategori..."
+          @input="resetPage"
         />
       </div>
     </div>
@@ -196,27 +219,61 @@ onMounted(ambilData)
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(item, i) in filteredKategori" :key="item.id">
-            <td>{{ i + 1 }}</td>
-            <td class="judul">{{ item.nama }}</td>
-            <td>{{ item.deskripsi || '-' }}</td>
-            <td class="aksi-cell">
-              <button class="btn-aksi" @click="bukaModalEdit(item)">Edit</button>
-              <button class="btn-aksi danger" @click="bukaModalHapus(item)">Hapus</button>
-            </td>
-          </tr>
+  <tr v-for="(item, i) in pagedKategori" :key="item.id">
+    <td>{{ (currentPage - 1) * perPage + i + 1 }}</td>
+    <td class="judul">{{ item.nama }}</td>
+    <td>{{ item.deskripsi || '-' }}</td>
+    <td class="aksi-cell">
+      <button class="btn-aksi" @click="bukaModalEdit(item)">Edit</button>
+      <button class="btn-aksi danger" @click="bukaModalHapus(item)">Hapus</button>
+    </td>
+  </tr>
 
-          <tr v-if="!isLoading && filteredKategori.length === 0">
-            <td colspan="4" class="empty">
-              {{ searchQuery ? 'Tidak ada kategori yang cocok.' : 'Belum ada kategori. Tambahkan kategori pertama.' }}
-            </td>
-          </tr>
+  <tr v-if="!isLoading && filteredKategori.length === 0">
+    <td colspan="4" class="empty">
+      {{ searchQuery ? 'Tidak ada kategori yang cocok.' : 'Belum ada kategori. Tambahkan kategori pertama.' }}
+    </td>
+  </tr>
 
-          <tr v-if="isLoading">
-            <td colspan="4" class="empty">Memuat data...</td>
-          </tr>
-        </tbody>
+  <tr v-if="isLoading">
+    <td colspan="4" class="empty">Memuat data...</td>
+  </tr>
+</tbody>
       </table>
+    </div>
+
+    <div class="pagination">
+      <span class="range">{{ rangeText }}</span>
+
+      <div class="pages">
+        <button type="button" :disabled="currentPage === 1" @click="currentPage--">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M15 6l-6 6 6 6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+
+        <button
+          v-for="n in totalPages"
+          :key="n"
+          type="button"
+          class="page-num"
+          :class="{ active: currentPage === n }"
+          @click="currentPage = n"
+        >
+          {{ n }}
+        </button>
+
+        <button type="button" :disabled="currentPage === totalPages" @click="currentPage++">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </div>
+
+      <select v-model.number="perPage" class="select select-sm" @change="resetPage">
+        <option :value="5">5 / halaman</option>
+        <option :value="10">10 / halaman</option>
+      </select>
     </div>
 
     <!-- Modal Tambah / Edit -->
@@ -467,6 +524,42 @@ tbody tr:hover {
   width: 16px;
   height: 16px;
   display: block;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 4px 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+.pages { display: flex; align-items: center; gap: 6px; }
+.pages button {
+  min-width: 32px; height: 32px; border: 0; background: transparent;
+  border-radius: 8px; cursor: pointer; color: #4b5563;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.pages .page-num.active { background: #5b4dff; color: #fff; }
+.pages button:disabled { opacity: 0.4; cursor: default; }
+.select-sm {
+  min-width: 110px;
+  width: auto;
+  /* Tambahkan ini untuk membuat efek card */
+  border: 1px solid #e5e7eb;  /* Border tipis abu-abu */
+  border-radius: 8px;         /* Sudut melengkung */
+  background-color: #ffffff;  /* Background putih */
+  padding: 8px 12px;          /* Jarak teks ke pinggir */
+  font-size: 13px;            /* Ukuran font */
+  color: #000000;             /* Warna teks */
+  outline: none;              /* Hilangkan garis biru saat diklik */
+  cursor: pointer;            /* Kursor berubah jadi tangan */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06); /* Sedikit bayangan (opsional) */
+}
+
+.select-sm:focus {
+  border-color: #5b4dff;      /* Warna border saat diklik */
 }
 
 /* ===== Modal ===== */
@@ -737,6 +830,33 @@ tbody tr:hover {
   .btn-primary,
   .btn-danger {
     padding: 10px 16px;
+  }
+
+  .pagination {
+    flex-direction: row; 
+    flex-wrap: wrap;     
+    justify-content: center; 
+    align-items: center;
+    gap: 12px;
+    padding-top: 16px;
+  }
+
+  .range {
+    width: 100%;         
+    text-align: center;
+    font-size: 12px;
+    margin-bottom: 4px;  
+  }
+
+  .pages {
+    justify-content: center;
+    width: auto;         
+  }
+
+  .select-sm {
+    width: auto;         
+    min-width: 110px;    
+    margin-left: 0;      
   }
 }
 

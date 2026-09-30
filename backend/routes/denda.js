@@ -3,10 +3,12 @@ const router = express.Router()
 const db = require('../db')   
 const { peminjaman, eksemplarBuku, anggota, buku } = require('../db/schema')
 const { eq, and, gt, or, ilike, sql } = require('drizzle-orm')
+const { wajibAdmin } = require('./auth')
+const { tanggalHariIniLokal } = require('../utils/tanggal')
 
 // GET /api/denda?search=&status=
 // Menampilkan semua transaksi peminjaman yang punya denda > 0
-router.get('/', async (req, res) => {
+router.get('/', wajibAdmin, async (req, res) => {
   try {
     const { search = '', status = 'Semua' } = req.query
 
@@ -65,10 +67,28 @@ router.get('/', async (req, res) => {
 
 // PATCH /api/denda/:id/bayar
 // Menandai denda sebagai sudah dibayar
-router.patch('/:id/bayar', async (req, res) => {
+router.patch('/:id/bayar', wajibAdmin, async (req, res) => {
   try {
     const { id } = req.params
-    const today = new Date().toISOString().slice(0, 10)
+    if (!Number.isInteger(Number(id))) {
+      return res.status(400).json({ message: 'ID tidak valid' })
+    }
+    const today = tanggalHariIniLokal()
+
+    const [cek] = await db
+      .select({ denda: peminjaman.denda, statusDenda: peminjaman.statusDenda })
+      .from(peminjaman)
+      .where(eq(peminjaman.id, Number(id)))
+
+    if (!cek) {
+      return res.status(404).json({ message: 'Data peminjaman tidak ditemukan' })
+    }
+    if (!cek.denda || cek.denda <= 0) {
+      return res.status(400).json({ message: 'Peminjaman ini tidak memiliki denda' })
+    }
+    if (cek.statusDenda === 'sudah_dibayar') {
+      return res.status(400).json({ message: 'Denda ini sudah ditandai dibayar' })
+    }
 
     await db
       .update(peminjaman)

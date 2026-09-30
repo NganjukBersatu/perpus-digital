@@ -17,21 +17,45 @@ export function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+// helper supaya Content-Type tidak lupa disertakan saat POST/PUT JSON
+export function jsonHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    ...authHeaders(),
+  }
+}
+
+// key eksplisit yang memang dipakai aplikasi
+const AUTH_KEYS = [
+  'token',
+  'accessToken',
+  'refreshToken',
+  'user',
+  'admin',
+  'role',
+  'auth',
+  'perpus_akun_admin',
+]
+
+function bersihkanStorage(storage) {
+  if (!storage) return
+  AUTH_KEYS.forEach((key) => storage.removeItem(key))
+}
+
 export function logoutUser(router) {
-  const keys = [
-    'token',
-    'accessToken',
-    'user',
-    'admin',
-    'role',
-    'auth',
-    'perpus_akun_admin'
-  ]
+  bersihkanStorage(localStorage)
+  bersihkanStorage(sessionStorage)
 
-  keys.forEach((key) => {
-    localStorage.removeItem(key)
-    sessionStorage.removeItem(key)
-  })
+  // reset state global (Pinia/Vuex) kalau ada, tanpa hard-import
+  // supaya file ini tetap bisa dipakai di project yang tidak pakai store.
+  try {
+    // event ini bisa didengarkan oleh store / komponen lain
+    window.dispatchEvent(new Event('auth:logout'))
+  } catch {
+    // SSR / non-browser, abaikan
+  }
 
-  router.push('/')
+  if (router && typeof router.push === 'function') {
+    router.push('/')
+  }
 }

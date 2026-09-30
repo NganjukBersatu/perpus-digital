@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, watch, computed } from 'vue'
+import { authHeaders } from '@/utils/auth'
 
 
 const now = new Date()
@@ -118,7 +119,7 @@ const dikembalikanPoints = computed(() =>
 async function muatStatistikPeminjaman() {
   try {
     const res = await fetch(
-      `http://localhost:3000/api/dashboard/statistik-peminjaman?range=${selectedRange.value}`
+      `${import.meta.env.VITE_API_BASE_URL}/dashboard/statistik-peminjaman?range=${selectedRange.value}`
     )
     const data = await res.json()
 
@@ -157,10 +158,18 @@ let searchBukuTerpopulerTimeout = null
 
 async function fetchKategoriBuku() {
   try {
-    const res = await fetch('http://localhost:3000/api/buku/kategori')
-    kategoriBukuList.value = await res.json()
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/buku/kategori`)
+    const data = await res.json()
+
+    if (!res.ok || !Array.isArray(data)) {
+      console.error('Response kategori tidak valid:', data)
+      kategoriBukuList.value = []
+      return
+    }
+    kategoriBukuList.value = data
   } catch (err) {
     console.error('Gagal mengambil kategori buku', err)
+    kategoriBukuList.value = []
   }
 }
 
@@ -171,10 +180,18 @@ async function fetchBukuTerpopulerLengkap() {
       kategori: kategoriFilterBuku.value,
       search: searchBukuTerpopuler.value,
     })
-    const res = await fetch(`http://localhost:3000/api/dashboard/buku-terpopuler-lengkap?${params}`)
-    bukuTerpopulerLengkap.value = await res.json()
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/dashboard/buku-terpopuler-lengkap?${params}`)
+    const data = await res.json()
+
+    if (!res.ok || !Array.isArray(data)) {
+      console.error('Response tidak valid:', data)
+      bukuTerpopulerLengkap.value = []
+      return
+    }
+    bukuTerpopulerLengkap.value = data
   } catch (err) {
     console.error('Gagal mengambil buku terpopuler lengkap', err)
+    bukuTerpopulerLengkap.value = []
   }
 }
 
@@ -234,7 +251,7 @@ const tampilkanTotalBelumDikembalikan = ref(false)
 
 async function fetchTotalDenda() {
   try {
-    const res = await fetch('http://localhost:3000/api/denda')
+const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/denda`)
     const data = await res.json()
     totalDenda.value = `Rp${(data.totalBelumDibayar || 0).toLocaleString('id-ID')}`
   } catch (err) {
@@ -244,7 +261,7 @@ async function fetchTotalDenda() {
 
 async function fetchStats() {
   try {
-    const res = await fetch('http://localhost:3000/api/dashboard/stats')
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/dashboard/stats`)
     if (!res.ok) throw new Error('response not ok')
     const data = await res.json()
 
@@ -261,8 +278,8 @@ async function fetchStats() {
 async function fetchPeminjamanTerbaru(hari) {
   try {
     const url = hari
-      ? `http://localhost:3000/api/dashboard/peminjaman-terbaru?hari=${hari}`
-      : 'http://localhost:3000/api/dashboard/peminjaman-terbaru'
+      ? `${import.meta.env.VITE_API_BASE_URL}/dashboard/peminjaman-terbaru?hari=${hari}`
+      : `${import.meta.env.VITE_API_BASE_URL}/dashboard/peminjaman-terbaru`
     const res = await fetch(url)
     peminjamanTerbaru.value = await res.json()
   } catch (err) {
@@ -272,7 +289,7 @@ async function fetchPeminjamanTerbaru(hari) {
 
 async function fetchPeminjamanBelumKembali() {
   try {
-    const res = await fetch('http://localhost:3000/api/dashboard/peminjaman-belum-kembali')
+   const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/dashboard/peminjaman-belum-kembali`)
     peminjamanBelumKembali.value = await res.json()
   } catch (err) {
     console.error('Gagal mengambil peminjaman belum kembali', err)
@@ -281,7 +298,7 @@ async function fetchPeminjamanBelumKembali() {
 
 async function fetchBukuTerpopuler() {
   try {
-    const res = await fetch('http://localhost:3000/api/dashboard/buku-terpopuler')
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/dashboard/buku-terpopuler`)
     bukuTerpopuler.value = await res.json()
   } catch (err) {
     console.error('Gagal mengambil buku terpopuler', err)
@@ -293,7 +310,7 @@ const tampilkanJatuhTempoHariIni = ref(false)
 
 async function fetchPengingat() {
   try {
-    const res = await fetch('http://localhost:3000/api/dashboard/pengingat')
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/dashboard/pengingat`, { headers: authHeaders() })
     const data = await res.json()
     pengingat.value = data.daftar
     totalBelumDikembalikan.value = data.totalBelumDikembalikan
@@ -305,7 +322,7 @@ async function fetchPengingat() {
 
 async function kembalikanBuku(id) {
   try {
-    const res = await fetch(`http://localhost:3000/api/peminjaman/${id}/kembalikan`, {
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/peminjaman/${id}/kembalikan`, {
       method: 'PATCH'
     })
     if (!res.ok) {
@@ -522,25 +539,33 @@ onMounted(async () => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(row, i) in peminjamanBelumKembaliFiltered" :key="row.id">
-              <td>{{ i + 1 }}</td>
-              <td>
-                <strong>{{ row.nama }}</strong><br />
-                <span class="muted">{{ row.kelas }}</span>
-              </td>
-              <td>{{ row.judulBuku }}</td>
-              <td>{{ row.tanggalPinjam }}</td>
-              <td>{{ row.tanggalKembali }}</td>
-              <td>{{ row.sisaHari }}</td>
-              <td>
-                <span class="badge" :class="row.status === 'Terlambat' ? 'badge-red' : 'badge-blue'">
-                  {{ row.status }}
-                </span>
-              </td>
-              <td>{{ row.denda > 0 ? `Rp${row.denda.toLocaleString('id-ID')}` : '-' }}</td>
-              <td><button class="kembali-btn" @click="kembalikanBuku(row.id)">Kembali</button></td>
-            </tr>
-          </tbody>
+  <tr v-for="(row, i) in peminjamanBelumKembaliFiltered" :key="row.id">
+    <td>{{ i + 1 }}</td>
+    <td>
+      <strong>{{ row.nama }}</strong><br />
+      <span class="muted">{{ row.kelas }}</span>
+    </td>
+    <td>{{ row.judulBuku }}</td>
+    <td>{{ row.tanggalPinjam }}</td>
+    <td>{{ row.tanggalKembali }}</td>
+    <td>{{ row.sisaHari }}</td>
+    <td>
+      <span class="badge" :class="row.status === 'Terlambat' ? 'badge-red' : 'badge-blue'">
+        {{ row.status }}
+      </span>
+    </td>
+    <td>{{ row.denda > 0 ? `Rp${row.denda.toLocaleString('id-ID')}` : '-' }}</td>
+    <td><button class="kembali-btn" @click="kembalikanBuku(row.id)">Kembali</button></td>
+  </tr>
+
+  <tr v-if="peminjamanBelumKembaliFiltered.length === 0">
+    <td colspan="9" class="muted" style="text-align:center; padding: 20px;">
+      {{ peminjamanBelumKembali.length === 0
+        ? 'Tidak ada peminjaman yang belum dikembalikan'
+        : 'Tidak ada data yang cocok dengan pencarian' }}
+    </td>
+  </tr>
+</tbody>
         </table>
       </section>
 

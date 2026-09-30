@@ -18,6 +18,9 @@ const pinjamanAktif = ref([])
 const stats = ref({ sedangDipinjam: 0, hampirJatuhTempo: 0, sudahDikembalikan: 0 })
 const isLoading = ref(true)
 const errorMessage = ref('')
+const showConfirmModal = ref(false)
+const bukuToReturn = ref(null)
+const isReturning = ref(false)
 
 function authHeaders() {
   const token = localStorage.getItem('token')
@@ -74,9 +77,22 @@ function formatTanggal(tanggal) {
   })
 }
 
-async function kembalikan(item) {
-  if (!confirm(`Yakin ingin mengembalikan "${item.judul}"?`)) return
+function kembalikan(item) {
+  bukuToReturn.value = item
+  showConfirmModal.value = true
+}
 
+function batalKembalikan() {
+  if (isReturning.value) return
+  showConfirmModal.value = false
+  bukuToReturn.value = null
+}
+
+async function konfirmasiKembalikan() {
+  const item = bukuToReturn.value
+  if (!item || isReturning.value) return
+
+  isReturning.value = true
   try {
     const res = await fetch(`${API_BASE}/pengembalian/${item.id}`, {
       method: 'PATCH',
@@ -91,6 +107,10 @@ async function kembalikan(item) {
   } catch (err) {
     console.error(err)
     alert('Gagal mengembalikan buku, coba lagi.')
+  } finally {
+    isReturning.value = false
+    showConfirmModal.value = false
+    bukuToReturn.value = null
   }
 }
 
@@ -217,6 +237,29 @@ function goToPeminjaman() {
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+        <div v-if="showConfirmModal" class="modal-overlay" @click.self="batalKembalikan">
+      <div class="confirm-box">
+        <div class="confirm-icon">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 14L4 9l5-5" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M4 9h10a6 6 0 0 1 0 12h-3" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+
+        <h3>Kembalikan Buku?</h3>
+        <p>
+          Yakin ingin mengembalikan
+          <strong>"{{ bukuToReturn?.judul }}"</strong>?
+        </p>
+
+        <div class="confirm-actions">
+          <button type="button" class="btn-secondary" :disabled="isReturning" @click="batalKembalikan">Batal</button>
+          <button type="button" class="btn-hapus-confirm" :disabled="isReturning" @click="konfirmasiKembalikan">
+            {{ isReturning ? 'Memproses...' : 'Ya, Kembalikan' }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -425,6 +468,53 @@ function goToPeminjaman() {
   cursor: pointer;
 }
 
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+  display: flex; align-items: center; justify-content: center; z-index: 100;
+}
+.confirm-box {
+  background: #fff;
+  border-radius: 14px;
+  width: 380px;
+  max-width: 92%;
+  padding: 28px 24px 24px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+  text-align: center;
+}
+.confirm-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #fee2e2;
+  color: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+.confirm-icon .icon-svg { width: 24px; height: 24px; }
+.confirm-box h3 { font-size: 16px; font-weight: 700; color: #1f2937; margin: 0 0 8px; }
+.confirm-box p { font-size: 13px; color: #6b7280; margin: 0 0 20px; line-height: 1.5; }
+.confirm-box p strong { color: #374151; }
+.confirm-actions { display: flex; justify-content: center; gap: 10px; }
+.btn-secondary {
+  background: #fff; color: #374151; border: 1px solid #e3e9f2; border-radius: 8px;
+  padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.btn-hapus-confirm {
+  border: 0;
+  background: #ef4444;
+  color: #fff;
+  border-radius: 8px;
+  padding: 9px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-hapus-confirm:hover { background: #dc2626; }
+.btn-hapus-confirm:disabled,
+.btn-secondary:disabled { opacity: 0.6; cursor: not-allowed; }
+
 .empty-state {
   text-align: center;
   padding: 36px 16px;
@@ -574,7 +664,9 @@ function goToPeminjaman() {
   }
 
   .btn-return {
-    width: 100%;
+    width: 120px;
+    flex-shrink: 0; 
+    text-align: center;
   }
 }
 </style>

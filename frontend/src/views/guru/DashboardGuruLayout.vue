@@ -8,30 +8,21 @@ const icons = {
   userCircle: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M6.5 19.5a6.5 6.5 0 0 1 11 0"/></svg>`
 }
 
-const guru = ref({ id: null, nama: '', role: 'Guru', mapel: '', nip: '' })
+// Baca langsung saat setup (sama seperti layout siswa), bukan menunggu onMounted
+const userTersimpan = JSON.parse(localStorage.getItem('user') || '{}')
 
-onMounted(() => {
-  const token = localStorage.getItem('token')
-  const role = localStorage.getItem('role')
-  const userRaw = localStorage.getItem('user')
-
-  if (!token || role !== 'guru' || !userRaw) {
-    router.push('/')
-    return
-  }
-
-  const user = JSON.parse(userRaw)
-  guru.value = {
-    id: user.id,
-    nama: user.nama || 'Guru',
-    role: 'Guru',
-    mapel: user.mapel || '-',
-    nip: user.nip || '-'
-  }
-
-  // notifikasi baru bisa di-fetch setelah kita tahu id guru
-  fetchNotifikasi()
+const guru = ref({
+  id: userTersimpan.id || null,
+  nama: userTersimpan.nama || 'Guru',
+  role: 'Guru',
+  mapel: userTersimpan.mapel || '-',
+  nip: userTersimpan.nip || '-'
 })
+
+// Guard tetap dipakai, tapi hanya untuk redirect
+if (!localStorage.getItem('token') || localStorage.getItem('role') !== 'guru') {
+  router.replace('/')
+}
 
 function authHeaders() {
   const token = localStorage.getItem('token')
@@ -65,7 +56,7 @@ function simpanStatus(statusMap) {
 async function fetchNotifikasi() {
   notifLoading.value = true
   try {
-    const res = await fetch('http://localhost:3000/api/guru/notifikasi', {
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/guru/notifikasi`, {
       headers: { ...authHeaders() }
     })
     if (!res.ok) throw new Error('Gagal ambil notifikasi')
@@ -125,7 +116,7 @@ async function tandaiSudahDibaca(item) {
   simpanStatus(statusTersimpan)
 
   try {
-    await fetch(`http://localhost:3000/api/guru/notifikasi/${item.id}/baca`, {
+    await fetch(`${import.meta.env.VITE_API_BASE_URL}/guru/notifikasi/${item.id}/baca`, {
       method: 'PATCH',
       headers: { ...authHeaders() }
     })
@@ -141,15 +132,17 @@ function handleVisibilityChange() {
 let notifInterval = null
 
 onMounted(() => {
+  fetchNotifikasi()  
   window.addEventListener('click', closeNotifOutside)
+  window.addEventListener('click', closeSidebarOutside) 
   window.addEventListener('scroll', closeNotifOnScroll, { capture: true })
   document.addEventListener('visibilitychange', handleVisibilityChange)
-
   notifInterval = setInterval(fetchNotifikasi, 30000)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('click', closeNotifOutside)
+  window.removeEventListener('click', closeSidebarOutside)
   window.removeEventListener('scroll', closeNotifOnScroll, { capture: true })
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   if (notifInterval) clearInterval(notifInterval)
@@ -173,6 +166,16 @@ function toggleMobileMenu() {
 
 function closeMobileMenu() {
   mobileMenuOpen.value = false
+}
+
+function closeSidebarOutside(e) {
+  // Hanya berlaku di tampilan mobile
+  if (!window.matchMedia('(max-width: 768px)').matches) return
+
+  // Klik di dalam sidebar, tombol hamburger, atau modal: abaikan
+  if (e.target.closest('.sidebar, .hamburger, .modal-overlay')) return
+
+  if (mobileMenuOpen.value) closeMobileMenu()
 }
 
 const showLogoutModal = ref(false)
@@ -221,7 +224,7 @@ function konfirmasiLogout() {
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
               <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
-            <span class="nav-label">Beranda</span>
+            <span class="nav-label">Dashboard</span>
           </span>
         </router-link>
 
@@ -429,6 +432,7 @@ function konfirmasiLogout() {
   font-family: 'Segoe UI', sans-serif;
   background: #f4f6fb;
   overflow-x: hidden;
+  overflow-x: clip;   
 }
 
 .icon {
@@ -454,6 +458,7 @@ function konfirmasiLogout() {
   top: 0;
   left: 0;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   transition: transform 0.25s ease, width 0.25s ease;
   z-index: 50;
@@ -666,6 +671,8 @@ function konfirmasiLogout() {
 
 .btn-logout {
   margin-top: 12px; 
+  flex-shrink: 0;
+  margin-bottom: env(safe-area-inset-bottom, 0px);
   background: transparent; 
   border: none; 
   color: #cbd5e1;
@@ -692,12 +699,11 @@ function konfirmasiLogout() {
   flex-direction: column;
   min-width: 0;
   margin-left: 260px;
+  padding-top: 64px; 
   transition: margin-left 0.25s ease;
 }
 
-.main-expanded {
-  margin-left: 76px;
-}
+.main-expanded .topbar { left: 76px; }
 
 .page-wrap {
   flex: 1;
@@ -712,8 +718,10 @@ function konfirmasiLogout() {
   align-items: center;
   gap: 12px;
   border-bottom: 1px solid #e5e7eb;
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 260px;  
+  right: 0;
   z-index: 40;
 }
 
@@ -1034,6 +1042,7 @@ function konfirmasiLogout() {
   .topbar {
     padding: 12px 16px;
     gap: 10px;
+    left: 0 !important;
   }
 
   .hamburger {

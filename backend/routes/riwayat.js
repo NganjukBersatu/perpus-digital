@@ -3,9 +3,10 @@ const router = express.Router()
 const db = require('../db')
 const { peminjaman, anggota, eksemplarBuku, buku } = require('../db/schema')
 const { eq, desc } = require('drizzle-orm')
+const { wajibAdmin } = require('./auth')
 
 // GET semua riwayat aktivitas (pinjam, kembali, telat, bayar denda)
-router.get('/', async (req, res) => {
+router.get('/', wajibAdmin, async (req, res) => {
   try {
     const rows = await db
       .select({

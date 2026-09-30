@@ -343,7 +343,7 @@ async function ambilDaftarKelas() {
 
 async function ambilDaftarGuru() {
   try {
-    const res = await fetch(`${API}/guru`, { headers: authHeaders() })
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/guru`)
     if (res.ok) daftarGuru.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -458,6 +458,7 @@ async function siapkanDaftarKamera() {
 }
 
 onMounted(async () => {
+  bisukanWarnZxing()
   siapkanDaftarKamera()
   ambilDaftarKelas()
   ambilDaftarGuru()
@@ -478,15 +479,31 @@ const zxingHints = new Map()
 zxingHints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.EAN_13])
 zxingHints.set(DecodeHintType.TRY_HARDER, true)
 const zxingReader = new BrowserMultiFormatReader(zxingHints, {
-  delayBetweenScanAttempts: 100,
+  delayBetweenScanAttempts: 250,
 })
+
+const gambarHints = new Map()
+gambarHints.set(DecodeHintType.POSSIBLE_FORMATS, [
+  BarcodeFormat.EAN_13,
+  BarcodeFormat.EAN_8,
+  BarcodeFormat.UPC_A,
+  BarcodeFormat.UPC_E,
+  BarcodeFormat.CODE_128,
+  BarcodeFormat.CODE_39,
+])
+gambarHints.set(DecodeHintType.TRY_HARDER, true)
+const zxingGambarReader = new BrowserMultiFormatReader(gambarHints)
 
 const warnAsli = console.warn
 
 function bisukanWarnZxing() {
+  if (console.warn !== warnAsli) return // sudah terpasang
   console.warn = (...args) => {
     const teks = args.map(String).join(" ")
-    if (teks.includes("non-ReaderException")) return
+    if (
+      teks.includes("non-ReaderException") ||
+      teks.includes("Could not create a Canvas element")
+    ) return
     warnAsli.apply(console, args)
   }
 }
@@ -503,6 +520,18 @@ function validasiChecksumEan13(kode) {
   return cekDigit === digits[12]
 }
 
+const tunggu = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+function bukaKamera(constraints) {
+  return zxingReader.decodeFromConstraints(
+    constraints,
+    scanVideoRef.value,
+    (result) => {
+      if (result) handleKodeTerbaca(result.getText())
+    }
+  )
+}
+
 async function mulaiPindai() {
   resetHasilPindai()
   riwayatDeteksi = []
@@ -513,57 +542,44 @@ async function mulaiPindai() {
   }
 
   isScanning.value = true
-  bisukanWarnZxing()
   statusScan.value = "Kamera aktif — arahkan ke barcode"
-  await new Promise((resolve) => setTimeout(resolve, 0))
+  await nextTick()
 
-  const constraintBelakang = {
-    video: {
-      facingMode: { ideal: "environment" },
-      width: { ideal: 1280 },
-      height: { ideal: 720 },
+  const pilihan = [
+    {
+      video: {
+        deviceId: { exact: selectedCameraId.value },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
     },
-  }
-  const constraintDeviceId = {
-    video: {
-      deviceId: { exact: selectedCameraId.value },
-      width: { ideal: 1280 },
-      height: { ideal: 720 },
+    {
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
     },
-  }
+  ]
 
-  // Kalau pengguna memilih kamera sendiri, hormati pilihannya.
-  // Kalau tidak, utamakan kamera belakang.
-  const urutan = userPilihKamera.value
-    ? [constraintDeviceId, constraintBelakang]
-    : [constraintBelakang, constraintDeviceId]
-
-  let berhasil = false
-  for (const constraint of urutan) {
-    try {
-      zxingControls = await zxingReader.decodeFromConstraints(
-        constraint,
-        scanVideoRef.value,
-        (result) => {
-          if (result) handleKodeTerbaca(result.getText())
-        }
-      )
-      mulaiFallbackOcr()
-    } catch (err2) {
-      console.error(err2)
-       pulihkanWarn()    
-      scanError.value =
-        "Kamera tidak bisa diakses. Izinkan kamera di browser, lalu coba lagi."
-      isScanning.value = false
+  let errTerakhir = null
+  for (let percobaan = 0; percobaan < 3; percobaan++) {
+    for (const constraints of pilihan) {
+      try {
+        zxingControls = await bukaKamera(constraints)
+        mulaiFallbackOcr()
+        return
+      } catch (err) {
+        errTerakhir = err
+        console.error("Gagal membuka kamera:", err?.name, err)
+      }
     }
+    if (errTerakhir?.name === "NotAllowedError") break
+    await tunggu(700)
   }
 
-  if (berhasil) {
-    mulaiFallbackOcr()
-  } else {
-    scanError.value = "Kamera tidak bisa diakses. Izinkan kamera di browser, lalu coba lagi."
-    isScanning.value = false
-  }
+  scanError.value = `Kamera tidak bisa diakses (${errTerakhir?.name || "error tidak diketahui"}). Pastikan kamera tidak dipakai aplikasi atau tab lain, lalu coba lagi.`
+  isScanning.value = false
 }
 
 function handleKodeTerbaca(kode) {
@@ -736,8 +752,7 @@ async function bacaIsbnDariKamera() {
 }
 
 async function hentikanPindai() {
-  hentikanFallbackOcr()
-   pulihkanWarn()   
+  hentikanFallbackOcr() 
   if (zxingControls) {
     zxingControls.stop()
     zxingControls = null
@@ -745,17 +760,24 @@ async function hentikanPindai() {
   isScanning.value = false
 }
 
+const sedangMencariBuku = ref(false)
+
 async function onScanSuccess(decodedText) {
   barcode.value = decodedText
+  sedangMencariBuku.value = true
   await hentikanPindai()
 
-  // Prefix 978/979 = Bookland EAN, ciri khas ISBN asli.
-  // Kode toko/penerbit lain (walau sama-sama 13 digit) tetap dicari lewat kolom barcode eksemplar.
-  if (/^(978|979)\d{10}$/.test(decodedText)) {
-    await cariBukuByIsbn(decodedText)
-    if (!bookData.value) bookNotFound.value = true
-  } else {
-    await cariBuku(decodedText)
+  try {
+    // Prefix 978/979 = Bookland EAN, ciri khas ISBN asli.
+    // Kode toko/penerbit lain (walau sama-sama 13 digit) tetap dicari lewat kolom barcode eksemplar.
+    if (/^(978|979)\d{10}$/.test(decodedText)) {
+      await cariBukuByIsbn(decodedText)
+      if (!bookData.value) bookNotFound.value = true
+    } else {
+      await cariBuku(decodedText)
+    }
+  } finally {
+    sedangMencariBuku.value = false
   }
 }
 
@@ -810,8 +832,8 @@ async function handleFileUpload(e) {
     return
   }
 
-  await onScanSuccess(kode) // otomatis: ISBN -> cariBukuByIsbn, lainnya -> cariBuku
-}
+  await onScanSuccess(kode)
+} 
 
 // ===== PINJAMAN =====
 function mulaiPeminjaman() {
@@ -920,6 +942,7 @@ watch(activeTab, async (tab) => {
 
 onBeforeUnmount(() => {
   hentikanPindai()
+  pulihkanWarn()
   if (ocrWorker) ocrWorker.terminate()
 })
 </script>
@@ -976,7 +999,7 @@ onBeforeUnmount(() => {
 
           <div class="scanner-area">
             <template v-if="activeTab === 'kamera'">
-              <div v-if="!isScanning" class="scanner-idle">
+              <div v-if="!isScanning && !sedangMencariBuku" class="scanner-idle">
                 <h3>Siap memindai?</h3>
                 <p>Arahkan kamera ke barcode yang terdapat pada buku.</p>
 
@@ -991,6 +1014,12 @@ onBeforeUnmount(() => {
 
                 <button class="primary-button" @click="mulaiPindai">Mulai scan</button>
               </div>
+
+              <div v-else-if="sedangMencariBuku" class="scanner-idle">
+  <h3>Mencari buku...</h3>
+  <p>Barcode <span class="mono">{{ barcode }}</span> terbaca. Mohon tunggu sebentar.</p>
+</div>
+
 
 <div v-show="isScanning" class="viewfinder">
   <div class="viewfinder-stage">
@@ -1976,6 +2005,22 @@ button, input, select { font: inherit; }
   height: 100% !important;
   max-height: none !important;
   object-fit: cover !important;
+}
+
+.viewfinder__info {
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  transform: translateX(-50%);
+  z-index: 2;
+  width: max-content;
+  max-width: 90%;
+  text-align: center;
+  padding: 6px 10px;
+  color: white;
+  background: rgba(7, 20, 38, 0.72);
+  border-radius: 999px;
+  font-size: 11px;
 }
 
 .viewfinder__actions {

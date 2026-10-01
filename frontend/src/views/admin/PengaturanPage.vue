@@ -37,8 +37,8 @@ function pilihTab(id) {
 
 const form = reactive({
   perpustakaan: {
-    namaPerpustakaan: 'Perpustakaan SMK Negeri 1 Kertosono',
-    namaSekolah: 'SMK Negeri 1 Kertosono',
+    namaPerpustakaan: 'Perpustakaan SMK xxxxxxxxxx',
+    namaSekolah: 'SMK xxxxxxxxxx',
     alamat: '',
     telepon: '',
     email: '',
@@ -190,8 +190,8 @@ async function resetSection() {
   }
 
   form.perpustakaan = {
-    namaPerpustakaan: 'Perpustakaan SMK Negeri 1 Kertosono',
-    namaSekolah: 'SMK Negeri 1 Kertosono',
+    namaPerpustakaan: 'Perpustakaan SMK xxxxxxxxxx',
+    namaSekolah: 'SMK xxxxxxxxxx',
     alamat: '',
     telepon: '',
     email: '',
@@ -453,7 +453,7 @@ onMounted(loadSettings)
                   <polyline points="10 9 9 9 8 9"></polyline>
                 </svg>
               </span>
-              <textarea v-model="form.perpustakaan.deskripsi" rows="3" placeholder="Contoh: Pustakawan SMK Negeri 1 Kertosono"></textarea>
+              <textarea v-model="form.perpustakaan.deskripsi" rows="3" placeholder="Contoh: Pustakawan SMK xxxxxxxxxx"></textarea>
             </div>
           </label>
         </div>

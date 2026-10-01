@@ -10,9 +10,9 @@ const defaultAturan = {
 const { db } = require('../db/client')
 const { ambilPengaturanNotifikasi } = require('../utils/hitungDenda')
 
-async function ambilAturanNotifikasi() {
+async function ambilAturanNotifikasi(sekolahId) {
   try {
-    const dariDb = await ambilPengaturanNotifikasi(db)
+    const dariDb = await ambilPengaturanNotifikasi(db, sekolahId)
     return {
       pengingatJatuhTempo: dariDb.pengingatJatuhTempo ?? defaultAturan.pengingatJatuhTempo,
       hariSebelumJatuhTempo: dariDb.hariSebelumJatuhTempo ?? defaultAturan.hariSebelumJatuhTempo,

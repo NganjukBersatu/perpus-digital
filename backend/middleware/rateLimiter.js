@@ -34,4 +34,15 @@ const daftarLimiter = rateLimit({
   legacyHeaders: false,
 })
 
-module.exports = { loginLimiter, daftarLimiter }
+
+// Cek ketersediaan username saat mendaftar. Dipisah dari daftarLimiter
+// supaya tidak berbagi jatah dengan pendaftaran siswa.
+const cekUsernameLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 40,
+  message: { error: 'Terlalu banyak pengecekan username, coba lagi nanti.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+module.exports = { loginLimiter, daftarLimiter, cekUsernameLimiter }

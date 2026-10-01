@@ -1,0 +1,1 @@
+ALTER TABLE "admin_akun" ADD COLUMN "harus_ganti_password" boolean DEFAULT false NOT NULL;

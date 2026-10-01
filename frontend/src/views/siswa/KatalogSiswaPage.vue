@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { authHeaders } from '@/utils/auth'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL
 
@@ -57,7 +58,7 @@ function getCoverColor(kategori) {
 
 async function fetchKategori() {
   try {
-    const res = await fetch(`${API_BASE}/kategori`)
+    const res = await fetch(`${API_BASE}/kategori`, { headers: authHeaders() })
     if (!res.ok) throw new Error('Gagal mengambil kategori')
     const data = await res.json()
     kategoriList.value = ['Semua', ...data.map(k => k.nama)]
@@ -76,7 +77,7 @@ async function fetchBuku() {
     if (keyword.value.trim()) params.append('q', keyword.value.trim())
     if (kategoriAktif.value !== 'Semua') params.append('kategoriNama', kategoriAktif.value)
 
-    const res = await fetch(`${API_BASE}/buku?${params.toString()}`)
+    const res = await fetch(`${API_BASE}/buku?${params.toString()}`, { headers: authHeaders() })
     if (!res.ok) throw new Error('Gagal mengambil data buku')
 
     const data = await res.json()

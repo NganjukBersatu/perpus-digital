@@ -3,9 +3,9 @@ const router = express.Router()
 const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken')
 const { db } = require('../db/client')
-const { adminAkun, anggota } = require('../db/schema')
-const { eq, and } = require('drizzle-orm')
-const { loginLimiter } = require('../middleware/rateLimiter')
+const { adminAkun, anggota, sekolah } = require('../db/schema')
+const { eq, and, sql } = require('drizzle-orm')
+const { loginLimiter, daftarLimiter, cekUsernameLimiter } = require('../middleware/rateLimiter')
 const { normalisasiTanggal } = require('../utils/validasi')
 const { ambilSekolahAktif } = require('../utils/sekolah')
 
@@ -37,20 +37,26 @@ router.post('/login', loginLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Username dan password wajib diisi' })
     }
 
-    const [akun] = await db.select().from(adminAkun).where(eq(adminAkun.username, username.trim()))
+    // Dengan sekolahId → admin sekolah. Tanpa sekolahId → hanya akun superadmin.
+    let sek = null
+    let akun
+    if (req.body?.sekolahId) {
+      sek = await ambilSekolahAktif(req.body.sekolahId)
+      if (!sek) return res.status(400).json({ error: 'Sekolah tidak ditemukan atau tidak aktif' })
+      ;[akun] = await db.select().from(adminAkun)
+        .where(and(eq(adminAkun.sekolahId, sek.id), eq(adminAkun.username, username.trim())))
+    } else {
+      ;[akun] = await db.select().from(adminAkun)
+        .where(and(eq(adminAkun.username, username.trim()), eq(adminAkun.peran, 'superadmin')))
+    }
+
     // selalu jalankan bcrypt agar waktu respons sama, baik akun ada maupun tidak
     const cocok = await bcrypt.compare(password, akun ? akun.passwordHash : HASH_PALSU)
     if (!akun || !cocok) {
       return res.status(401).json({ error: 'Username atau password salah' })
     }
 
-    // sekolahId diambil dari akun, bukan dari form
     const superadmin = akun.peran === 'superadmin'
-    let sek = null
-    if (!superadmin) {
-      sek = await ambilSekolahAktif(akun.sekolahId)
-      if (!sek) return res.status(403).json({ error: 'Sekolah tidak aktif' })
-    }
     const role = superadmin ? 'superadmin' : 'admin'
 
     const token = jwt.sign(
@@ -63,12 +69,13 @@ router.post('/login', loginLimiter, async (req, res) => {
       token,
       role,
       nama: akun.namaLengkap,
+      harusGantiPassword: !!akun.harusGantiPassword,
       sekolah: sek ? { id: sek.id, nama: sek.nama, logoUrl: sek.logoUrl } : null,
       admin: {
         token,
         role: 'admin',
-          nama: akun.namaLengkap,
-          admin: {
+        nama: akun.namaLengkap,
+        admin: {
           id: akun.id,
           username: akun.username,
           namaLengkap: akun.namaLengkap,
@@ -82,6 +89,102 @@ router.post('/login', loginLimiter, async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Gagal login' })
+  }
+})
+
+  // GET cek apakah username admin masih tersedia (dipakai form daftar sekolah)
+  router.get('/cek-username', cekUsernameLimiter, async (req, res) => {
+    try {
+      const username = String(req.query.username ?? '').trim()
+      if (!/^[A-Za-z0-9._-]{4,50}$/.test(username)) {
+        return res.status(400).json({ error: 'Format username tidak valid' })
+      }
+      const [ada] = await db
+        .select({ id: adminAkun.id })
+        .from(adminAkun)
+        .where(eq(adminAkun.username, username))
+        .limit(1)
+      res.json({ tersedia: !ada })
+    } catch (err) {
+      console.error(err)
+      res.status(500).json({ error: 'Gagal memeriksa username' })
+    }
+  })
+
+// POST daftar admin + sekolah baru
+// Membuat 1 baris di tabel `sekolah` dan 1 akun di `admin_akun` sekaligus.
+// Kalau KODE_UNDANGAN di-set di .env, pendaftar wajib mengirim kode yang sama.
+router.post('/daftar-admin', daftarLimiter, async (req, res) => {
+  try {
+    const body = req.body || {}
+    const namaSekolah = String(body.namaSekolah ?? '').trim().replace(/\s+/g, ' ')
+    const username = String(body.username ?? '').trim()
+    const password = body.password
+
+    const kodeWajib = process.env.KODE_UNDANGAN
+    if (kodeWajib && String(body.kodeUndangan ?? '').trim() !== kodeWajib) {
+      return res.status(403).json({ error: 'Kode undangan salah' })
+    }
+
+    if (!namaSekolah || namaSekolah.length > 255) {
+      return res.status(400).json({ error: 'Nama sekolah wajib diisi (maksimal 255 karakter)' })
+    }
+    if (!/^[A-Za-z0-9._-]{4,50}$/.test(username)) {
+      return res.status(400).json({
+        error: 'Username 4–50 karakter, hanya huruf, angka, titik, garis bawah, atau strip',
+      })
+    }
+    if (typeof password !== 'string' || password.length < 8 || Buffer.byteLength(password) > 72) {
+      return res.status(400).json({ error: 'Password harus 8–72 karakter' })
+    }
+
+    // nama sekolah yang sama (huruf besar/kecil dianggap sama) ditolak
+    const [sekolahSama] = await db
+      .select({ id: sekolah.id })
+      .from(sekolah)
+      .where(sql`lower(${sekolah.nama}) = ${namaSekolah.toLowerCase()}`)
+      .limit(1)
+    if (sekolahSama) {
+      return res.status(409).json({ error: 'Sekolah ini sudah terdaftar' })
+    }
+
+    const [usernameSama] = await db
+      .select({ id: adminAkun.id })
+      .from(adminAkun)
+      .where(eq(adminAkun.username, username))
+      .limit(1)
+    if (usernameSama) {
+      return res.status(409).json({ error: 'Username sudah dipakai' })
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10)
+
+    // transaksi: kalau salah satu gagal, dua-duanya dibatalkan
+    const sekBaru = await db.transaction(async (tx) => {
+      const [s] = await tx.insert(sekolah).values({ nama: namaSekolah }).returning()
+      await tx.insert(adminAkun).values({
+        sekolahId: s.id,
+        peran: 'admin_sekolah',
+        username,
+        passwordHash,
+        namaLengkap: 'Admin Perpustakaan',
+        harusGantiPassword: true,
+      })
+      return s
+    })
+
+    res.status(201).json({
+      success: true,
+      message: 'Pendaftaran berhasil. Silakan login dan ganti password Anda.',
+      sekolah: { id: sekBaru.id, nama: sekBaru.nama },
+    })
+  } catch (err) {
+    // dua pendaftaran dengan data sama yang masuk bersamaan
+    if ((err.cause?.code || err.code) === '23505') {
+      return res.status(409).json({ error: 'Sekolah atau username sudah terdaftar' })
+    }
+    console.error(err)
+    res.status(500).json({ error: 'Gagal mendaftar' })
   }
 })
 

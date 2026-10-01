@@ -1,5 +1,5 @@
 {
-  "id": "774e5d8a-0c02-4d2b-94aa-9d13725b0f1f",
+  "id": "58ca9b98-0be1-4e21-8fad-23ec2f4fae9f",
   "prevId": "b260938a-ee6a-43e6-b213-89ed7980a11d",
   "version": "7",
   "dialect": "postgresql",
@@ -44,13 +44,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": true
-        },
-        "status": {
-          "name": "status",
-          "type": "varchar(20)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'menunggu'"
         },
         "created_at": {
           "name": "created_at",
@@ -121,7 +114,7 @@
           "name": "email",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "telepon": {
           "name": "telepon",
@@ -147,6 +140,13 @@
           "primaryKey": false,
           "notNull": false,
           "default": "now()"
+        },
+        "harus_ganti_password": {
+          "name": "harus_ganti_password",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         }
       },
       "indexes": {},
@@ -172,13 +172,6 @@
           "nullsNotDistinct": false,
           "columns": [
             "username"
-          ]
-        },
-        "admin_akun_email_unique": {
-          "name": "admin_akun_email_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "email"
           ]
         }
       },

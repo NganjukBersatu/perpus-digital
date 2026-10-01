@@ -1,17 +1,27 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { logoutUser, authHeaders } from '@/utils/auth'
 
 
 const router = useRouter()
+const route = useRoute()
 
 const tabs = [
   { id: 'profil', label: 'Profil' },
   { id: 'keamanan', label: 'Keamanan' }
 ]
 
-const activeTab = ref('profil')
+const activeTab = ref(route.query.tab === 'keamanan' ? 'keamanan' : 'profil')
+
+function bacaUser() {
+  try {
+    return JSON.parse(localStorage.getItem('user') || 'null') || {}
+  } catch {
+    return {}
+  }
+}
+const wajibGanti = ref(bacaUser().harusGantiPassword === true)
 const toast = ref('')
 const savedAt = ref('')
 const isLoading = ref(true)
@@ -166,6 +176,13 @@ async function changePassword() {
     security.tampilkanPasswordLama = false
     security.tampilkanPasswordBaru = false
     showToast('Konfirmasi berhasil', 'sukses')
+
+    if (wajibGanti.value) {
+      const userLama = JSON.parse(localStorage.getItem('user') || '{}')
+      localStorage.setItem('user', JSON.stringify({ ...userLama, harusGantiPassword: false }))
+      wajibGanti.value = false
+      setTimeout(() => router.push('/admin'), 1200)
+    }
   } catch (err) {
     console.error(err)
     showToast('Gagal terhubung ke server', 'error')
@@ -427,6 +444,14 @@ onMounted(loadProfile)
           <p class="hint">Gunakan password baru minimal 8 karakter. Jangan bagikan ke siswa atau guru.</p>
         </div>
       </div>
+
+      <p
+        v-if="wajibGanti"
+        class="hint"
+        style="margin: 0 0 16px; padding: 12px 14px; border-radius: 10px; background: #fef3c7; color: #92400e;"
+      >
+        Akun Anda baru dibuat. Demi keamanan, ganti password Anda sekarang sebelum memakai menu lain.
+      </p>
 
       <div class="form-vertical">
         <label>

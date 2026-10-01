@@ -94,7 +94,7 @@ async function konfirmasiKembalikan() {
 
   isReturning.value = true
   try {
-    const res = await fetch(`${API_BASE}/pengembalian/${item.id}`, {
+    const res = await fetch(`${API_BASE}/dashboard-siswa/kembalikan/${item.id}`, {
       method: 'PATCH',
       headers: authHeaders()
     })

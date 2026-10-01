@@ -79,7 +79,8 @@ router.post('/', wajibAdmin, async (req, res) => {
     const [baru] = await db
       .insert(anggota)
       .values({ sekolahId, nama: namaBersih, kelas: kelasBersih, nis: nisBersih, tanggalLahir: tgl, peran: 'siswa' })
-    res.status(201).json(baru)
+      .returning()
+      res.status(201).json(baru)
   } catch (err) {
     if (nisGanda(err)) return res.status(409).json({ error: 'NIS sudah terdaftar' })
     console.error(err)

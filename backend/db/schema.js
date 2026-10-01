@@ -37,6 +37,7 @@ const adminAkun = pgTable("admin_akun", {
   jabatan: varchar("jabatan", { length: 100 }),
   nipNik: varchar("nip_nik", { length: 50 }),
   createdAt: timestamp("created_at").defaultNow(),
+  harusGantiPassword: boolean("harus_ganti_password").notNull().default(false),
 })
 
 const pengaturanPerpustakaan = pgTable("pengaturan_perpustakaan", {

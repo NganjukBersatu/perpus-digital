@@ -1,4 +1,21 @@
+const { eq } = require("drizzle-orm")
 const { pengaturanPerpustakaan } = require("../db/schema")
+
+// Satu pintu untuk membaca pengaturan: wajib per sekolah.
+// Sengaja melempar error kalau sekolahId tidak valid, supaya pengaturan
+// sekolah lain tidak pernah terbaca diam-diam.
+async function ambilBarisPengaturan(db, sekolahId) {
+  const id = Number(sekolahId)
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error("sekolahId wajib diisi untuk membaca pengaturan perpustakaan")
+  }
+  const [data] = await db
+    .select()
+    .from(pengaturanPerpustakaan)
+    .where(eq(pengaturanPerpustakaan.sekolahId, id))
+    .limit(1)
+  return data
+}
 
 function hitungDenda({ tanggalKembali, tanggalDikembalikan, peran, pengaturanDenda }) {
   const batas = new Date(tanggalKembali)
@@ -35,8 +52,8 @@ function hitungDenda({ tanggalKembali, tanggalDikembalikan, peran, pengaturanDen
   return { denda, hariTerlambat }
 }
 
-async function ambilPengaturanDenda(db) {
-  const [data] = await db.select().from(pengaturanPerpustakaan).limit(1)
+async function ambilPengaturanDenda(db, sekolahId) {
+  const data = await ambilBarisPengaturan(db, sekolahId)
   const d = data?.detail?.denda || {}
 
   return {
@@ -50,8 +67,8 @@ async function ambilPengaturanDenda(db) {
   }
 }
 
-async function ambilPengaturanPeminjaman(db) {
-  const [data] = await db.select().from(pengaturanPerpustakaan).limit(1)
+async function ambilPengaturanPeminjaman(db, sekolahId) {
+  const data = await ambilBarisPengaturan(db, sekolahId)
   const p = data?.detail?.peminjaman || {}
 
   return {
@@ -67,8 +84,8 @@ async function ambilPengaturanPeminjaman(db) {
   }
 }
 
-async function ambilPengaturanNotifikasi(db) {
-  const [data] = await db.select().from(pengaturanPerpustakaan).limit(1)
+async function ambilPengaturanNotifikasi(db, sekolahId) {
+  const data = await ambilBarisPengaturan(db, sekolahId)
   const n = data?.detail?.notifikasi || {}
 
   return {

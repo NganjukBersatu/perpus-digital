@@ -5,10 +5,14 @@ const { hitungDenda } = require('./hitungDenda')
 const { tanggalHariIniLokal } = require('./tanggal')
 const { ErrorBisnis } = require('./errorBisnis')
 
+// sekolahId (WAJIB): peminjaman harus milik sekolah tsb, apa pun ID yang dikirim client.
 // anggotaId (opsional): kalau diisi, peminjaman harus milik anggota tsb.
-async function prosesPengembalian(peminjamanId, { anggotaId } = {}) {
+async function prosesPengembalian(peminjamanId, { anggotaId, sekolahId } = {}) {
+  if (!Number.isInteger(Number(sekolahId)) || Number(sekolahId) <= 0) {
+    throw new Error('sekolahId wajib diisi untuk memproses pengembalian')
+  }
   return db.transaction(async (tx) => {
-    const kondisi = [eq(peminjaman.id, peminjamanId)]
+    const kondisi = [eq(peminjaman.id, peminjamanId), eq(peminjaman.sekolahId, sekolahId)]
     if (anggotaId) kondisi.push(eq(peminjaman.anggotaId, anggotaId))
 
     const [row] = await tx
@@ -48,14 +52,14 @@ async function prosesPengembalian(peminjamanId, { anggotaId } = {}) {
     const [updated] = await tx
       .update(peminjaman)
       .set({ tanggalDikembalikan, denda })
-      .where(and(eq(peminjaman.id, row.id), isNull(peminjaman.tanggalDikembalikan)))
+      .where(and(eq(peminjaman.id, row.id), eq(peminjaman.sekolahId, sekolahId), isNull(peminjaman.tanggalDikembalikan)))
       .returning()
     if (!updated) throw new ErrorBisnis(400, 'Buku ini sudah dikembalikan')
 
     const [ek] = await tx
       .update(eksemplarBuku)
       .set({ status: 'tersedia' })
-      .where(eq(eksemplarBuku.id, row.eksemplarId))
+      .where(and(eq(eksemplarBuku.id, row.eksemplarId), eq(eksemplarBuku.sekolahId, sekolahId)))
       .returning({ bukuId: eksemplarBuku.bukuId })
 
     return { updated, denda, bukuId: ek?.bukuId }

@@ -100,7 +100,7 @@ router.put('/password', wajibAdmin, async (req, res) => {
     if (!cocok) return res.status(401).json({ error: 'Password lama salah' })
 
     const passwordHash = await bcrypt.hash(passwordBaru, 10)
-    await db.update(adminAkun).set({ passwordHash }).where(eq(adminAkun.id, req.user.id))
+    await db.update(adminAkun).set({ passwordHash, harusGantiPassword: false }).where(eq(adminAkun.id, req.user.id))
 
     res.json({ success: true })
   } catch (err) {

@@ -89,7 +89,7 @@ async function buatBarcodeOtomatis(runner, bukuId, isbn, jumlah) {
 router.get('/', wajibLogin, async (req, res) => {
   try {
     const { q, kategoriNama, status } = req.query
-    const conditions = []
+    const conditions = [eq(buku.sekolahId, req.user.sekolahId)]
     if (q) conditions.push(ilike(buku.judul, `%${q}%`))
     if (status) conditions.push(eq(buku.status, status))
 
@@ -144,7 +144,7 @@ router.get('/:id/detail', wajibAdmin, async (req, res) => {
       })
       .from(buku)
       .leftJoin(kategori, eq(kategori.id, buku.kategoriId))
-      .where(eq(buku.id, id))
+      .where(and(eq(buku.id, id), eq(buku.sekolahId, req.user.sekolahId)))
 
     if (!bukuData) {
       return res.status(404).json({ error: 'Buku tidak ditemukan' })
@@ -199,6 +199,7 @@ router.post('/', wajibAdmin, async (req, res) => {
     // Jumlah eksemplar: default 1, dibatasi 1-500 supaya tidak bisa dipakai membanjiri tabel
     const jumlahBaru = Math.min(Math.max(Math.floor(Number(jumlahEksemplar)) || 1, 1), 500)
     const barcodeBersih = bersihkanBarcode(barcode)
+    const { sekolahId } = req.user
 
     const hasil = await db.transaction(async (tx) => {
       // CEK DUPLIKAT: judul & penulis sama persis (tanpa peduli besar/kecil huruf).
@@ -210,6 +211,7 @@ router.post('/', wajibAdmin, async (req, res) => {
         .from(buku)
         .where(
           and(
+            eq(buku.sekolahId, sekolahId),
             sql`lower(${buku.judul}) = lower(${judulBersih})`,
             sql`lower(${buku.penulis}) = lower(${penulisBersih})`
           )
@@ -220,7 +222,7 @@ router.post('/', wajibAdmin, async (req, res) => {
         const [bentrok] = await tx
           .select({ id: eksemplarBuku.id })
           .from(eksemplarBuku)
-          .where(eq(eksemplarBuku.barcode, barcodeBersih))
+          .where(and(eq(eksemplarBuku.sekolahId, sekolahId), eq(eksemplarBuku.barcode, barcodeBersih)))
         if (bentrok) {
           const err = new Error(`Barcode "${barcodeBersih}" sudah dipakai oleh eksemplar lain.`)
           err.statusCode = 400
@@ -234,6 +236,7 @@ router.post('/', wajibAdmin, async (req, res) => {
         const [baru] = await tx
           .insert(buku)
           .values({
+            sekolahId,
             judul: judulBersih,
             penulis: penulisBersih,
             kategoriId: kategoriId || null,
@@ -250,6 +253,7 @@ router.post('/', wajibAdmin, async (req, res) => {
       // Tambah eksemplar (baik ke buku baru maupun buku duplikat yang sudah ada)
       if (barcodeBersih) {
         await tx.insert(eksemplarBuku).values({
+          sekolahId,
           bukuId,
           barcode: barcodeBersih,
           status: 'tersedia',
@@ -259,7 +263,7 @@ router.post('/', wajibAdmin, async (req, res) => {
         // menghitung eksemplar yang SUDAH ADA dulu, supaya nomor urutnya tidak
         // bentrok saat buku duplikat ditambahkan berkali-kali.
         const eksemplarBaru = await buatBarcodeOtomatis(tx, bukuId, isbn || bukuSama?.isbn, jumlahBaru)
-        await tx.insert(eksemplarBuku).values(eksemplarBaru)
+        await tx.insert(eksemplarBuku).values(eksemplarBaru.map((e) => ({ ...e, sekolahId })))
       }
 
       // Hitung ulang stok & tersedia DI DALAM transaksi yang sama
@@ -304,7 +308,7 @@ router.post('/:id/eksemplar', wajibAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Barcode tidak valid atau kosong' })
     }
 
-    const [bukuAda] = await db.select().from(buku).where(eq(buku.id, bukuId))
+    const [bukuAda] = await db.select().from(buku).where(and(eq(buku.id, bukuId), eq(buku.sekolahId, req.user.sekolahId)))
     if (!bukuAda) {
       return res.status(404).json({ error: 'Buku tidak ditemukan' })
     }
@@ -313,7 +317,7 @@ router.post('/:id/eksemplar', wajibAdmin, async (req, res) => {
     const [existing] = await db
       .select({ id: eksemplarBuku.id })
       .from(eksemplarBuku)
-      .where(eq(eksemplarBuku.barcode, barcodeBersih))
+      .where(and(eq(eksemplarBuku.sekolahId, req.user.sekolahId), eq(eksemplarBuku.barcode, barcodeBersih)))
 
     let barcodeFinal = barcodeBersih
 
@@ -331,7 +335,7 @@ router.post('/:id/eksemplar', wajibAdmin, async (req, res) => {
 
     const [eksemplar] = await db
       .insert(eksemplarBuku)
-      .values({ bukuId, barcode: barcodeFinal, status: 'tersedia' })
+      .values({ sekolahId: req.user.sekolahId, bukuId, barcode: barcodeFinal, status: 'tersedia' })
       .returning()
 
     // Sinkronkan stok & tersedia setelah eksemplar baru tersimpan
@@ -354,7 +358,7 @@ router.get('/:id/untuk-pinjam', wajibAdmin, async (req, res) => {
   try {
     const bukuId = Number(req.params.id)
 
-    const [bukuData] = await db.select().from(buku).where(eq(buku.id, bukuId))
+    const [bukuData] = await db.select().from(buku).where(and(eq(buku.id, bukuId), eq(buku.sekolahId, req.user.sekolahId)))
     if (!bukuData) {
       return res.status(404).json({ message: 'Buku tidak ditemukan' })
     }
@@ -432,7 +436,7 @@ router.put('/:id', wajibAdmin, async (req, res) => {
     const [updated] = await db
       .update(buku)
       .set(nilai)
-      .where(eq(buku.id, id))
+      .where(and(eq(buku.id, id), eq(buku.sekolahId, req.user.sekolahId)))
       .returning()
 
     if (!updated) return res.status(404).json({ error: 'Buku tidak ditemukan' })
@@ -461,7 +465,7 @@ router.delete('/:id', wajibAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id)
 
-    const [bukuAda] = await db.select().from(buku).where(eq(buku.id, id))
+    const [bukuAda] = await db.select().from(buku).where(and(eq(buku.id, id), eq(buku.sekolahId, req.user.sekolahId)))
     if (!bukuAda) {
       return res.status(404).json({ error: 'Buku tidak ditemukan' })
     }

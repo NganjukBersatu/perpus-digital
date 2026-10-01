@@ -17,7 +17,7 @@ const { normalisasiTanggal, escapeLike } = require("./utils/validasi")
 const { ErrorBisnis } = require("./utils/errorBisnis")
 const { prosesPengembalian } = require("./utils/pengembalian")
 
-const { router: authRoutes, wajibLoginGuru, wajibAdmin } = require("./routes/auth")
+const { router: authRoutes, wajibLogin, wajibLoginGuru, wajibAdmin } = require("./routes/auth")
 const adminRoutes = require("./routes/admin")
 const pengaturanRoutes = require("./routes/pengaturan")
 const pengembalianRoutes = require("./routes/pengembalian")
@@ -30,7 +30,7 @@ const kategoriRoutes = require("./routes/kategori")
 const riwayatRoutes = require("./routes/riwayat")
 const laporanRoutes = require("./routes/laporan")
 const bukuRoutes = require("./routes/buku")
-const bukuIsbnRoutes = require("./routes/bukuIsbn")
+const bukuIsbnRouter = require("./routes/bukuIsbn")
 const { router: authSiswaRoutes, wajibLoginSiswa } = require("./routes/authSiswa")
 const dashboardSiswaRoutes = require("./routes/dashboardSiswa")
 const { pasangRouteNotifikasiSiswa } = require("./routes/notifikasiSiswa")
@@ -58,6 +58,7 @@ app.use(express.json())
 
 app.use("/api/auth", authRoutes)
 app.use("/api/auth/siswa", authSiswaRoutes)
+app.use("/api/sekolah", require("./routes/sekolah"))
 app.use("/api/admin", adminRoutes)
 app.use("/api/pengaturan", pengaturanRoutes)
 app.use("/api/pengembalian", wajibAdmin, pengembalianRoutes)
@@ -71,7 +72,7 @@ pasangRouteNotifikasiGuru(app, wajibLoginGuru)
 // Cek: kalau routes/buku.js punya route GET '/:id', route /kategori di bawah
 // tidak akan pernah terpanggil. Lihat catatan di dekat app.get("/api/buku/kategori").
 app.use("/api/buku", bukuRoutes)
-app.use("/api/buku", bukuIsbnRoutes)
+app.use("/api/buku", bukuIsbnRouter)
 app.use("/api/siswa", siswaRoutes)
 app.use("/api/guru", guruRoutes)
 app.use("/api", kelasRoutes)
@@ -94,6 +95,7 @@ app.use("/api/search", wajibAdmin)
 // "978123-02", dst. Kalau ada barcode yang persis sama, itu yang diprioritaskan.
 app.get("/api/eksemplar-buku/:barcode", async (req, res) => {
   try {
+    const { sekolahId } = req.user
     const barcode = String(req.params.barcode || "").trim()
     if (!barcode) {
       return res.status(400).json({ message: "Barcode wajib diisi" })
@@ -111,7 +113,7 @@ app.get("/api/eksemplar-buku/:barcode", async (req, res) => {
       })
       .from(eksemplarBuku)
       .innerJoin(buku, eq(buku.id, eksemplarBuku.bukuId))
-      .where(ilike(eksemplarBuku.barcode, `${escapeLike(barcode)}%`))
+      .where(and(eq(eksemplarBuku.sekolahId, sekolahId), ilike(eksemplarBuku.barcode, `${escapeLike(barcode)}%`)))
       .orderBy(eksemplarBuku.id)
 
     if (cocok.length === 0) {
@@ -136,7 +138,7 @@ app.get("/api/eksemplar-buku/:barcode", async (req, res) => {
         status: eksemplarBuku.status,
       })
       .from(eksemplarBuku)
-      .where(eq(eksemplarBuku.bukuId, bukuId))
+      .where(and(eq(eksemplarBuku.bukuId, bukuId), eq(eksemplarBuku.sekolahId, sekolahId)))
       .orderBy(eksemplarBuku.id)
 
     res.json({
@@ -157,6 +159,7 @@ app.get("/api/eksemplar-buku/:barcode", async (req, res) => {
 // POST simpan peminjaman baru
 app.post("/api/peminjaman", async (req, res) => {
   try {
+    const { sekolahId } = req.user
     const { eksemplarId, nama, kelas, tanggalPinjam, tanggalKembali, tipePeminjam, anggotaId } = req.body || {}
 
     // ---------- validasi input ----------
@@ -181,8 +184,8 @@ app.post("/api/peminjaman", async (req, res) => {
       return res.status(400).json({ message: "Nama dan kelas wajib diisi" })
     }
 
-    const pengaturanPinjam = await ambilPengaturanPeminjaman(db)
-    const pengaturanDenda = await ambilPengaturanDenda(db)
+    const pengaturanPinjam = await ambilPengaturanPeminjaman(db, sekolahId)
+    const pengaturanDenda = await ambilPengaturanDenda(db, sekolahId)
 
     // ---------- tanggal kembali (UTC supaya tidak geser hari) ----------
     let tanggalKembaliFinal
@@ -207,7 +210,7 @@ app.post("/api/peminjaman", async (req, res) => {
       const [ek] = await tx
         .update(eksemplarBuku)
         .set({ status: "dipinjam" })
-        .where(and(eq(eksemplarBuku.id, idEksemplar), eq(eksemplarBuku.status, "tersedia")))
+        .where(and(eq(eksemplarBuku.id, idEksemplar), eq(eksemplarBuku.sekolahId, sekolahId), eq(eksemplarBuku.status, "tersedia")))
         .returning({ bukuId: eksemplarBuku.bukuId })
       if (!ek) throw new ErrorBisnis(409, "Eksemplar tidak ditemukan atau sedang tidak tersedia")
 
@@ -215,7 +218,7 @@ app.post("/api/peminjaman", async (req, res) => {
       const [{ stokTersedia }] = await tx
         .select({ stokTersedia: sql`count(*)`.mapWith(Number) })
         .from(eksemplarBuku)
-        .where(and(eq(eksemplarBuku.bukuId, ek.bukuId), eq(eksemplarBuku.status, "tersedia")))
+        .where(and(eq(eksemplarBuku.bukuId, ek.bukuId), eq(eksemplarBuku.sekolahId, sekolahId), eq(eksemplarBuku.status, "tersedia")))
       const stokSebelum = stokTersedia + 1
       if (stokSebelum <= pengaturanPinjam.minStokPinjam) {
         throw new ErrorBisnis(
@@ -230,7 +233,7 @@ app.post("/api/peminjaman", async (req, res) => {
         const [g] = await tx
           .select({ id: anggota.id, nama: anggota.nama, kelas: anggota.kelas })
           .from(anggota)
-          .where(and(eq(anggota.id, Number(anggotaId)), eq(anggota.peran, "guru")))
+          .where(and(eq(anggota.id, Number(anggotaId)), eq(anggota.sekolahId, sekolahId), eq(anggota.peran, "guru")))
         if (!g) throw new ErrorBisnis(400, "Guru tidak ditemukan")
         idPeminjam = g.id
         namaFinal = g.nama
@@ -242,6 +245,7 @@ app.post("/api/peminjaman", async (req, res) => {
           .from(anggota)
           .where(
             and(
+              eq(anggota.sekolahId, sekolahId),
               sql`lower(btrim(${anggota.nama})) = lower(${namaBersih})`,
               eq(anggota.kelas, kelasBersih),
               eq(anggota.peran, "siswa")
@@ -253,7 +257,7 @@ app.post("/api/peminjaman", async (req, res) => {
         } else {
           const [baru] = await tx
             .insert(anggota)
-            .values({ nama: namaBersih, kelas: kelasBersih, peran: "siswa" })
+            .values({ sekolahId, nama: namaBersih, kelas: kelasBersih, peran: "siswa" })
             .returning({ id: anggota.id })
           idPeminjam = baru.id
           semuaId = [baru.id]
@@ -266,7 +270,7 @@ app.post("/api/peminjaman", async (req, res) => {
       const [{ jumlahAktif }] = await tx
         .select({ jumlahAktif: sql`count(*)`.mapWith(Number) })
         .from(peminjaman)
-        .where(and(inArray(peminjaman.anggotaId, semuaId), isNull(peminjaman.tanggalDikembalikan)))
+        .where(and(eq(peminjaman.sekolahId, sekolahId), inArray(peminjaman.anggotaId, semuaId), isNull(peminjaman.tanggalDikembalikan)))
       const maxBuku = peranPeminjam === "guru" ? pengaturanPinjam.maxBukuGuru : pengaturanPinjam.maxBukuSiswa
       if (jumlahAktif >= maxBuku) {
         throw new ErrorBisnis(400, `Batas pinjam tercapai (maks ${maxBuku} buku)`)
@@ -274,6 +278,7 @@ app.post("/api/peminjaman", async (req, res) => {
 
       // 5) simpan peminjaman
       await tx.insert(peminjaman).values({
+        sekolahId,
         nama: namaFinal,
         kelas: kelasFinal,
         eksemplarId: idEksemplar,
@@ -305,10 +310,11 @@ app.post("/api/peminjaman", async (req, res) => {
 // PATCH tandai peminjaman sebagai dikembalikan
 app.patch("/api/peminjaman/:id/kembalikan", async (req, res) => {
   try {
+    const { sekolahId } = req.user
     const id = Number(req.params.id)
     if (!Number.isInteger(id)) return res.status(400).json({ message: "ID tidak valid" })
 
-    const { updated, bukuId } = await prosesPengembalian(id)
+    const { updated, bukuId } = await prosesPengembalian(id, { sekolahId })
     if (bukuId) await sinkronkanStokBuku(bukuId)
 
     res.json(updated)
@@ -321,16 +327,17 @@ app.patch("/api/peminjaman/:id/kembalikan", async (req, res) => {
 
 app.patch("/api/peminjaman/:id/perpanjang", async (req, res) => {
   try {
+    const { sekolahId } = req.user
     const id = Number(req.params.id)
     if (!Number.isInteger(id)) return res.status(400).json({ message: "ID tidak valid" })
 
-    const pengaturanPinjam = await ambilPengaturanPeminjaman(db)
+    const pengaturanPinjam = await ambilPengaturanPeminjaman(db, sekolahId)
 
     if (!pengaturanPinjam.bolehPerpanjang) {
       return res.status(400).json({ message: "Perpanjangan peminjaman tidak diizinkan" })
     }
 
-    const [pinjam] = await db.select().from(peminjaman).where(eq(peminjaman.id, id))
+    const [pinjam] = await db.select().from(peminjaman).where(and(eq(peminjaman.id, id), eq(peminjaman.sekolahId, sekolahId)))
     if (!pinjam) return res.status(404).json({ message: "Data peminjaman tidak ditemukan" })
     if (pinjam.tanggalDikembalikan) {
       return res.status(400).json({ message: "Buku ini sudah dikembalikan, tidak bisa diperpanjang" })
@@ -361,7 +368,7 @@ app.patch("/api/peminjaman/:id/perpanjang", async (req, res) => {
         tanggalKembali: tglBaru.toISOString().slice(0, 10),
         jumlahPerpanjangan: (pinjam.jumlahPerpanjangan || 0) + 1,
       })
-      .where(and(eq(peminjaman.id, id), isNull(peminjaman.tanggalDikembalikan)))
+      .where(and(eq(peminjaman.id, id), eq(peminjaman.sekolahId, sekolahId), isNull(peminjaman.tanggalDikembalikan)))
       .returning()
 
     if (!updated) {
@@ -377,25 +384,28 @@ app.patch("/api/peminjaman/:id/perpanjang", async (req, res) => {
 
 app.get("/api/dashboard/stats", async (req, res) => {
   try {
+    const { sekolahId } = req.user
     const today = tanggalHariIniLokal()
 
     const totalBuku = await db.select({ count: sql`count(*)`.mapWith(Number) }).from(buku)
+      .where(eq(buku.sekolahId, sekolahId))
     const totalAnggota = await db
       .select({
         count: sql`count(distinct lower(btrim(${anggota.nama})))`.mapWith(Number)
       })
       .from(anggota)
-      .where(sql`${anggota.peran} in ('siswa', 'guru')`)
+      .where(and(eq(anggota.sekolahId, sekolahId), sql`${anggota.peran} in ('siswa', 'guru')`))
 
     const totalDipinjam = await db
       .select({ count: sql`count(*)`.mapWith(Number) })
       .from(peminjaman)
-      .where(isNull(peminjaman.tanggalDikembalikan))
+      .where(and(eq(peminjaman.sekolahId, sekolahId), isNull(peminjaman.tanggalDikembalikan)))
 
     const totalTerlambat = await db
       .select({ count: sql`count(*)`.mapWith(Number) })
       .from(peminjaman)
       .where(and(
+        eq(peminjaman.sekolahId, sekolahId),
         isNull(peminjaman.tanggalDikembalikan),
         lt(peminjaman.tanggalKembali, today)
       ))
@@ -415,6 +425,7 @@ app.get("/api/dashboard/stats", async (req, res) => {
 // GET 5 peminjaman terbaru
 app.get("/api/dashboard/peminjaman-terbaru", async (req, res) => {
   try {
+    const { sekolahId } = req.user
     const { hari } = req.query
     let data
 
@@ -426,12 +437,13 @@ app.get("/api/dashboard/peminjaman-terbaru", async (req, res) => {
       data = await db
         .select()
         .from(peminjaman)
-        .where(gte(peminjaman.tanggalPinjam, formatTanggalISO(batasAwal)))
+        .where(and(eq(peminjaman.sekolahId, sekolahId), gte(peminjaman.tanggalPinjam, formatTanggalISO(batasAwal))))
         .orderBy(desc(peminjaman.id))
     } else {
       data = await db
         .select()
         .from(peminjaman)
+        .where(eq(peminjaman.sekolahId, sekolahId))
         .orderBy(desc(peminjaman.id))
         .limit(5)
     }
@@ -461,6 +473,7 @@ app.get("/api/dashboard/peminjaman-terbaru", async (req, res) => {
 // GET semua peminjaman yang belum dikembalikan
 app.get("/api/dashboard/peminjaman-belum-kembali", async (req, res) => {
   try {
+    const { sekolahId } = req.user
     const rows = await db
       .select({
         id: peminjaman.id,
@@ -481,7 +494,7 @@ app.get("/api/dashboard/peminjaman-belum-kembali", async (req, res) => {
       .innerJoin(anggota, eq(anggota.id, peminjaman.anggotaId))
       .innerJoin(eksemplarBuku, eq(eksemplarBuku.id, peminjaman.eksemplarId))
       .innerJoin(buku, eq(buku.id, eksemplarBuku.bukuId))
-      .where(isNull(peminjaman.tanggalDikembalikan))
+      .where(and(eq(peminjaman.sekolahId, sekolahId), isNull(peminjaman.tanggalDikembalikan)))
 
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -547,11 +560,13 @@ app.get("/api/dashboard/peminjaman-belum-kembali", async (req, res) => {
 // GET buku terpopuler (paling sering dipinjam)
 app.get("/api/dashboard/buku-terpopuler", async (req, res) => {
   try {
+    const { sekolahId } = req.user
     const rows = await db.execute(sql`
       select b.judul as judul, count(p.id) as dipinjam
       from peminjaman p
       join eksemplar_buku e on e.id = p.eksemplar_id
       join buku b on b.id = e.buku_id
+      where p.sekolah_id = ${sekolahId}
       group by b.id, b.judul
       order by dipinjam desc
       limit 5
@@ -575,12 +590,13 @@ app.get("/api/dashboard/buku-terpopuler", async (req, res) => {
 // Kalau ada router.get('/:id') atau router.get('/'), pindahkan handler ini ke
 // SEBELUM app.use("/api/buku", bukuRoutes), atau ke dalam routes/buku.js,
 // kalau tidak handler ini tidak akan pernah terpanggil.
-app.get("/api/buku/kategori", async (req, res) => {
+app.get("/api/buku/kategori", wajibLogin, async (req, res) => {
   try {
+    const { sekolahId } = req.user
     const rows = await db.execute(sql`
       select nama
       from kategori
-      where nama is not null and nama <> ''
+      where sekolah_id = ${sekolahId} and nama is not null and nama <> ''
       order by nama
     `)
     res.json(rows.rows.map((r) => r.nama))
@@ -593,6 +609,7 @@ app.get("/api/buku/kategori", async (req, res) => {
 // GET buku terpopuler lengkap (dengan filter rentang waktu, kategori, dan pencarian judul)
 app.get("/api/dashboard/buku-terpopuler-lengkap", async (req, res) => {
   try {
+    const { sekolahId } = req.user
     const { range = "semua", kategori } = req.query
     const search = String(req.query.search ?? "").trim()
 
@@ -614,7 +631,7 @@ app.get("/api/dashboard/buku-terpopuler-lengkap", async (req, res) => {
       join eksemplar_buku e on e.id = p.eksemplar_id
       join buku b on b.id = e.buku_id
       left join kategori k on k.id = b.kategori_id
-      where 1=1
+      where p.sekolah_id = ${sekolahId}
     `
 
     if (startDate) {
@@ -647,7 +664,8 @@ app.get("/api/dashboard/buku-terpopuler-lengkap", async (req, res) => {
 // GET pengingat - buku yang belum dikembalikan
 app.get("/api/dashboard/pengingat", async (req, res) => {
   try {
-    const pengaturanNotif = await ambilPengaturanNotifikasi(db)
+    const { sekolahId } = req.user
+    const pengaturanNotif = await ambilPengaturanNotifikasi(db, sekolahId)
 
     const semuaBelumKembali = await db
       .select({
@@ -663,7 +681,7 @@ app.get("/api/dashboard/pengingat", async (req, res) => {
       })
       .from(peminjaman)
       .innerJoin(anggota, eq(peminjaman.anggotaId, anggota.id))
-      .where(isNull(peminjaman.tanggalDikembalikan))
+      .where(and(eq(peminjaman.sekolahId, sekolahId), isNull(peminjaman.tanggalDikembalikan)))
       .orderBy(peminjaman.tanggalKembali)
 
     const today = new Date()
@@ -743,7 +761,8 @@ app.get("/api/dashboard/pengingat", async (req, res) => {
 // GET notifikasi lonceng - ringkasan buku terlambat & jatuh tempo hari ini
 app.get("/api/dashboard/notifikasi", async (req, res) => {
   try {
-    const pengaturanNotif = await ambilPengaturanNotifikasi(db)
+    const { sekolahId } = req.user
+    const pengaturanNotif = await ambilPengaturanNotifikasi(db, sekolahId)
     const today = tanggalHariIniLokal()
     const waktuSekarang = new Date().toISOString()
 
@@ -753,6 +772,7 @@ app.get("/api/dashboard/notifikasi", async (req, res) => {
         .select({ count: sql`count(*)` })
         .from(peminjaman)
         .where(and(
+          eq(peminjaman.sekolahId, sekolahId),
           isNull(peminjaman.tanggalDikembalikan),
           sql`${peminjaman.tanggalKembali}::date < ${today}::date`
         ))
@@ -765,6 +785,7 @@ app.get("/api/dashboard/notifikasi", async (req, res) => {
         .select({ count: sql`count(*)` })
         .from(peminjaman)
         .where(and(
+          eq(peminjaman.sekolahId, sekolahId),
           isNull(peminjaman.tanggalDikembalikan),
           sql`${peminjaman.tanggalKembali}::date = ${today}::date`
         ))
@@ -790,8 +811,9 @@ app.get("/api/dashboard/notifikasi", async (req, res) => {
 })
 
 // GET daftar semua buku beserta jumlah stok & tersedia
-app.get("/api/buku", async (req, res) => {
+app.get("/api/buku", wajibLogin, async (req, res) => {
   try {
+    const { sekolahId } = req.user
     const search = String(req.query.search ?? "").trim()
 
     let query = sql`
@@ -804,11 +826,12 @@ app.get("/api/buku", async (req, res) => {
         count(e.id) filter (where e.status = 'tersedia') as tersedia
       from buku b
       left join eksemplar_buku e on e.buku_id = b.id
+      where b.sekolah_id = ${sekolahId}
     `
 
     if (search) {
       const pola = "%" + escapeLike(search) + "%"
-      query = sql`${query} where b.judul ilike ${pola} or b.isbn ilike ${pola} or b.penulis ilike ${pola}`
+      query = sql`${query} and (b.judul ilike ${pola} or b.isbn ilike ${pola} or b.penulis ilike ${pola})`
     }
 
     query = sql`${query} group by b.id order by b.judul`
@@ -844,6 +867,7 @@ app.get("/api/buku", async (req, res) => {
 // GET pencarian gabungan (buku, siswa, guru, ISBN)
 app.get("/api/search", async (req, res) => {
   try {
+    const { sekolahId } = req.user
     const q = String(req.query.q ?? "").trim()
     if (!q) {
       return res.json({ buku: [], siswa: [], guru: [] })
@@ -853,21 +877,21 @@ app.get("/api/search", async (req, res) => {
     const bukuRows = await db.execute(sql`
       select id, judul, penulis, isbn
       from buku
-      where judul ilike ${pola} or isbn ilike ${pola}
+      where sekolah_id = ${sekolahId} and (judul ilike ${pola} or isbn ilike ${pola})
       limit 5
     `)
 
     const siswaRows = await db.execute(sql`
       select id, nama, kelas
       from anggota
-      where nama ilike ${pola} and peran = 'siswa'
+      where sekolah_id = ${sekolahId} and nama ilike ${pola} and peran = 'siswa'
       limit 5
     `)
 
     const guruRows = await db.execute(sql`
       select id, nama, kelas
       from anggota
-      where nama ilike ${pola} and peran = 'guru'
+      where sekolah_id = ${sekolahId} and nama ilike ${pola} and peran = 'guru'
       limit 5
     `)
 
@@ -946,6 +970,7 @@ function buildBuckets(start, now, groupBy) {
 
 app.get("/api/dashboard/statistik-peminjaman", async (req, res) => {
   try {
+    const { sekolahId } = req.user
     const range = req.query.range || "6bulan"
     const { start, now, groupBy } = getRangeConfig(range)
     const buckets = buildBuckets(start, now, groupBy)
@@ -957,6 +982,7 @@ app.get("/api/dashboard/statistik-peminjaman", async (req, res) => {
       from peminjaman
       where tanggal_pinjam >= ${startStr}
         and tanggal_pinjam <= ${endStr}
+        and sekolah_id = ${sekolahId}
       group by periode
       order by periode
     `)
@@ -966,6 +992,7 @@ app.get("/api/dashboard/statistik-peminjaman", async (req, res) => {
       from peminjaman
       where tanggal_dikembalikan >= ${startStr}
         and tanggal_dikembalikan <= ${endStr}
+        and sekolah_id = ${sekolahId}
       group by periode
       order by periode
     `)

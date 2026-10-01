@@ -9,6 +9,9 @@ onMounted(muat)
 
 const router = useRouter()
 
+// nama sekolah dari login (disimpan di LoginView.vue)
+const namaSekolah = localStorage.getItem('sekolahNama') || 'MANAGEMENT PERPUSTAKAAN'
+
 const dataLogin = getAdmin()
 const admin = ref({
   nama: dataLogin?.namaLengkap || 'Admin Perpustakaan',
@@ -73,7 +76,7 @@ let jumlahTerakhirDiketahui = null
 
 async function fetchNotifikasi() {
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/dashboard/notifikasi`)
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/dashboard/notifikasi`, { headers: { ...authHeaders() } })
     const data = await res.json()
     const sekarang = new Date().toISOString()
 
@@ -231,7 +234,7 @@ function onSearchInput() {
 
   searchTimeout = setTimeout(async () => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/search?q=${encodeURIComponent(q)}`)
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/search?q=${encodeURIComponent(q)}`, { headers: { ...authHeaders() } })
       searchResults.value = await res.json()
       searchOpen.value = true
     } catch (err) {
@@ -293,7 +296,7 @@ onBeforeUnmount(() => {
       <div class="brand" @click="bukaSidebarJikaTertutup">
         <img src="/logo.png" alt="Logo" class="icon icon-lg" />
         <div class="brand-text">
-          <div class="brand-title">MANAGEMENT PERPUSTAKAAN</div>
+          <div class="brand-title">{{ namaSekolah }}</div>
         </div>
         <button class="sidebar-toggle-inside" type="button" @click.stop="toggleSidebar">
           <svg class="icon icon-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">

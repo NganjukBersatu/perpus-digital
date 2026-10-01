@@ -34,7 +34,7 @@ function pasangRouteNotifikasiSiswa(app, verifikasiToken) {
           )
         )
 
-      const aturan = await ambilAturanNotifikasi(req.siswa.sekolahId)
+      const aturan = await ambilAturanNotifikasi(req.user.sekolahId)
       const notifikasi = []
 
       for (const item of daftarPinjam) {

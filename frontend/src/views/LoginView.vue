@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -11,6 +11,25 @@ const roles = [
 ]
 
 const selectedRole = ref('siswa')
+const daftarSekolah = ref([])
+const sekolahId = ref(localStorage.getItem('sekolahId') || '')
+
+async function muatDaftarSekolah() {
+  try {
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/sekolah/publik`)
+    if (res.ok) {
+      daftarSekolah.value = await res.json()
+      // pilihan tersimpan yang sudah tidak aktif dibuang
+      if (!daftarSekolah.value.some((s) => String(s.id) === String(sekolahId.value))) {
+        sekolahId.value = ''
+      }
+    }
+  } catch (err) {
+    console.error('Gagal memuat daftar sekolah', err)
+  }
+}
+
+onMounted(muatDaftarSekolah)
 
 const form = ref({
   nis: '',
@@ -44,6 +63,14 @@ const daftarError = ref('')
 const daftarMessage = ref('')
 const isDaftarLoading = ref(false)
 
+// State untuk fitur "Daftar Sekolah" khusus Admin
+const adminAuthMode = ref('login') // 'login' | 'daftar'
+const daftarAdminForm = ref({ namaSekolah: '', username: '', password: '', konfirmasi: '', kodeUndangan: '' })
+const daftarAdminError = ref('')
+const daftarAdminMessage = ref('')
+const isDaftarAdminLoading = ref(false)
+const usernameStatus = ref('') // '' | 'memeriksa' | 'tersedia' | 'dipakai'
+
 const roleLabel = computed(() => {
   const found = roles.find(r => r.value === selectedRole.value)
   return found ? found.label : ''
@@ -60,32 +87,47 @@ watch(selectedRole, () => {
   daftarForm.value = { nama: '', nis: '', kelas: '', tanggalLahir: '' }
   daftarError.value = ''
   daftarMessage.value = ''
+  adminAuthMode.value = 'login'
+  daftarAdminForm.value = { namaSekolah: '', username: '', password: '', konfirmasi: '', kodeUndangan: '' }
+  daftarAdminError.value = ''
+  daftarAdminMessage.value = ''
 })
 
 async function handleLogin() {
+  if (selectedRole.value === 'admin' && adminAuthMode.value === 'daftar') return
   errorMessage.value = ''
   isLoading.value = true
 
   let endpoint = ''
   let payload = {}
 
+  if (!sekolahId.value) {
+    errorMessage.value = 'Pilih sekolah terlebih dahulu'
+    isLoading.value = false
+    return
+  }
+  const idSekolah = Number(sekolahId.value)
+
   if (selectedRole.value === 'siswa') {
     endpoint = '/auth/siswa/login'
     payload = {
       nis: form.value.nis,
-      tanggalLahir: form.value.tanggalLahir
+      tanggalLahir: form.value.tanggalLahir,
+      sekolahId: idSekolah
     }
   } else if (selectedRole.value === 'guru') {
     endpoint = '/auth/guru/login'
     payload = {
       nip: form.value.nip,
-      password: form.value.password
+      password: form.value.password,
+      sekolahId: idSekolah
     }
   } else {
     endpoint = '/auth/login'
     payload = {
       username: form.value.username,
-      password: form.value.password
+      password: form.value.password,
+      sekolahId: idSekolah
     }
   }
 
@@ -114,6 +156,10 @@ async function handleLogin() {
 
     localStorage.setItem('token', data.token)
     localStorage.setItem('role', data.role || selectedRole.value)
+    if (data.sekolah) {
+      localStorage.setItem('sekolahId', String(data.sekolah.id))
+      localStorage.setItem('sekolahNama', data.sekolah.nama || '')
+    }
     localStorage.setItem('user', JSON.stringify({
       id: data.siswa?.id || data.guru?.id,
       role: data.role || selectedRole.value,
@@ -124,7 +170,7 @@ async function handleLogin() {
       mapel: data.guru?.mapel,
       // Dipakai supaya kalau guru refresh halaman sebelum sempat ganti
       // password, sistem masih ingat bahwa dia harus diarahkan ke sana.
-      harusGantiPassword: data.guru?.harusGantiPassword ?? false
+      harusGantiPassword: data.harusGantiPassword ?? data.guru?.harusGantiPassword ?? false
     }))
 
     // Guru yang masih pakai password awal (NIP) diarahkan ke halaman
@@ -132,6 +178,11 @@ async function handleLogin() {
     // (dengan notifikasi wajib ganti) alih-alih halaman terpisah.
     if (data.role === 'guru' && data.guru?.harusGantiPassword) {
       router.push('/guru/profil')
+      return
+    }
+
+    if (data.role === 'admin' && data.harusGantiPassword) {
+      router.push({ path: '/admin/akun', query: { tab: 'keamanan' } })
       return
     }
 
@@ -177,7 +228,8 @@ async function handleLupaPassword() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nip: lupaForm.value.nip,
-          tanggalLahir: lupaForm.value.tanggalLahir
+          tanggalLahir: lupaForm.value.tanggalLahir,
+          sekolahId: Number(sekolahId.value),
         })
       }
     )
@@ -226,7 +278,8 @@ async function handleDaftarSiswa() {
           nama: daftarForm.value.nama,
           nis: daftarForm.value.nis,
           kelas: daftarForm.value.kelas,
-          tanggalLahir: daftarForm.value.tanggalLahir
+          tanggalLahir: daftarForm.value.tanggalLahir,
+          sekolahId: Number(sekolahId.value),
         })
       }
     )
@@ -250,6 +303,94 @@ async function handleDaftarSiswa() {
     isDaftarLoading.value = false
   }
 }
+
+function bukaDaftarAdmin() {
+  adminAuthMode.value = 'daftar'
+  daftarAdminForm.value = { namaSekolah: '', username: '', password: '', konfirmasi: '', kodeUndangan: '' }
+  daftarAdminError.value = ''
+  daftarAdminMessage.value = ''
+  errorMessage.value = ''
+  usernameStatus.value = ''
+}
+
+function kembaliKeLoginAdmin() {
+  adminAuthMode.value = 'login'
+  daftarAdminError.value = ''
+}
+
+async function handleDaftarAdmin() {
+  daftarAdminError.value = ''
+  daftarAdminMessage.value = ''
+  const f = daftarAdminForm.value
+
+  if (!f.namaSekolah.trim() || !f.username.trim() || !f.password) {
+    daftarAdminError.value = 'Nama sekolah, username, dan password wajib diisi'
+    return
+  }
+  if (f.password.length < 8) {
+    daftarAdminError.value = 'Password minimal 8 karakter'
+    return
+  }
+  if (f.password !== f.konfirmasi) {
+    daftarAdminError.value = 'Konfirmasi password tidak sama'
+    return
+  }
+
+  isDaftarAdminLoading.value = true
+  try {
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/daftar-admin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        namaSekolah: f.namaSekolah,
+        username: f.username,
+        password: f.password,
+        kodeUndangan: f.kodeUndangan,
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      daftarAdminError.value = data.error || data.message || 'Gagal mendaftar'
+      return
+    }
+
+    // sekolah baru langsung terpilih di dropdown
+    sekolahId.value = String(data.sekolah.id)
+    await muatDaftarSekolah()
+
+    // kembali ke form login dengan username sudah terisi
+    form.value.username = f.username.trim()
+    form.value.password = ''
+    daftarAdminForm.value = { namaSekolah: '', username: '', password: '', konfirmasi: '', kodeUndangan: '' }
+    adminAuthMode.value = 'login'
+    daftarAdminMessage.value =
+      'Pendaftaran berhasil! Masukkan password yang tadi Anda buat, lalu klik "Masuk sebagai Admin".'
+  } catch (err) {
+    console.error('DAFTAR ADMIN ERROR:', err)
+    daftarAdminError.value = 'Tidak bisa terhubung ke server'
+  } finally {
+    isDaftarAdminLoading.value = false
+  }
+}
+
+
+  async function cekUsernameAdmin() {
+    const u = daftarAdminForm.value.username.trim()
+    if (u.length < 4) {
+      usernameStatus.value = ''
+      return
+    }
+    usernameStatus.value = 'memeriksa'
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/auth/cek-username?username=${encodeURIComponent(u)}`
+      )
+      const data = await res.json().catch(() => ({}))
+      usernameStatus.value = res.ok ? (data.tersedia ? 'tersedia' : 'dipakai') : ''
+    } catch {
+      usernameStatus.value = ''
+    }
+  }
 </script>
 
 <template>
@@ -335,33 +476,40 @@ async function handleDaftarSiswa() {
               {{ role.label }}
             </button>
           </div>
+          <div class="field" v-if="!(selectedRole === 'admin' && adminAuthMode === 'daftar')">
+            <label>Sekolah</label>
+            <select v-model="sekolahId" class="select-sekolah">
+              <option value="" disabled>Pilih sekolah</option>
+              <option v-for="s in daftarSekolah" :key="s.id" :value="String(s.id)">{{ s.nama }}</option>
+            </select>
+          </div>
 
           <form @submit.prevent="handleLogin">
-          <template v-if="selectedRole === 'siswa' && siswaAuthMode === 'login'">
-  <div class="field">
-    <label>NIS</label>
-    <div class="input-wrap">
-      <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="3" y="4" width="18" height="16" rx="2" />
-        <path d="M3 9h18" />
-      </svg>
-      <input v-model="form.nis" type="text" placeholder="Masukkan NIS" required />
-    </div>
-  </div>
-  <div class="field">
-    <label>Tanggal Lahir</label>
-    <div class="input-wrap">
-      <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10" />
-        <polyline points="12 6 12 12 16 14" />
-      </svg>
-      <input v-model="form.tanggalLahir" type="date" required />
-    </div>
-    <div class="forgot-link">
-      <button type="button" class="link-btn" @click="bukaDaftarSiswa">Belum punya akun? Daftar</button>
-    </div>
-  </div>
-</template>
+            <template v-if="selectedRole === 'siswa' && siswaAuthMode === 'login'">
+              <div class="field">
+                <label>NIS</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    <path d="M3 9h18" />
+                  </svg>
+                  <input v-model="form.nis" type="text" placeholder="Masukkan NIS" required />
+                </div>
+              </div>
+              <div class="field">
+                <label>Tanggal Lahir</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  <input v-model="form.tanggalLahir" type="date" required />
+                </div>
+                <div class="forgot-link">
+                  <button type="button" class="link-btn" @click="bukaDaftarSiswa">Belum punya akun? Daftar</button>
+                </div>
+              </div>
+            </template>
 
             <template v-else-if="selectedRole === 'siswa' && siswaAuthMode === 'daftar'">
               <p class="lupa-desc">Isi data diri Anda untuk membuat akun siswa.</p>
@@ -440,28 +588,28 @@ async function handleDaftarSiswa() {
                 </div>
               </div>
               <div class="field">
-  <label>Password</label>
-  <div class="input-wrap">
-    <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <rect x="3" y="11" width="18" height="10" rx="2" />
-      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-    </svg>
-    <input v-model="form.password" :type="showPassword ? 'text' : 'password'" placeholder="Masukkan password" required />
-    <button type="button" class="toggle-eye" tabindex="-1" @click="showPassword = !showPassword">
-      <svg v-if="!showPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
-        <circle cx="12" cy="12" r="3" />
-      </svg>
-      <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a18.5 18.5 0 0 1 4.22-5.06M9.9 4.24A10.94 10.94 0 0 1 12 5c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24" />
-        <line x1="1" y1="1" x2="23" y2="23" />
-      </svg>
-    </button>
-  </div>
-  <div class="forgot-link">
-    <button type="button" class="link-btn" @click="bukaLupaPassword">Lupa password?</button>
-  </div>
-</div>
+                <label>Password</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="10" rx="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <input v-model="form.password" :type="showPassword ? 'text' : 'password'" placeholder="Masukkan password" required />
+                  <button type="button" class="toggle-eye" tabindex="-1" @click="showPassword = !showPassword">
+                    <svg v-if="!showPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                    <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a18.5 18.5 0 0 1 4.22-5.06M9.9 4.24A10.94 10.94 0 0 1 12 5c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                    </svg>
+                  </button>
+                </div>
+                <div class="forgot-link">
+                  <button type="button" class="link-btn" @click="bukaLupaPassword">Lupa password?</button>
+                </div>
+              </div>
             </template>
 
             <template v-else-if="selectedRole === 'guru' && guruAuthMode === 'lupa'">
@@ -507,7 +655,7 @@ async function handleDaftarSiswa() {
               </button>
             </template>
 
-            <template v-else>
+            <template v-else-if="adminAuthMode === 'login'">
               <div class="field">
                 <label>Username</label>
                 <div class="input-wrap">
@@ -520,28 +668,100 @@ async function handleDaftarSiswa() {
               </div>
 
               <div class="field">
-  <label>Password</label>
-  <div class="input-wrap">
-    <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <rect x="3" y="11" width="18" height="10" rx="2" />
-      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-    </svg>
-    <input v-model="form.password" :type="showPassword ? 'text' : 'password'" placeholder="Masukkan password" required />
-    <button type="button" class="toggle-eye" tabindex="-1" @click="showPassword = !showPassword">
-      <svg v-if="!showPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
-        <circle cx="12" cy="12" r="3" />
-      </svg>
-      <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a18.5 18.5 0 0 1 4.22-5.06M9.9 4.24A10.94 10.94 0 0 1 12 5c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24" />
-        <line x1="1" y1="1" x2="23" y2="23" />
-      </svg>
-    </button>
-  </div>
-</div>
-</template>
+                <label>Password</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="10" rx="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <input v-model="form.password" :type="showPassword ? 'text' : 'password'" placeholder="Masukkan password" required />
+                  <button type="button" class="toggle-eye" tabindex="-1" @click="showPassword = !showPassword">
+                    <svg v-if="!showPassword" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                    <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a18.5 18.5 0 0 1 4.22-5.06M9.9 4.24A10.94 10.94 0 0 1 12 5c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div class="forgot-link">
+                <button type="button" class="link-btn" @click="bukaDaftarAdmin">Belum punya akun? Daftarkan sekolah</button>
+              </div>
+              <p v-if="daftarAdminMessage" class="success-text">{{ daftarAdminMessage }}</p>
+            </template>
+            <template v-else>
+              <p class="lupa-desc">Daftarkan sekolah Anda dan buat akun admin perpustakaan.</p>
+              <div class="field">
+                <label>Nama Sekolah</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    <path d="M3 9h18" />
+                  </svg>
+                  <input v-model="daftarAdminForm.namaSekolah" type="text" placeholder="Contoh: SMK xxxxxxxxxx" maxlength="255" />
+                </div>
+              </div>
+              <div class="field">
+                <label>Username</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="8" r="3" />
+                    <path d="M5 21a7 7 0 0 1 14 0" />
+                  </svg>
+                  <input v-model="daftarAdminForm.username" type="text" placeholder="Minimal 4 karakter" autocomplete="username" @input="usernameStatus = ''" @blur="cekUsernameAdmin" />
+                </div>
+                <p v-if="usernameStatus === 'dipakai'" class="error-text">Username sudah digunakan, pilih username lain.</p>
+                <p v-else-if="usernameStatus === 'tersedia'" class="success-text">Username tersedia.</p>
+              </div>
+              <div class="field">
+                <label>Password</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="10" rx="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <input v-model="daftarAdminForm.password" type="password" placeholder="Minimal 8 karakter" autocomplete="new-password" />
+                </div>
+              </div>
+              <div class="field">
+                <label>Ulangi Password</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="10" rx="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <input v-model="daftarAdminForm.konfirmasi" type="password" placeholder="Ketik ulang password" autocomplete="new-password" />
+                </div>
+              </div>
+              <div class="field">
+                <label>Kode Undangan (jika ada)</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  <input v-model="daftarAdminForm.kodeUndangan" type="text" placeholder="Diberikan oleh pengembang" />
+                </div>
+              </div>
+              <p v-if="daftarAdminError" class="error-text">{{ daftarAdminError }}</p>
+              <button
+                type="button"
+                class="btn-login"
+                :disabled="isDaftarAdminLoading || usernameStatus === 'dipakai'"
+                :style="{ opacity: isDaftarAdminLoading ? 0.7 : 1, cursor: isDaftarAdminLoading ? 'not-allowed' : 'pointer' }"
+                @click="handleDaftarAdmin"
+              >
+                {{ isDaftarAdminLoading ? 'Memproses...' : 'Daftarkan Sekolah' }}
+              </button>
+              <button type="button" class="link-btn back-link" @click="kembaliKeLoginAdmin">
+                ← Kembali ke halaman login
+              </button>
+            </template>
 
-            <template v-if="!(selectedRole === 'guru' && guruAuthMode === 'lupa') && !(selectedRole === 'siswa' && siswaAuthMode === 'daftar')">
+            <template v-if="!(selectedRole === 'guru' && guruAuthMode === 'lupa') && !(selectedRole === 'siswa' && siswaAuthMode === 'daftar') && !(selectedRole === 'admin' && adminAuthMode === 'daftar')">
               <p v-if="errorMessage" class="error-text">
                 {{ errorMessage }}
               </p>
@@ -557,14 +777,14 @@ async function handleDaftarSiswa() {
             </template>
           </form>
 
-         <a         
-        :href="kontakAdminUrl"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="form-footer"
-         >
-         Ada kendala saat masuk? <span class="kontak-highlight">Hubungi admin perpustakaan.</span>
-         </a>
+          <a
+            :href="kontakAdminUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="form-footer"
+          >
+            Ada kendala saat masuk? <span class="kontak-highlight">Hubungi admin perpustakaan.</span>
+          </a>
         </div>
       </div>
     </div>
@@ -875,6 +1095,19 @@ async function handleDaftarSiswa() {
   margin: 0 0 16px;
   line-height: 1.5;
 }
+
+.select-sekolah {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+  font-size: 13px;
+  outline: none;
+}
+.select-sekolah:focus { border-color: #2864e8; }
+.select-sekolah option { color: #0b1a3a; }
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 860px) {

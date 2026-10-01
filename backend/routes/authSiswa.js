@@ -161,10 +161,11 @@ function wajibLoginSiswa(req, res, next) {
   if (payload.role !== 'siswa') {
     return res.status(403).json({ error: 'Akses ditolak' })
   }
-    if (!Number.isInteger(payload.sekolahId)) {
+  if (!Number.isInteger(payload.sekolahId)) {
     return res.status(401).json({ error: 'Sesi tidak valid, silakan login ulang' })
   }
-  req.siswa = payload
+  req.user = payload // data siswa (id, role, sekolahId) dipakai route di bawahnya
+  req.siswa = payload  
   next() // di luar try, jadi error hilir tidak salah dilaporkan sebagai 401
 }
 

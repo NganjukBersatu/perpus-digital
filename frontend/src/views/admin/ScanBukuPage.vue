@@ -51,7 +51,7 @@ async function cariJudulManual() {
   }
   isSearchingJudulManual.value = true
   try {
-    const res = await fetch(`${API}/buku?q=${encodeURIComponent(q)}`)
+    const res = await fetch(`${API}/buku?q=${encodeURIComponent(q)}`, { headers: authHeaders() })
     if (res.ok) hasilJudulManual.value = await res.json()
   } catch (err) {
     console.error(err)
@@ -63,7 +63,7 @@ async function cariJudulManual() {
 async function pilihBukuDariJudul(bukuTerpilih) {
   scanError.value = ""
   try {
-    const res = await fetch(`${API}/buku/${bukuTerpilih.id}/untuk-pinjam`)
+    const res = await fetch(`${API}/buku/${bukuTerpilih.id}/untuk-pinjam`, { headers: authHeaders() })
     if (res.status === 404) {
       scanError.value = "Buku ini belum punya eksemplar yang bisa dipinjam."
       return
@@ -299,7 +299,7 @@ const pengaturanPinjam = ref(null)
 
 async function ambilPengaturanPinjam() {
   try {
-    const res = await fetch(`${API}/pengaturan`)
+    const res = await fetch(`${API}/pengaturan`, { headers: authHeaders() })
     if (!res.ok) return
     const data = await res.json()
     pengaturanPinjam.value = data?.detail?.peminjaman || null
@@ -343,7 +343,7 @@ async function ambilDaftarKelas() {
 
 async function ambilDaftarGuru() {
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/guru`)
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/guru`, { headers: authHeaders() })
     if (res.ok) daftarGuru.value = await res.json()
   } catch (err) {
     console.error(err)

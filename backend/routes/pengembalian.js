@@ -7,16 +7,17 @@ const { ErrorBisnis } = require('../utils/errorBisnis')
 const { tanggalHariIniLokal } = require('../utils/tanggal')
 const { sinkronkanStokBuku } = require('./buku')
 const { eq, and, isNotNull, gte, lte, or, ilike, sql, desc } = require('drizzle-orm')
+const { wajibAdmin } = require('./auth')
 
 // GET /api/pengembalian?search=&status=&start=&end=&page=&limit=
-router.get('/', async (req, res) => {
+router.get('/', wajibAdmin, async (req, res) => {
   try {
     const { search = '', status = 'Semua', start, end } = req.query
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 5, 1), 100)
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1)
     const offset = (page - 1) * limit
 
-    const conditions = [isNotNull(peminjaman.tanggalDikembalikan)]
+    const conditions = [isNotNull(peminjaman.tanggalDikembalikan), eq(peminjaman.sekolahId, req.user.sekolahId)]
 
     if (search) {
       conditions.push(
@@ -93,7 +94,7 @@ router.get('/', async (req, res) => {
 })
 
 // GET /api/pengembalian/summary  -> untuk 4 card di atas
-router.get('/summary', async (req, res) => {
+router.get('/summary', wajibAdmin, async (req, res) => {
   try {
     const today = tanggalHariIniLokal()
 
@@ -112,7 +113,7 @@ router.get('/summary', async (req, res) => {
         // dendaMaksimal: peminjaman.dendaMaksimal,
       })
       .from(peminjaman)
-      .where(isNotNull(peminjaman.tanggalDikembalikan))
+      .where(and(eq(peminjaman.sekolahId, req.user.sekolahId), isNotNull(peminjaman.tanggalDikembalikan)))
 
     res.json(result[0])
   } catch (err) {
@@ -122,12 +123,12 @@ router.get('/summary', async (req, res) => {
 })
 
 // PATCH /api/pengembalian/:id  -> proses "buku dikembalikan"
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', wajibAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id)
     if (!Number.isInteger(id)) return res.status(400).json({ message: 'ID tidak valid' })
 
-    const { denda, bukuId } = await prosesPengembalian(id)
+    const { denda, bukuId } = await prosesPengembalian(id, { sekolahId: req.user.sekolahId })
     if (bukuId) await sinkronkanStokBuku(bukuId)
 
     res.json({ message: 'Buku berhasil dikembalikan', denda })

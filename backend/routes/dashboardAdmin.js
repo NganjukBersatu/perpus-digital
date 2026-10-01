@@ -2,7 +2,7 @@ const express = require('express')
 const router = express.Router()
 const db = require('../db')
 const { buku, peminjaman, anggota } = require('../db/schema')
-const { isNull, sql, desc } = require('drizzle-orm')
+const { isNull, sql, desc, eq, and } = require('drizzle-orm')
 const { wajibAdmin } = require('./auth')
 
 router.get('/stats', wajibAdmin, async (req, res) => {

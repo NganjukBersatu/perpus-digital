@@ -22,6 +22,7 @@ const sekolah = pgTable("sekolah", {
   alamat: text("alamat"),
   logoUrl: text("logo_url"),
   aktif: boolean("aktif").notNull().default(true),
+  status: varchar("status", { length: 20 }).notNull().default("menunggu"), // menunggu | aktif | ditolak | nonaktif
   createdAt: timestamp("created_at").defaultNow(),
 })
 
@@ -32,7 +33,7 @@ const adminAkun = pgTable("admin_akun", {
   username: varchar("username", { length: 50 }).notNull().unique(),
   passwordHash: varchar("password_hash", { length: 255 }).notNull(),
   namaLengkap: varchar("nama_lengkap", { length: 255 }).notNull(),
-  email: varchar("email", { length: 255 }),
+  email: varchar("email", { length: 255 }).notNull().unique(),
   telepon: varchar("telepon", { length: 20 }),
   jabatan: varchar("jabatan", { length: 100 }),
   nipNik: varchar("nip_nik", { length: 50 }),

@@ -252,6 +252,9 @@ const kelasBaru = ref('')
 const editKelasId = ref(null)
 const editKelasNama = ref('')
 
+const modeBanyak = ref(false)
+const teksKelasBanyak = ref('')
+
 async function muatKelas() {
   try {
     const res = await fetch(KELAS_URL, { headers: authHeaders() })
@@ -259,6 +262,26 @@ async function muatKelas() {
     daftarKelas.value = await res.json()
   } catch {
     showToast('Gagal memuat daftar kelas')
+  }
+}
+
+async function tambahKelasBanyak() {
+  const daftar = teksKelasBanyak.value.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean)
+  if (!daftar.length) return showToast('Isi daftar kelas terlebih dahulu')
+  try {
+    const res = await fetch(`${KELAS_URL}/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ namaKelas: daftar })
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) return showToast(data.message || 'Gagal menambah kelas')
+    showToast(`${data.ditambahkan} kelas ditambahkan` + (data.dilewati ? `, ${data.dilewati} sudah ada` : ''))
+    teksKelasBanyak.value = ''
+    modeBanyak.value = false
+    muatKelas()
+  } catch {
+    showToast('Gagal terhubung ke server')
   }
 }
 
@@ -921,6 +944,22 @@ onMounted(() => {
           <button class="btn primary" type="button" @click="tambahKelas">Tambah</button>
         </div>
 
+                <button class="link-banyak" type="button" @click="modeBanyak = !modeBanyak">
+          {{ modeBanyak ? '− Tutup tambah banyak' : '+ Tambah banyak sekaligus' }}
+        </button>
+
+        <div v-if="modeBanyak" class="kelas-banyak">
+          <p class="hint">Tulis satu kelas per baris. Boleh tempel dari Excel.</p>
+
+          <textarea
+            v-model="teksKelasBanyak"
+            rows="8"
+            :placeholder="'IX-A\nIX-B\nIX-C'"
+          ></textarea>
+
+          <button class="btn primary" type="button" @click="tambahKelasBanyak">Tambahkan semua</button>
+        </div>
+
         <p v-if="!daftarKelas.length" class="hint">Belum ada kelas.</p>
 
         <ul class="kelas-list">
@@ -1424,27 +1463,83 @@ label.full {
   padding: 0;
   margin: 0;
   display: grid;
-  gap: 10px;
+  gap: 6px;
 }
 
 .kelas-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 10px 14px;
+  border-radius: 10px;
+  padding: 6px 10px;
 }
 
 .kelas-item .input-wrapper {
   flex: 1;
 }
 
+.kelas-item .input-wrapper input {
+  padding: 6px 10px 6px 0;
+  font-size: 13px;
+}
+
+.kelas-item .btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
 .kelas-nama {
   flex: 1;
   font-weight: 600;
+  font-size: 13px;
   color: #334155;
+}
+
+/* Tambah banyak kelas */
+.link-banyak {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-bottom: 16px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #2563eb;
+  cursor: pointer;
+}
+
+.link-banyak:hover {
+  text-decoration: underline;
+}
+
+.kelas-banyak {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.kelas-banyak textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 500;
+  color: #0f172a;
+  resize: vertical;
+  outline: none;
+}
+
+.kelas-banyak textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 /* Responsive */

@@ -68,6 +68,41 @@ router.post("/", async (req, res) => {
   }
 })
 
+// POST tambah banyak kelas sekaligus
+router.post("/bulk", async (req, res) => {
+  try {
+    const mentah = Array.isArray(req.body?.namaKelas) ? req.body.namaKelas : []
+
+    // rapikan spasi dan buang nama kembar di dalam daftar
+    const unik = new Map()
+    for (const n of mentah) {
+      const t = String(n).trim().replace(/\s+/g, " ")
+      if (t) unik.set(t.toLowerCase(), t)
+    }
+    const daftar = [...unik.values()]
+
+    if (!daftar.length) return res.status(400).json({ message: "Daftar kelas kosong" })
+    if (daftar.length > 200) return res.status(400).json({ message: "Maksimal 200 kelas sekaligus" })
+    if (daftar.some((n) => n.length > 50)) {
+      return res.status(400).json({ message: "Nama kelas maksimal 50 karakter" })
+    }
+
+    // kelas yang sudah ada dilewati, sisanya ditambahkan
+    const hasil = await db.insert(kelas)
+      .values(daftar.map((n) => ({ sekolahId: req.sekolahId, namaKelas: n })))
+      .onConflictDoNothing()
+      .returning({ id: kelas.id })
+
+    res.status(201).json({
+      ditambahkan: hasil.length,
+      dilewati: daftar.length - hasil.length,
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ message: "Gagal menambah kelas" })
+  }
+})
+
 // PUT ubah nama kelas (nama kelas di data anggota ikut diubah)
 router.put("/:id", async (req, res) => {
   try {

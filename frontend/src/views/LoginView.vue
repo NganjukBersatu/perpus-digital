@@ -29,7 +29,42 @@ async function muatDaftarSekolah() {
   }
 }
 
-onMounted(muatDaftarSekolah)
+const daftarKelas = ref([])
+const kelasMemuat = ref(false)
+
+async function muatKelas() {
+  daftarKelas.value = []
+  if (!sekolahId.value) return
+  kelasMemuat.value = true
+  try {
+    const res = await fetch(
+      `${import.meta.env.VITE_API_BASE_URL}/kelas?sekolahId=${encodeURIComponent(sekolahId.value)}`
+    )
+    if (res.ok) daftarKelas.value = await res.json()
+  } catch (err) {
+    console.error('Gagal memuat daftar kelas', err)
+  } finally {
+    kelasMemuat.value = false
+  }
+}
+
+const teksPlaceholderKelas = computed(() => {
+  if (!sekolahId.value) return 'Pilih sekolah terlebih dahulu'
+  if (kelasMemuat.value) return 'Memuat kelas...'
+  if (!daftarKelas.value.length) return 'Belum ada kelas, hubungi admin'
+  return 'Pilih kelas'
+})
+
+// Ganti sekolah -> kelas yang sudah dipilih dikosongkan dan daftar dimuat ulang
+watch(sekolahId, () => {
+  daftarForm.value.kelas = ''
+  muatKelas()
+})
+
+onMounted(() => {
+  muatDaftarSekolah()
+  muatKelas()
+})
 
 const form = ref({
   nis: '',
@@ -255,6 +290,7 @@ async function bukaDaftarSiswa() {
   daftarForm.value = { nama: '', nis: '', kelas: '', tanggalLahir: '' }
   daftarError.value = ''
   daftarMessage.value = ''
+  muatKelas()
 }
 
 function kembaliKeLoginSiswa() {
@@ -266,6 +302,14 @@ function kembaliKeLoginSiswa() {
 async function handleDaftarSiswa() {
   daftarError.value = ''
   daftarMessage.value = ''
+  if (!sekolahId.value) {
+    daftarError.value = 'Pilih sekolah terlebih dahulu'
+    return
+  }
+  if (!daftarForm.value.kelas) {
+    daftarError.value = 'Pilih kelas terlebih dahulu'
+    return
+  }
   isDaftarLoading.value = true
 
   try {
@@ -538,13 +582,14 @@ async function handleDaftarAdmin() {
 
               <div class="field">
                 <label>Kelas</label>
-                <div class="input-wrap">
-                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="4" width="18" height="16" rx="2" />
-                    <path d="M3 9h18" />
-                  </svg>
-                  <input v-model="daftarForm.kelas" type="text" placeholder="Contoh: XII-RPL 2" maxlength="30" required />
-                </div>
+                <select
+                  v-model="daftarForm.kelas"
+                  class="select-sekolah"
+                  :disabled="kelasMemuat || !daftarKelas.length"
+                >
+                  <option value="" disabled>{{ teksPlaceholderKelas }}</option>
+                  <option v-for="k in daftarKelas" :key="k" :value="k">{{ k }}</option>
+                </select>
               </div>
 
               <div class="field">

@@ -14,6 +14,7 @@ const tabs = [
   { id: 'peminjaman', label: 'Aturan Peminjaman', icon: 'calendar' },
   { id: 'denda', label: 'Pengaturan Denda', icon: 'coins' },
   { id: 'notifikasi', label: 'Notifikasi', icon: 'bell' },
+  { id: 'kelas', label: 'Kelas', icon: 'users' },
   { id: 'sistem', label: 'Sistem', icon: 'settings' }
 ]
 
@@ -245,7 +246,71 @@ function exportSettings() {
   showToast('File pengaturan diunduh')
 }
 
-onMounted(loadSettings)
+const KELAS_URL = `${import.meta.env.VITE_API_BASE_URL}/pengaturan-kelas`
+const daftarKelas = ref([])
+const kelasBaru = ref('')
+const editKelasId = ref(null)
+const editKelasNama = ref('')
+
+async function muatKelas() {
+  try {
+    const res = await fetch(KELAS_URL, { headers: authHeaders() })
+    if (!res.ok) throw new Error()
+    daftarKelas.value = await res.json()
+  } catch {
+    showToast('Gagal memuat daftar kelas')
+  }
+}
+
+async function kirimKelas(url, method, body) {
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: body ? JSON.stringify(body) : undefined
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      showToast(data.message || data.error || 'Gagal memproses kelas')
+      return false
+    }
+    return true
+  } catch {
+    showToast('Gagal terhubung ke server')
+    return false
+  }
+}
+
+async function tambahKelas() {
+  if (!kelasBaru.value.trim()) return showToast('Nama kelas wajib diisi')
+  if (await kirimKelas(KELAS_URL, 'POST', { namaKelas: kelasBaru.value })) {
+    kelasBaru.value = ''
+    showToast('Kelas ditambahkan')
+    muatKelas()
+  }
+}
+
+async function simpanKelas(k) {
+  if (!editKelasNama.value.trim()) return showToast('Nama kelas wajib diisi')
+  if (await kirimKelas(`${KELAS_URL}/${k.id}`, 'PUT', { namaKelas: editKelasNama.value })) {
+    editKelasId.value = null
+    showToast('Kelas diperbarui')
+    muatKelas()
+  }
+}
+
+async function hapusKelas(k) {
+  if (!confirm(`Hapus kelas ${k.namaKelas}?`)) return
+  if (await kirimKelas(`${KELAS_URL}/${k.id}`, 'DELETE')) {
+    showToast('Kelas dihapus')
+    muatKelas()
+  }
+}
+
+onMounted(() => {
+  loadSettings()
+  muatKelas()
+})
 </script>
 
 <template>
@@ -324,6 +389,13 @@ onMounted(loadSettings)
           <svg v-else-if="tab.icon === 'bell'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
             <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+                    <!-- Icon: users -->
+          <svg v-else-if="tab.icon === 'users'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
           </svg>
           <!-- Icon: settings -->
           <svg v-else-if="tab.icon === 'settings'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -825,6 +897,50 @@ onMounted(loadSettings)
         </div>
       </section>
 
+            <!-- KELAS -->
+      <section v-show="activeTab === 'kelas'" class="card">
+        <div class="card-header">
+          <div class="card-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+          </div>
+          <div>
+            <h2>Kelas</h2>
+            <p class="hint">Daftar kelas untuk data siswa dan form peminjaman. Perubahan di sini langsung tersimpan.</p>
+          </div>
+        </div>
+
+        <div class="kelas-tambah">
+          <div class="input-wrapper">
+            <input v-model="kelasBaru" type="text" placeholder="Contoh: X RPL 1" style="padding-left:14px;" @keyup.enter="tambahKelas" />
+          </div>
+          <button class="btn primary" type="button" @click="tambahKelas">Tambah</button>
+        </div>
+
+        <p v-if="!daftarKelas.length" class="hint">Belum ada kelas.</p>
+
+        <ul class="kelas-list">
+          <li v-for="k in daftarKelas" :key="k.id" class="kelas-item">
+            <template v-if="editKelasId === k.id">
+              <div class="input-wrapper">
+                <input v-model="editKelasNama" type="text" style="padding-left:14px;" @keyup.enter="simpanKelas(k)" />
+              </div>
+              <button class="btn primary" type="button" @click="simpanKelas(k)">Simpan</button>
+              <button class="btn ghost" type="button" @click="editKelasId = null">Batal</button>
+            </template>
+            <template v-else>
+              <span class="kelas-nama">{{ k.namaKelas }}</span>
+              <button class="btn ghost" type="button" @click="editKelasId = k.id; editKelasNama = k.namaKelas">Ubah</button>
+              <button class="btn danger" type="button" @click="hapusKelas(k)">Hapus</button>
+            </template>
+          </li>
+        </ul>
+      </section>
+
       <!-- SISTEM -->
       <section v-show="activeTab === 'sistem'" class="card">
         <div class="card-header">
@@ -1290,6 +1406,45 @@ label.full {
     transform: translateY(0);
     opacity: 1;
   }
+}
+
+/* Kelas */
+.kelas-tambah {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.kelas-tambah .input-wrapper {
+  flex: 1;
+}
+
+.kelas-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.kelas-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+
+.kelas-item .input-wrapper {
+  flex: 1;
+}
+
+.kelas-nama {
+  flex: 1;
+  font-weight: 600;
+  color: #334155;
 }
 
 /* Responsive */

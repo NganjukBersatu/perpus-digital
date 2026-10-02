@@ -111,7 +111,7 @@ async function saveProfile() {
       }),
     })
     const data = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(data.error || 'Gagal menyimpan')
+    if (!res.ok) throw new Error(data.error || 'Gagal menyimpan')
 
     const userLama = JSON.parse(localStorage.getItem('user') || '{}')
     localStorage.setItem('user', JSON.stringify({
@@ -231,7 +231,14 @@ onMounted(loadProfile)
           </svg>
           Keluar
         </button>
-        <button class="btn primary" type="button" :disabled="isSaving" @click="saveProfile">
+        <!-- PERUBAHAN: hanya tampil di tab Profil -->
+        <button
+          v-if="activeTab === 'profil'"
+          class="btn primary"
+          type="button"
+          :disabled="isSaving"
+          @click="saveProfile"
+        >
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
             <polyline points="17 21 17 13 7 13 7 21"/>
@@ -463,10 +470,12 @@ onMounted(loadProfile)
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
               </svg>
             </span>
+            <!-- PERUBAHAN: class has-eye + placeholder singkat -->
             <input
               v-model="security.passwordLama"
+              class="has-eye"
               :type="security.tampilkanPasswordLama ? 'text' : 'password'"
-              placeholder="Masukkan password saat ini"
+              placeholder="Password saat ini"
             />
             <button
               type="button"
@@ -495,10 +504,12 @@ onMounted(loadProfile)
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
               </svg>
             </span>
+            <!-- PERUBAHAN: class has-eye + placeholder singkat -->
             <input
               v-model="security.passwordBaru"
+              class="has-eye"
               :type="security.tampilkanPasswordBaru ? 'text' : 'password'"
-              placeholder="Masukkan password baru"
+              placeholder="Password baru"
             />
             <button
               type="button"
@@ -906,6 +917,12 @@ label {
   background: #eef2ff;
 }
 
+/* PERUBAHAN: ruang di kanan untuk ikon mata */
+.input-with-icon input.has-eye {
+  padding-right: 44px;
+  text-overflow: ellipsis;
+}
+
 /* ================= ACTIONS ================= */
 .actions {
   margin-top: 22px;
@@ -924,6 +941,7 @@ label {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap; /* PERUBAHAN: teks tombol tidak turun baris */
   transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -1107,6 +1125,30 @@ label {
   .head-actions .btn {
     flex: 1;
     justify-content: center;
+  }
+}
+
+/* PERUBAHAN: tampilan HP */
+@media (max-width: 640px) {
+  .akun-page {
+    padding: 16px 14px 40px;
+  }
+
+  .head-actions {
+    flex-direction: column-reverse; /* Simpan di atas, Keluar di bawah */
+    gap: 8px;
+  }
+
+  .head-actions .btn {
+    flex: none;
+    width: 100%;
+    justify-content: center;
+    padding: 11px 16px;
+  }
+
+  .hero-meta {
+    flex-wrap: wrap;
+    font-size: 13px;
   }
 }
 </style>

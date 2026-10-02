@@ -43,7 +43,7 @@ const adminAkun = pgTable("admin_akun", {
 
 const pengaturanPerpustakaan = pgTable("pengaturan_perpustakaan", {
   id: serial("id").primaryKey(),
-  sekolahId: integer("sekolah_id").references(() => sekolah.id, { onDelete: "restrict" }).unique(),
+  sekolahId: integer("sekolah_id").notNull().references(() => sekolah.id, { onDelete: "restrict" }).unique(),
   namaSekolah: varchar("nama_sekolah", { length: 255 }).notNull().default(""),
   namaPerpustakaan: varchar("nama_perpustakaan", { length: 255 }).notNull().default(""),
   alamat: text("alamat"),
@@ -53,7 +53,7 @@ const pengaturanPerpustakaan = pgTable("pengaturan_perpustakaan", {
 
 const kategori = pgTable("kategori", {
   id: serial("id").primaryKey(),
-  sekolahId: integer("sekolah_id").references(() => sekolah.id, { onDelete: "restrict" }),
+  sekolahId: integer("sekolah_id").notNull().references(() => sekolah.id, { onDelete: "restrict" }),
   nama: varchar("nama", { length: 100 }).notNull(),
   deskripsi: text("deskripsi"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -63,7 +63,7 @@ const kategori = pgTable("kategori", {
 
 const kelas = pgTable("kelas", {
   id: serial("id").primaryKey(),
-  sekolahId: integer("sekolah_id").references(() => sekolah.id, { onDelete: "restrict" }),
+  sekolahId: integer("sekolah_id").notNull().references(() => sekolah.id, { onDelete: "restrict" }),
   namaKelas: varchar("nama_kelas", { length: 50 }).notNull(),
 }, (table) => ({
   namaKelasUnik: unique("kelas_nama_sekolah_unique").on(table.sekolahId, table.namaKelas),
@@ -71,7 +71,7 @@ const kelas = pgTable("kelas", {
 
 const anggota = pgTable("anggota", {
   id: serial("id").primaryKey(),
-  sekolahId: integer("sekolah_id").references(() => sekolah.id, { onDelete: "restrict" }),
+  sekolahId: integer("sekolah_id").notNull().references(() => sekolah.id, { onDelete: "restrict" }),
   nama: varchar("nama", { length: 255 }).notNull(),
   kelas: varchar("kelas", { length: 50 }),
 
@@ -102,7 +102,7 @@ const anggota = pgTable("anggota", {
 //    (kategori jadi null) supaya koleksi buku tidak ikut hilang.
 const buku = pgTable("buku", {
   id: serial("id").primaryKey(),
-  sekolahId: integer("sekolah_id").references(() => sekolah.id, { onDelete: "restrict" }),
+  sekolahId: integer("sekolah_id").notNull().references(() => sekolah.id, { onDelete: "restrict" }),
   judul: varchar("judul", { length: 255 }).notNull(),
   penulis: varchar("penulis", { length: 255 }),
   penerbit: varchar("penerbit", { length: 255 }),
@@ -126,7 +126,7 @@ const buku = pgTable("buku", {
 //    Kalau buku dihapus, semua eksemplarnya ikut terhapus otomatis.
 const eksemplarBuku = pgTable("eksemplar_buku", {
   id: serial("id").primaryKey(),
-  sekolahId: integer("sekolah_id").references(() => sekolah.id, { onDelete: "restrict" }),
+  sekolahId: integer("sekolah_id").notNull().references(() => sekolah.id, { onDelete: "restrict" }),
   bukuId: integer("buku_id")
     .notNull()
     .references(() => buku.id, { onDelete: "cascade" }),
@@ -145,7 +145,7 @@ const eksemplarBuku = pgTable("eksemplar_buku", {
 //    yang punya riwayat peminjaman TIDAK BISA dihapus sembarangan.
 const peminjaman = pgTable("peminjaman", {
   id: serial("id").primaryKey(),
-  sekolahId: integer("sekolah_id").references(() => sekolah.id, { onDelete: "restrict" }),
+  sekolahId: integer("sekolah_id").notNull().references(() => sekolah.id, { onDelete: "restrict" }),
   nama: varchar("nama", { length: 255 }),
   kelas: varchar("kelas", { length: 50 }),
   eksemplarId: integer("eksemplar_id")

@@ -4,21 +4,28 @@ const { db } = require('../db/client')
 const { pengaturanPerpustakaan } = require('../db/schema')
 const { eq, and } = require('drizzle-orm')
 const { wajibAdmin, opsionalLogin } = require('./auth')
-const { sekolahIdDari } = require('../utils/sekolah')
+const { sekolahIdDari, ambilSekolahAktif } = require('../utils/sekolah')
 
 // GET pengaturan (tidak perlu login — dipakai juga untuk tampil di sidebar sebelum login)
 router.get('/', opsionalLogin, async (req, res) => {
   try {
     const sekolahId = sekolahIdDari(req)
     if (!sekolahId) return res.status(400).json({ error: 'sekolahId wajib diisi' })
+    if (!req.user?.sekolahId && !(await ambilSekolahAktif(sekolahId))) {
+      return res.status(404).json({ error: 'Sekolah tidak ditemukan' })
+    }
     const [data] = await db.select().from(pengaturanPerpustakaan)
       .where(eq(pengaturanPerpustakaan.sekolahId, sekolahId)).limit(1)
-    res.json(data || {
-      namaSekolah: '',
-      namaPerpustakaan: '',
-      alamat: '',
-      detail: null
-    })
+    // Tanpa login: hanya info dasar. Seluruh `detail` hanya untuk pengguna sekolah itu.
+    if (!req.user?.sekolahId) {
+      return res.json({
+        namaSekolah: data?.namaSekolah || '',
+        namaPerpustakaan: data?.namaPerpustakaan || '',
+        alamat: data?.alamat || '',
+        detail: null,
+      })
+    }
+    res.json(data || { namaSekolah: '', namaPerpustakaan: '', alamat: '', detail: null })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Gagal mengambil pengaturan' })
@@ -128,6 +135,9 @@ router.get('/publik', opsionalLogin, async (req, res) => {
   try {
     const sekolahId = sekolahIdDari(req)
     if (!sekolahId) return res.status(400).json({ error: 'sekolahId wajib diisi' })
+    if (!req.user?.sekolahId && !(await ambilSekolahAktif(sekolahId))) {
+      return res.status(404).json({ error: 'Sekolah tidak ditemukan' })
+    }
     const [row] = await db.select().from(pengaturanPerpustakaan)
       .where(eq(pengaturanPerpustakaan.sekolahId, sekolahId)).limit(1)
 

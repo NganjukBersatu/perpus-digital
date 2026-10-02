@@ -62,7 +62,8 @@ async function prosesPengembalian(peminjamanId, { anggotaId, sekolahId } = {}) {
       .where(and(eq(eksemplarBuku.id, row.eksemplarId), eq(eksemplarBuku.sekolahId, sekolahId)))
       .returning({ bukuId: eksemplarBuku.bukuId })
 
-    return { updated, denda, bukuId: ek?.bukuId }
+    if (!ek) throw new ErrorBisnis(409, 'Eksemplar tidak ditemukan, pengembalian dibatalkan')
+    return { updated, denda, bukuId: ek.bukuId }
   })
 }
 

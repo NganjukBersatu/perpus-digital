@@ -27,6 +27,7 @@ import PeminjamanSiswaPage from '@/views/siswa/PeminjamanSiswaPage.vue'
 import PeminjamanGuruPage from '@/views/guru/PeminjamanGuruPage.vue'
 import RiwayatGuruPage from '@/views/guru/RiwayatGuruPage.vue'
 import ProfilGuruPage from '@/views/guru/ProfilGuruPage.vue'
+import SuperAdminSekolah from '@/views/SuperAdminSekolah.vue'
 import { usePengaturanDenda } from '@/composables/usePengaturanDenda'
 
 const ComingSoon = {
@@ -158,16 +159,16 @@ const router = createRouter({
           name: 'admin-data-peminjaman',
           component: DataPeminjaman,
         },
-       {
-  path: 'denda',
-  name: 'admin-denda',
-  component: Denda,
-  beforeEnter: async () => {
-    const { dendaAktif, muat } = usePengaturanDenda()
-    await muat()
-    if (!dendaAktif.value) return '/admin'
-  },
-},
+        {
+          path: 'denda',
+          name: 'admin-denda',
+          component: Denda,
+          beforeEnter: async () => {
+            const { dendaAktif, muat } = usePengaturanDenda()
+            await muat()
+            if (!dendaAktif.value) return '/admin'
+          },
+        },
         {
           path: 'laporan',
           name: 'admin-laporan',
@@ -189,7 +190,12 @@ const router = createRouter({
           component: AkunAdminPage
         }
       ]
-    }
+    },
+    {
+      path: '/superadmin',
+      name: 'superadmin-sekolah',
+      component: SuperAdminSekolah,
+    },
   ],
   scrollBehavior() { 
     return { top: 0 }

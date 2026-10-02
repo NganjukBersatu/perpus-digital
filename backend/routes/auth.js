@@ -73,7 +73,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       sekolah: sek ? { id: sek.id, nama: sek.nama, logoUrl: sek.logoUrl } : null,
       admin: {
         token,
-        role: 'admin',
+        role,
         nama: akun.namaLengkap,
         admin: {
           id: akun.id,
@@ -120,6 +120,7 @@ router.post('/daftar-admin', daftarLimiter, async (req, res) => {
     const namaSekolah = String(body.namaSekolah ?? '').trim().replace(/\s+/g, ' ')
     const username = String(body.username ?? '').trim()
     const password = body.password
+    const email = String(body.email ?? '').trim().toLowerCase()
 
     const kodeWajib = process.env.KODE_UNDANGAN
     if (kodeWajib && String(body.kodeUndangan ?? '').trim() !== kodeWajib) {
@@ -136,6 +137,10 @@ router.post('/daftar-admin', daftarLimiter, async (req, res) => {
     }
     if (typeof password !== 'string' || password.length < 8 || Buffer.byteLength(password) > 72) {
       return res.status(400).json({ error: 'Password harus 8–72 karakter' })
+    }
+
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || email.length > 255) {
+      return res.status(400).json({ error: 'Email tidak valid' })
     }
 
     // nama sekolah yang sama (huruf besar/kecil dianggap sama) ditolak
@@ -157,6 +162,15 @@ router.post('/daftar-admin', daftarLimiter, async (req, res) => {
       return res.status(409).json({ error: 'Username sudah dipakai' })
     }
 
+    const [emailSama] = await db
+      .select({ id: adminAkun.id })
+      .from(adminAkun)
+      .where(eq(adminAkun.email, email))
+      .limit(1)
+    if (emailSama) {
+      return res.status(409).json({ error: 'Email sudah dipakai' })
+    }
+
     const passwordHash = await bcrypt.hash(password, 10)
 
     // transaksi: kalau salah satu gagal, dua-duanya dibatalkan
@@ -168,6 +182,7 @@ router.post('/daftar-admin', daftarLimiter, async (req, res) => {
         username,
         passwordHash,
         namaLengkap: 'Admin Perpustakaan',
+        email,
         harusGantiPassword: true,
       })
       return s
@@ -175,13 +190,13 @@ router.post('/daftar-admin', daftarLimiter, async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Pendaftaran berhasil. Silakan login dan ganti password Anda.',
+      message: 'Pendaftaran berhasil. Akun Anda menunggu persetujuan super admin.',
       sekolah: { id: sekBaru.id, nama: sekBaru.nama },
     })
   } catch (err) {
     // dua pendaftaran dengan data sama yang masuk bersamaan
     if ((err.cause?.code || err.code) === '23505') {
-      return res.status(409).json({ error: 'Sekolah atau username sudah terdaftar' })
+      return res.status(409).json({ error: 'Sekolah, username, atau email sudah terdaftar' })
     }
     console.error(err)
     res.status(500).json({ error: 'Gagal mendaftar' })

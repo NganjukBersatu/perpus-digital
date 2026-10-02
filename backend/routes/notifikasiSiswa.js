@@ -30,6 +30,7 @@ function pasangRouteNotifikasiSiswa(app, verifikasiToken) {
         .where(
           and(
             eq(peminjaman.anggotaId, anggotaId),
+            eq(peminjaman.sekolahId, req.user.sekolahId),
             isNull(peminjaman.tanggalDikembalikan)
           )
         )

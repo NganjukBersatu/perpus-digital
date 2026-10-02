@@ -69,8 +69,6 @@ app.use("/api/pengembalian", wajibAdmin, pengembalianRoutes)
 pasangRouteNotifikasiSiswa(app, wajibLoginSiswa)
 pasangRouteNotifikasiGuru(app, wajibLoginGuru)
 
-// Cek: kalau routes/buku.js punya route GET '/:id', route /kategori di bawah
-// tidak akan pernah terpanggil. Lihat catatan di dekat app.get("/api/buku/kategori").
 app.use("/api/buku", bukuRoutes)
 app.use("/api/buku", bukuIsbnRouter)
 app.use("/api/siswa", siswaRoutes)
@@ -368,11 +366,16 @@ app.patch("/api/peminjaman/:id/perpanjang", async (req, res) => {
         tanggalKembali: tglBaru.toISOString().slice(0, 10),
         jumlahPerpanjangan: (pinjam.jumlahPerpanjangan || 0) + 1,
       })
-      .where(and(eq(peminjaman.id, id), eq(peminjaman.sekolahId, sekolahId), isNull(peminjaman.tanggalDikembalikan)))
+      .where(and(
+        eq(peminjaman.id, id),
+        eq(peminjaman.sekolahId, sekolahId),
+        isNull(peminjaman.tanggalDikembalikan),
+        sql`coalesce(${peminjaman.jumlahPerpanjangan}, 0) = ${pinjam.jumlahPerpanjangan || 0}`
+      ))
       .returning()
 
     if (!updated) {
-      return res.status(400).json({ message: "Buku ini sudah dikembalikan, tidak bisa diperpanjang" })
+      return res.status(409).json({ message: "Data peminjaman baru saja berubah, muat ulang lalu coba lagi" })
     }
 
     res.json(updated)
@@ -431,7 +434,7 @@ app.get("/api/dashboard/peminjaman-terbaru", async (req, res) => {
 
     if (hari && Number.isFinite(Number(hari))) {
       const batasAwal = new Date()
-      batasAwal.setDate(batasAwal.getDate() - Number(hari))
+      batasAwal.setDate(batasAwal.getDate() - Math.min(Math.max(Number(hari), 0), 365))
       batasAwal.setHours(0, 0, 0, 0)
 
       data = await db
@@ -584,12 +587,6 @@ app.get("/api/dashboard/buku-terpopuler", async (req, res) => {
   }
 })
 
-// GET daftar kategori buku yang ada (untuk dropdown filter)
-// CATATAN: router bukuRoutes sudah didaftarkan di atas. Jalankan
-//   grep -n "router.get" routes/buku.js routes/bukuIsbn.js
-// Kalau ada router.get('/:id') atau router.get('/'), pindahkan handler ini ke
-// SEBELUM app.use("/api/buku", bukuRoutes), atau ke dalam routes/buku.js,
-// kalau tidak handler ini tidak akan pernah terpanggil.
 app.get("/api/buku/kategori", wajibLogin, async (req, res) => {
   try {
     const { sekolahId } = req.user
@@ -807,60 +804,6 @@ app.get("/api/dashboard/notifikasi", async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ message: "Gagal mengambil notifikasi" })
-  }
-})
-
-// GET daftar semua buku beserta jumlah stok & tersedia
-app.get("/api/buku", wajibLogin, async (req, res) => {
-  try {
-    const { sekolahId } = req.user
-    const search = String(req.query.search ?? "").trim()
-
-    let query = sql`
-      select
-        b.id,
-        b.judul,
-        b.penulis,
-        b.isbn,
-        count(e.id) as stok,
-        count(e.id) filter (where e.status = 'tersedia') as tersedia
-      from buku b
-      left join eksemplar_buku e on e.buku_id = b.id
-      where b.sekolah_id = ${sekolahId}
-    `
-
-    if (search) {
-      const pola = "%" + escapeLike(search) + "%"
-      query = sql`${query} and (b.judul ilike ${pola} or b.isbn ilike ${pola} or b.penulis ilike ${pola})`
-    }
-
-    query = sql`${query} group by b.id order by b.judul`
-
-    const result = await db.execute(query)
-
-    const data = result.rows.map((row) => {
-      const stok = Number(row.stok)
-      const tersedia = Number(row.tersedia)
-      let status
-      if (tersedia === 0) status = "Habis"
-      else if (tersedia <= stok * 0.3) status = "Stok Menipis"
-      else status = "Tersedia"
-
-      return {
-        id: row.id,
-        judul: row.judul,
-        penulis: row.penulis,
-        isbn: row.isbn,
-        stok,
-        tersedia,
-        status,
-      }
-    })
-
-    res.json(data)
-  } catch (err) {
-    console.error(err)
-    res.status(500).json({ message: "Gagal mengambil data buku" })
   }
 })
 

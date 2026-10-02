@@ -32,6 +32,7 @@ function pasangRouteNotifikasiGuru(app, wajibLoginGuru) {
         .where(
           and(
             eq(peminjaman.anggotaId, anggotaId),
+            eq(peminjaman.sekolahId, req.user.sekolahId),
             isNull(peminjaman.tanggalDikembalikan)
           )
         )

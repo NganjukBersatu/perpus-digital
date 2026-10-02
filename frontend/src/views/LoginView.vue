@@ -65,7 +65,7 @@ const isDaftarLoading = ref(false)
 
 // State untuk fitur "Daftar Sekolah" khusus Admin
 const adminAuthMode = ref('login') // 'login' | 'daftar'
-const daftarAdminForm = ref({ namaSekolah: '', username: '', password: '', konfirmasi: '', kodeUndangan: '' })
+const daftarAdminForm = ref({ namaSekolah: '', username: '', email: '', password: '', konfirmasi: '', kodeUndangan: '' })
 const daftarAdminError = ref('')
 const daftarAdminMessage = ref('')
 const isDaftarAdminLoading = ref(false)
@@ -88,7 +88,7 @@ watch(selectedRole, () => {
   daftarError.value = ''
   daftarMessage.value = ''
   adminAuthMode.value = 'login'
-  daftarAdminForm.value = { namaSekolah: '', username: '', password: '', konfirmasi: '', kodeUndangan: '' }
+  daftarAdminForm.value = { namaSekolah: '', username: '', email: '', password: '', konfirmasi: '', kodeUndangan: '' }
   daftarAdminError.value = ''
   daftarAdminMessage.value = ''
 })
@@ -306,7 +306,7 @@ async function handleDaftarSiswa() {
 
 function bukaDaftarAdmin() {
   adminAuthMode.value = 'daftar'
-  daftarAdminForm.value = { namaSekolah: '', username: '', password: '', konfirmasi: '', kodeUndangan: '' }
+  daftarAdminForm.value = { namaSekolah: '', username: '', email: '', password: '', konfirmasi: '', kodeUndangan: '' }
   daftarAdminError.value = ''
   daftarAdminMessage.value = ''
   errorMessage.value = ''
@@ -323,8 +323,8 @@ async function handleDaftarAdmin() {
   daftarAdminMessage.value = ''
   const f = daftarAdminForm.value
 
-  if (!f.namaSekolah.trim() || !f.username.trim() || !f.password) {
-    daftarAdminError.value = 'Nama sekolah, username, dan password wajib diisi'
+  if (!f.namaSekolah.trim() || !f.username.trim() || !f.email.trim() || !f.password) {
+    daftarAdminError.value = 'Nama sekolah, username, email, dan password wajib diisi'
     return
   }
   if (f.password.length < 8) {
@@ -344,6 +344,7 @@ async function handleDaftarAdmin() {
       body: JSON.stringify({
         namaSekolah: f.namaSekolah,
         username: f.username,
+        email: f.email.trim(),
         password: f.password,
         kodeUndangan: f.kodeUndangan,
       }),
@@ -355,16 +356,16 @@ async function handleDaftarAdmin() {
     }
 
     // sekolah baru langsung terpilih di dropdown
-    sekolahId.value = String(data.sekolah.id)
+    if (data.sekolah?.id) sekolahId.value = String(data.sekolah.id)
     await muatDaftarSekolah()
 
     // kembali ke form login dengan username sudah terisi
     form.value.username = f.username.trim()
     form.value.password = ''
-    daftarAdminForm.value = { namaSekolah: '', username: '', password: '', konfirmasi: '', kodeUndangan: '' }
+    daftarAdminForm.value = { namaSekolah: '', username: '', email: '', password: '', konfirmasi: '', kodeUndangan: '' }
     adminAuthMode.value = 'login'
     daftarAdminMessage.value =
-      'Pendaftaran berhasil! Masukkan password yang tadi Anda buat, lalu klik "Masuk sebagai Admin".'
+      data.message || 'Pendaftaran berhasil. Sekolah Anda menunggu persetujuan super admin sebelum bisa digunakan.'
   } catch (err) {
     console.error('DAFTAR ADMIN ERROR:', err)
     daftarAdminError.value = 'Tidak bisa terhubung ke server'
@@ -715,6 +716,16 @@ async function handleDaftarAdmin() {
                 </div>
                 <p v-if="usernameStatus === 'dipakai'" class="error-text">Username sudah digunakan, pilih username lain.</p>
                 <p v-else-if="usernameStatus === 'tersedia'" class="success-text">Username tersedia.</p>
+              </div>
+              <div class="field">
+                <label>Email</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="5" width="18" height="14" rx="2" />
+                    <path d="M3 7l9 6 9-6" />
+                  </svg>
+                  <input v-model="daftarAdminForm.email" type="email" placeholder="contoh@sekolah.sch.id" autocomplete="email" />
+                </div>
               </div>
               <div class="field">
                 <label>Password</label>

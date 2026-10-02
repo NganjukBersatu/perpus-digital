@@ -6,7 +6,7 @@ async function ambilSekolahAktif(sekolahId) {
   const id = Number(sekolahId)
   if (!Number.isInteger(id)) return null
   const [s] = await db.select().from(sekolah).where(eq(sekolah.id, id)).limit(1)
-  return s && s.aktif ? s : null
+  return s && s.aktif && s.status === 'aktif' ? s : null
 }
 
 // Untuk endpoint publik: sekolah dari token kalau ada, kalau tidak dari ?sekolahId=

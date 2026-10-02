@@ -3,7 +3,7 @@ const router = express.Router()
 const bcrypt = require('bcrypt')
 const { db } = require('../db/client')
 const { adminAkun } = require('../db/schema')
-const { eq } = require('drizzle-orm')
+const { eq, and, ne } = require('drizzle-orm')
 const { wajibAdmin } = require('./auth')
 
 // GET profil admin yang sedang login
@@ -33,6 +33,11 @@ router.put('/profil', wajibAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Username wajib diisi' })
     }
 
+    const emailBersih = String(email ?? '').trim().toLowerCase()
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailBersih) || emailBersih.length > 255) {
+      return res.status(400).json({ error: 'Email tidak valid' })
+    }
+
     const [akunSekarang] = await db
       .select()
       .from(adminAkun)
@@ -53,12 +58,21 @@ router.put('/profil', wajibAdmin, async (req, res) => {
       }
     }
 
+    const [emailSama] = await db
+      .select({ id: adminAkun.id })
+      .from(adminAkun)
+      .where(and(eq(adminAkun.email, emailBersih), ne(adminAkun.id, req.user.id)))
+      .limit(1)
+    if (emailSama) {
+      return res.status(409).json({ error: 'Email sudah dipakai' })
+    }
+
     const [updated] = await db
       .update(adminAkun)
       .set({
         namaLengkap: String(namaLengkap).trim(),
         username: usernameBaru,
-        email,
+        email: emailBersih,
         telepon,
         jabatan,
         nipNik,
@@ -71,7 +85,8 @@ router.put('/profil', wajibAdmin, async (req, res) => {
   } catch (err) {
     // dua permintaan dengan username sama yang masuk bersamaan
     if ((err.cause?.code || err.code) === '23505') {
-      return res.status(409).json({ error: 'Username sudah dipakai' })
+      const bidang = String(err.cause?.constraint || '').includes('email') ? 'Email' : 'Username'
+      return res.status(409).json({ error: `${bidang} sudah dipakai` })
     }
     console.error(err)
     res.status(500).json({ error: 'Gagal menyimpan profil' })

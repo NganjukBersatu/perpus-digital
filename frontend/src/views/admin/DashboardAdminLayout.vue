@@ -607,7 +607,7 @@ onBeforeUnmount(() => {
         </div>
       </header>
 
-      <router-view :admin="admin" />
+      <router-view />
     </main>
 
     <div

@@ -186,11 +186,9 @@ const pengajuanBantuan = pgTable("pengajuan_bantuan", {
   id: serial("id").primaryKey(),
   sekolahId: integer("sekolah_id").references(() => sekolah.id, { onDelete: "restrict" }),
   peran: varchar("peran", { length: 20 }).notNull(), // siswa | guru | admin
-  nama: varchar("nama", { length: 100 }).notNull(),
-  nisNip: varchar("nis_nip", { length: 50 }),
-  jenis: varchar("jenis", { length: 50 }).notNull(), // lupa password | tidak bisa daftar | data salah | lainnya
-  pesan: text("pesan"),
-  kontak: varchar("kontak", { length: 100 }),
+  jenis: varchar("jenis", { length: 50 }).notNull(),
+  pesan: text("pesan").notNull(),
+  kontak: varchar("kontak", { length: 100 }).notNull(),
   status: varchar("status", { length: 20 }).notNull().default("baru"), // baru | diproses | selesai
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({

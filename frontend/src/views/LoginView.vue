@@ -78,12 +78,6 @@ const errorMessage = ref('')
 const showPassword = ref(false)
 const isLoading = ref(false)
 
-const nomorAdmin = '6285607748208' // ganti sesuai nomor WA admin/penjaga perpus
-const pesanTemplate = 'Halo, saya mengalami kendala saat login ke sistem perpustakaan.'
-const kontakAdminUrl = computed(() =>
-  `https://wa.me/${nomorAdmin}?text=${encodeURIComponent(pesanTemplate)}`
-)
-
 // State untuk fitur "Lupa Password" dan "Daftar" khusus Guru
 const guruAuthMode = ref('login') // 'login' | 'lupa' | 'daftar'
 const lupaForm = ref({ nip: '', tanggalLahir: '' })
@@ -91,7 +85,7 @@ const lupaError = ref('')
 const lupaMessage = ref('')
 const isLupaLoading = ref(false)
 
-// BARU: state pendaftaran guru
+// State pendaftaran guru
 const daftarGuruForm = ref({ nama: '', nip: '', mapel: '', tanggalLahir: '', password: '', konfirmasi: '' })
 const daftarGuruError = ref('')
 const daftarGuruMessage = ref('')
@@ -112,9 +106,51 @@ const daftarAdminMessage = ref('')
 const isDaftarAdminLoading = ref(false)
 const usernameStatus = ref('') // '' | 'memeriksa' | 'tersedia' | 'dipakai'
 
+// BARU: State untuk form "Laporkan Kendala" (laporan masuk ke superadmin)
+const kendalaMode = ref(false)
+const kendalaForm = ref({ kontak: '', jenis: '', pesan: '' })
+const kendalaError = ref('')
+const kendalaMessage = ref('')
+const isKendalaLoading = ref(false)
+
+// Siswa & guru -> admin sekolah masing-masing. Admin -> super admin.
+const jenisKendala = computed(() =>
+  selectedRole.value === 'admin'
+    ? [
+        'Lupa password / tidak bisa login',
+        'Pendaftaran sekolah belum disetujui',
+        'Sekolah saya tidak ada di daftar',
+        'Lainnya'
+      ]
+    : [
+        'Lupa password / tidak bisa login',
+        'Data saya tidak ditemukan',
+        'Akun belum disetujui',
+        'Lainnya'
+      ]
+)
+// Untuk siswa & guru, sekolah wajib dipilih supaya laporan sampai ke admin sekolahnya
+const sekolahWajib = computed(() => kendalaMode.value && selectedRole.value !== 'admin')
+const tujuanKendalaLabel = computed(() =>
+  selectedRole.value === 'admin' ? 'super admin' : 'admin sekolah'
+)
+
 const roleLabel = computed(() => {
   const found = roles.find(r => r.value === selectedRole.value)
   return found ? found.label : ''
+})
+
+// Kolom "Sekolah" disembunyikan hanya saat admin mendaftarkan sekolah baru
+const tampilkanPilihSekolah = computed(
+  () => !(selectedRole.value === 'admin' && adminAuthMode.value === 'daftar' && !kendalaMode.value)
+)
+
+// Tombol "Masuk sebagai ..." hanya tampil saat benar-benar di mode login
+const modeLogin = computed(() => {
+  if (kendalaMode.value) return false
+  if (selectedRole.value === 'siswa') return siswaAuthMode.value === 'login'
+  if (selectedRole.value === 'guru') return guruAuthMode.value === 'login'
+  return adminAuthMode.value === 'login'
 })
 
 watch(selectedRole, () => {
@@ -124,7 +160,6 @@ watch(selectedRole, () => {
   lupaForm.value = { nip: '', tanggalLahir: '' }
   lupaError.value = ''
   lupaMessage.value = ''
-  // BARU: reset form daftar guru
   daftarGuruForm.value = { nama: '', nip: '', mapel: '', tanggalLahir: '', password: '', konfirmasi: '' }
   daftarGuruError.value = ''
   daftarGuruMessage.value = ''
@@ -136,10 +171,28 @@ watch(selectedRole, () => {
   daftarAdminForm.value = { namaSekolah: '', username: '', email: '', password: '', konfirmasi: '', kodeUndangan: '' }
   daftarAdminError.value = ''
   daftarAdminMessage.value = ''
+  // BARU: tutup form kendala saat ganti peran
+  kendalaMode.value = false
+  kendalaError.value = ''
+  kendalaMessage.value = ''
 })
 
+// Satu pintu untuk tombol Enter / submit: arahkan ke handler sesuai mode aktif
+function onSubmit() {
+  if (kendalaMode.value) return handleKendala()
+
+  if (selectedRole.value === 'siswa') {
+    return siswaAuthMode.value === 'daftar' ? handleDaftarSiswa() : handleLogin()
+  }
+  if (selectedRole.value === 'guru') {
+    if (guruAuthMode.value === 'lupa') return handleLupaPassword()
+    if (guruAuthMode.value === 'daftar') return handleDaftarGuru()
+    return handleLogin()
+  }
+  return adminAuthMode.value === 'daftar' ? handleDaftarAdmin() : handleLogin()
+}
+
 async function handleLogin() {
-  if (selectedRole.value === 'admin' && adminAuthMode.value === 'daftar') return
   errorMessage.value = ''
   isLoading.value = true
 
@@ -295,7 +348,7 @@ async function handleLupaPassword() {
   }
 }
 
-// BARU: pendaftaran guru
+// Pendaftaran guru
 function bukaDaftarGuru() {
   guruAuthMode.value = 'daftar'
   daftarGuruForm.value = { nama: '', nip: '', mapel: '', tanggalLahir: '', password: '', konfirmasi: '' }
@@ -366,7 +419,7 @@ async function handleDaftarGuru() {
   }
 }
 
-async function bukaDaftarSiswa() {
+function bukaDaftarSiswa() {
   siswaAuthMode.value = 'daftar'
   daftarForm.value = { nama: '', nis: '', kelas: '', tanggalLahir: '' }
   daftarError.value = ''
@@ -420,7 +473,7 @@ async function handleDaftarSiswa() {
     form.value.nis = daftarForm.value.nis
     form.value.tanggalLahir = daftarForm.value.tanggalLahir
 
-    daftarMessage.value = 'Pendaftaran berhasil! Silakan klik "Masuk sebagai Siswa" di bawah.'
+    daftarMessage.value = 'Pendaftaran berhasil! Silakan klik "Kembali ke halaman login", lalu "Masuk sebagai Siswa".'
   } catch (err) {
     console.error('DAFTAR SISWA ERROR:', err)
     daftarError.value = 'Tidak bisa terhubung ke server'
@@ -497,24 +550,89 @@ async function handleDaftarAdmin() {
   }
 }
 
+async function cekUsernameAdmin() {
+  const u = daftarAdminForm.value.username.trim()
+  if (u.length < 4) {
+    usernameStatus.value = ''
+    return
+  }
+  usernameStatus.value = 'memeriksa'
+  try {
+    const res = await fetch(
+      `${import.meta.env.VITE_API_BASE_URL}/auth/cek-username?username=${encodeURIComponent(u)}`
+    )
+    const data = await res.json().catch(() => ({}))
+    usernameStatus.value = res.ok ? (data.tersedia ? 'tersedia' : 'dipakai') : ''
+  } catch {
+    usernameStatus.value = ''
+  }
+}
 
-  async function cekUsernameAdmin() {
-    const u = daftarAdminForm.value.username.trim()
-    if (u.length < 4) {
-      usernameStatus.value = ''
+// ===== BARU: Laporkan Kendala =====
+function bukaKendala() {
+  // tutup semua mode daftar / lupa supaya tidak bentrok
+  guruAuthMode.value = 'login'
+  siswaAuthMode.value = 'login'
+  adminAuthMode.value = 'login'
+  errorMessage.value = ''
+  kendalaForm.value = { kontak: '', jenis: '', pesan: '' }
+  kendalaError.value = ''
+  kendalaMessage.value = ''
+  kendalaMode.value = true
+}
+
+function kembaliDariKendala() {
+  kendalaMode.value = false
+  kendalaError.value = ''
+  kendalaMessage.value = ''
+}
+
+async function handleKendala() {
+  kendalaError.value = ''
+  kendalaMessage.value = ''
+  const f = kendalaForm.value
+
+  if (!f.kontak.trim() || !f.jenis || !f.pesan.trim()) {
+    kendalaError.value = 'Kontak, jenis kendala, dan pesan wajib diisi'
+    return
+  }
+  if (sekolahWajib.value && !sekolahId.value) {
+    kendalaError.value = 'Pilih sekolah terlebih dahulu agar laporan sampai ke admin sekolah Anda'
+    return
+  }
+  if (f.pesan.trim().length < 10) {
+    kendalaError.value = 'Jelaskan kendala Anda minimal 10 karakter'
+    return
+  }
+
+  isKendalaLoading.value = true
+  try {
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/kendala`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        kontak: f.kontak.trim(),
+        jenis: f.jenis,
+        pesan: f.pesan.trim(),
+        role: selectedRole.value,
+        // siswa/guru: wajib (tujuan = admin sekolah). admin: opsional (tujuan = super admin)
+        sekolahId: sekolahId.value ? Number(sekolahId.value) : null
+      })
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      kendalaError.value = data.error || data.message || 'Gagal mengirim laporan'
       return
     }
-    usernameStatus.value = 'memeriksa'
-    try {
-      const res = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/auth/cek-username?username=${encodeURIComponent(u)}`
-      )
-      const data = await res.json().catch(() => ({}))
-      usernameStatus.value = res.ok ? (data.tersedia ? 'tersedia' : 'dipakai') : ''
-    } catch {
-      usernameStatus.value = ''
-    }
+    kendalaForm.value = { kontak: '', jenis: '', pesan: '' }
+    kendalaMessage.value = `Laporan terkirim ke ${tujuanKendalaLabel.value}. Anda akan dihubungi melalui kontak yang diisi.`
+  } catch (err) {
+    console.error('KENDALA ERROR:', err)
+    kendalaError.value = 'Tidak bisa terhubung ke server'
+  } finally {
+    isKendalaLoading.value = false
   }
+}
 </script>
 
 <template>
@@ -585,8 +703,10 @@ async function handleDaftarAdmin() {
       <!-- PANEL FORM -->
       <div class="form-panel">
         <div class="form-inner">
-          <h1>Masuk ke akun Anda</h1>
-          <p class="form-subtitle">Pilih peran Anda untuk melanjutkan.</p>
+          <h1>{{ kendalaMode ? 'Laporkan Kendala' : 'Masuk ke akun Anda' }}</h1>
+          <p class="form-subtitle">
+            {{ kendalaMode ? `Laporan Anda akan diteruskan ke ${tujuanKendalaLabel}.` : 'Pilih peran Anda untuk melanjutkan.' }}
+          </p>
 
           <div class="role-selector">
             <button
@@ -600,16 +720,68 @@ async function handleDaftarAdmin() {
               {{ role.label }}
             </button>
           </div>
-          <div class="field" v-if="!(selectedRole === 'admin' && adminAuthMode === 'daftar')">
-            <label>Sekolah</label>
+
+          <div class="field" v-if="tampilkanPilihSekolah">
+            <label>Sekolah<span v-if="kendalaMode && !sekolahWajib"> (opsional)</span></label>
             <select v-model="sekolahId" class="select-sekolah">
-              <option value="" disabled>Pilih sekolah</option>
+              <option value="" :disabled="!kendalaMode || sekolahWajib">
+                {{ kendalaMode && !sekolahWajib ? 'Tidak tahu / belum terdaftar' : 'Pilih sekolah' }}
+              </option>
               <option v-for="s in daftarSekolah" :key="s.id" :value="String(s.id)">{{ s.nama }}</option>
             </select>
           </div>
 
-          <form @submit.prevent="handleLogin">
-            <template v-if="selectedRole === 'siswa' && siswaAuthMode === 'login'">
+          <form @submit.prevent="onSubmit">
+            <!-- BARU: form laporan kendala -->
+            <template v-if="kendalaMode">
+              <div class="field">
+                <label>Kontak (No. WhatsApp / Email)</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="5" width="18" height="14" rx="2" />
+                    <path d="M3 7l9 6 9-6" />
+                  </svg>
+                  <input v-model="kendalaForm.kontak" type="text" placeholder="08xxxxxxxxxx atau email" maxlength="100" />
+                </div>
+              </div>
+
+              <div class="field">
+                <label>Jenis Kendala</label>
+                <select v-model="kendalaForm.jenis" class="select-sekolah">
+                  <option value="" disabled>Pilih jenis kendala</option>
+                  <option v-for="j in jenisKendala" :key="j" :value="j">{{ j }}</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label>Pesan</label>
+                <textarea
+                  v-model="kendalaForm.pesan"
+                  class="textarea-kendala"
+                  rows="4"
+                  maxlength="1000"
+                  placeholder="Jelaskan kendala yang Anda alami"
+                ></textarea>
+              </div>
+
+              <p v-if="kendalaError" class="error-text">{{ kendalaError }}</p>
+              <p v-if="kendalaMessage" class="success-text">{{ kendalaMessage }}</p>
+
+              <button
+                type="submit"
+                class="btn-login"
+                :disabled="isKendalaLoading"
+                :style="{ opacity: isKendalaLoading ? 0.7 : 1, cursor: isKendalaLoading ? 'not-allowed' : 'pointer' }"
+              >
+                {{ isKendalaLoading ? 'Mengirim...' : 'Kirim Laporan' }}
+              </button>
+
+              <button type="button" class="link-btn back-link" @click="kembaliDariKendala">
+                ← Kembali ke halaman login
+              </button>
+            </template>
+
+            <template v-else-if="selectedRole === 'siswa' && siswaAuthMode === 'login'">
               <div class="field">
                 <label>NIS</label>
                 <div class="input-wrap">
@@ -687,11 +859,10 @@ async function handleDaftarAdmin() {
               <p v-if="daftarMessage" class="success-text">{{ daftarMessage }}</p>
 
               <button
-                type="button"
+                type="submit"
                 class="btn-login"
                 :disabled="isDaftarLoading"
                 :style="{ opacity: isDaftarLoading ? 0.7 : 1, cursor: isDaftarLoading ? 'not-allowed' : 'pointer' }"
-                @click="handleDaftarSiswa"
               >
                 {{ isDaftarLoading ? 'Memproses...' : 'Daftar' }}
               </button>
@@ -731,7 +902,6 @@ async function handleDaftarAdmin() {
                     </svg>
                   </button>
                 </div>
-                <!-- PERUBAHAN: tambah tautan Daftar di sebelah Lupa password -->
                 <div class="forgot-link">
                   <button type="button" class="link-btn" @click="bukaDaftarGuru">Belum punya akun? Daftar</button>
                   <button type="button" class="link-btn" @click="bukaLupaPassword">Lupa password?</button>
@@ -769,11 +939,10 @@ async function handleDaftarAdmin() {
               <p v-if="lupaMessage" class="success-text">{{ lupaMessage }}</p>
 
               <button
-                type="button"
+                type="submit"
                 class="btn-login"
                 :disabled="isLupaLoading"
                 :style="{ opacity: isLupaLoading ? 0.7 : 1, cursor: isLupaLoading ? 'not-allowed' : 'pointer' }"
-                @click="handleLupaPassword"
               >
                 {{ isLupaLoading ? 'Memproses...' : 'Reset Password' }}
               </button>
@@ -783,7 +952,6 @@ async function handleDaftarAdmin() {
               </button>
             </template>
 
-            <!-- BARU: form daftar guru (harus di antara blok 'lupa' dan blok admin login) -->
             <template v-else-if="selectedRole === 'guru' && guruAuthMode === 'daftar'">
               <p class="lupa-desc">Isi data diri Anda untuk membuat akun guru.</p>
 
@@ -856,11 +1024,10 @@ async function handleDaftarAdmin() {
               <p v-if="daftarGuruError" class="error-text">{{ daftarGuruError }}</p>
 
               <button
-                type="button"
+                type="submit"
                 class="btn-login"
                 :disabled="isDaftarGuruLoading"
                 :style="{ opacity: isDaftarGuruLoading ? 0.7 : 1, cursor: isDaftarGuruLoading ? 'not-allowed' : 'pointer' }"
-                @click="handleDaftarGuru"
               >
                 {{ isDaftarGuruLoading ? 'Memproses...' : 'Daftar' }}
               </button>
@@ -870,7 +1037,7 @@ async function handleDaftarAdmin() {
               </button>
             </template>
 
-            <template v-else-if="adminAuthMode === 'login'">
+            <template v-else-if="selectedRole === 'admin' && adminAuthMode === 'login'">
               <div class="field">
                 <label>Username</label>
                 <div class="input-wrap">
@@ -907,6 +1074,7 @@ async function handleDaftarAdmin() {
               </div>
               <p v-if="daftarAdminMessage" class="success-text">{{ daftarAdminMessage }}</p>
             </template>
+
             <template v-else>
               <p class="lupa-desc">Daftarkan sekolah Anda dan buat akun admin perpustakaan.</p>
               <div class="field">
@@ -973,11 +1141,10 @@ async function handleDaftarAdmin() {
               </div>
               <p v-if="daftarAdminError" class="error-text">{{ daftarAdminError }}</p>
               <button
-                type="button"
+                type="submit"
                 class="btn-login"
                 :disabled="isDaftarAdminLoading || usernameStatus === 'dipakai'"
                 :style="{ opacity: isDaftarAdminLoading ? 0.7 : 1, cursor: isDaftarAdminLoading ? 'not-allowed' : 'pointer' }"
-                @click="handleDaftarAdmin"
               >
                 {{ isDaftarAdminLoading ? 'Memproses...' : 'Daftarkan Sekolah' }}
               </button>
@@ -986,8 +1153,8 @@ async function handleDaftarAdmin() {
               </button>
             </template>
 
-            <!-- PERUBAHAN: 'lupa' diganti guruAuthMode !== 'login' supaya tombol Masuk juga hilang di mode daftar guru -->
-            <template v-if="!(selectedRole === 'guru' && guruAuthMode !== 'login') && !(selectedRole === 'siswa' && siswaAuthMode === 'daftar') && !(selectedRole === 'admin' && adminAuthMode === 'daftar')">
+            <!-- Tombol "Masuk" hanya tampil di mode login (bukan daftar / lupa / kendala) -->
+            <template v-if="modeLogin">
               <p v-if="errorMessage" class="error-text">
                 {{ errorMessage }}
               </p>
@@ -1003,14 +1170,15 @@ async function handleDaftarAdmin() {
             </template>
           </form>
 
-          <a
-            :href="kontakAdminUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="form-footer"
+          <!-- BARU: tombol pembuka form kendala (menggantikan link WhatsApp) -->
+          <button
+            v-if="!kendalaMode"
+            type="button"
+            class="form-footer footer-btn"
+            @click="bukaKendala"
           >
-            Ada kendala saat masuk? <span class="kontak-highlight">Hubungi admin perpustakaan.</span>
-          </a>
+            Ada kendala saat masuk? <span class="kontak-highlight">Laporkan ke admin perpustakaan.</span>
+          </button>
         </div>
       </div>
     </div>
@@ -1196,7 +1364,7 @@ async function handleDaftarAdmin() {
 .input-wrap input {
   width: 100%;
   padding: 11px 12px 11px 36px;
-   padding-right: 38px;
+  padding-right: 38px;
   border-radius: 9px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.05);
@@ -1235,6 +1403,30 @@ async function handleDaftarAdmin() {
   color-scheme: dark;
 }
 
+/* BARU: textarea form kendala */
+.textarea-kendala {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 90px;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.textarea-kendala::placeholder {
+  color: #6b7fa3;
+}
+.textarea-kendala:focus {
+  border-color: #2864e8;
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .btn-login {
   width: 100%;
   margin-top: 8px;
@@ -1267,6 +1459,15 @@ async function handleDaftarAdmin() {
 }
 .form-footer:hover {
   text-decoration: underline;
+}
+/* BARU: footer sekarang berupa <button>, samakan tampilannya dengan link */
+.footer-btn {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
 }
 .kontak-highlight {
   color: #6fa1ff;

@@ -20,6 +20,7 @@ import PengaturanPage from '../views/admin/PengaturanPage.vue'
 import AkunAdminPage from '../views/admin/AkunAdminPage.vue'
 import RiwayatAktivitas from '@/views/admin/RiwayatAktivitas.vue'
 import LaporanPage from '@/views/admin/LaporanPage.vue'
+import PengajuanBantuan from '@/views/admin/PengajuanBantuan.vue'
 import KatalogSiswaPage from '@/views/siswa/KatalogSiswaPage.vue'
 import RiwayatSiswaPage from '@/views/siswa/RiwayatSiswaPage.vue'
 import ProfilSiswaPage from '@/views/siswa/ProfilSiswaPage.vue'
@@ -178,6 +179,11 @@ const router = createRouter({
           path: 'riwayat',
           name: 'admin-riwayat',
           component: RiwayatAktivitas,
+        },
+                {
+          path: 'pengajuan',
+          name: 'admin-pengajuan',
+          component: PengajuanBantuan,
         },
         {
           path: 'pengaturan',

@@ -174,6 +174,26 @@ const peminjaman = pgTable("peminjaman", {
   tanggalDikembalikanIdx: index("peminjaman_tanggal_dikembalikan_idx").on(table.tanggalDikembalikan),
 }))
 
+// Pengajuan bantuan dari halaman login (siswa, guru, atau admin).
+// sekolahId boleh kosong: pengajuan admin yang lupa password / gagal daftar
+// tidak selalu terkait sekolah yang sudah aktif.
+const pengajuanBantuan = pgTable("pengajuan_bantuan", {
+  id: serial("id").primaryKey(),
+  sekolahId: integer("sekolah_id").references(() => sekolah.id, { onDelete: "restrict" }),
+  peran: varchar("peran", { length: 20 }).notNull(), // siswa | guru | admin
+  nama: varchar("nama", { length: 100 }).notNull(),
+  nisNip: varchar("nis_nip", { length: 50 }),
+  jenis: varchar("jenis", { length: 50 }).notNull(), // lupa password | tidak bisa daftar | data salah | lainnya
+  pesan: text("pesan"),
+  kontak: varchar("kontak", { length: 100 }),
+  status: varchar("status", { length: 20 }).notNull().default("baru"), // baru | diproses | selesai
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  sekolahIdIdx: index("pengajuan_bantuan_sekolah_id_idx").on(table.sekolahId),
+  statusIdx: index("pengajuan_bantuan_status_idx").on(table.status),
+  peranIdx: index("pengajuan_bantuan_peran_idx").on(table.peran),
+}))
+
 module.exports = {
   sekolah,
   adminAkun,
@@ -184,4 +204,17 @@ module.exports = {
   buku,
   eksemplarBuku,
   peminjaman,
+}
+
+module.exports = {
+  sekolah,
+  adminAkun,
+  pengaturanPerpustakaan,
+  kategori,
+  kelas,
+  anggota,
+  buku,
+  eksemplarBuku,
+  peminjaman,
+  pengajuanBantuan,
 }

@@ -28,6 +28,7 @@ import PeminjamanGuruPage from '@/views/guru/PeminjamanGuruPage.vue'
 import RiwayatGuruPage from '@/views/guru/RiwayatGuruPage.vue'
 import ProfilGuruPage from '@/views/guru/ProfilGuruPage.vue'
 import SuperAdminSekolah from '@/views/SuperAdminSekolah.vue'
+import KendalaInbox from '@/views/KendalaInbox.vue' // BARU: inbox laporan kendala (dipakai admin sekolah & super admin)
 import { usePengaturanDenda } from '@/composables/usePengaturanDenda'
 
 const ComingSoon = {
@@ -50,7 +51,7 @@ const router = createRouter({
       name: 'login',
       component: LoginView
     },
-        {
+    {
       path: '/siswa',
       component: DashboardSiswaLayout,
       meta: { requiresAuth: true, role: 'siswa' },
@@ -174,6 +175,16 @@ const router = createRouter({
           name: 'admin-laporan',
           component: LaporanPage,
         },
+        // BARU: laporan kendala dari siswa & guru sekolah ini
+        {
+          path: 'kendala',
+          name: 'admin-kendala',
+          component: KendalaInbox,
+          props: {
+            endpoint: '/admin/kendala',
+            judul: 'Laporan Kendala dari Siswa & Guru',
+          },
+        },
         {
           path: 'riwayat',
           name: 'admin-riwayat',
@@ -196,15 +207,33 @@ const router = createRouter({
       name: 'superadmin-sekolah',
       component: SuperAdminSekolah,
     },
+    // BARU: tab "Laporan Kendala" di halaman super admin.
+    // Memakai komponen yang sama dengan /superadmin (sidebar + 2 menu).
+    // Tanpa requiresAuth: super admin menyimpan token di key 'superadmin_token'
+    // dan login lewat form di halaman itu sendiri.
+    {
+      path: '/superadmin/kendala',
+      name: 'superadmin-kendala',
+      component: SuperAdminSekolah,
+    },
   ],
-  scrollBehavior() { 
+  scrollBehavior() {
     return { top: 0 }
   }
 })
 
+// Baca data user dengan aman: kalau isinya rusak, jangan sampai halaman error
+function bacaUser() {
+  try {
+    return JSON.parse(localStorage.getItem('user') || 'null')
+  } catch {
+    return null
+  }
+}
+
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token') || localStorage.getItem('accessToken')
-  const user = JSON.parse(localStorage.getItem('user') || 'null')
+  const user = bacaUser()
 
   // 1. Halaman yang butuh login (requiresAuth), tapi belum ada token sama sekali
   if (to.meta.requiresAuth && !token) {

@@ -92,6 +92,7 @@ router.post('/login', loginLimiter, async (req, res) => {
   }
 })
 
+
   // GET cek apakah username admin masih tersedia (dipakai form daftar sekolah)
   router.get('/cek-username', cekUsernameLimiter, async (req, res) => {
     try {
@@ -241,6 +242,80 @@ router.post('/guru/login', loginLimiter, async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Gagal login' })
+  }
+})
+
+// POST daftar guru (self-register, langsung aktif)
+router.post('/guru/daftar', daftarLimiter, async (req, res) => {
+  try {
+    const { nama, nip, mapel, tanggalLahir, password } = req.body || {}
+    const sek = await ambilSekolahAktif(req.body?.sekolahId)
+    if (!sek) return res.status(400).json({ error: 'Sekolah wajib dipilih' })
+
+    const namaBersih = String(nama ?? '').trim()
+    const nipBersih = String(nip ?? '').trim()
+    const mapelBersih = String(mapel ?? '').trim()
+    const passwordStr = String(password ?? '')
+
+    if (!namaBersih) return res.status(400).json({ error: 'Nama wajib diisi' })
+    if (!nipBersih) return res.status(400).json({ error: 'NIP wajib diisi' })
+    const tgl = normalisasiTanggal(tanggalLahir)
+    if (!tgl) {
+      return res.status(400).json({ error: 'Tanggal lahir wajib diisi (format YYYY-MM-DD)' })
+    }
+    if (passwordStr.length < 8) {
+      return res.status(400).json({ error: 'Password minimal 8 karakter' })
+    }
+    // bcrypt hanya membaca 72 byte pertama
+    if (Buffer.byteLength(passwordStr) > 72) {
+      return res.status(400).json({ error: 'Password terlalu panjang' })
+    }
+    if (passwordStr === nipBersih) {
+  return res.status(400).json({ error: 'Password tidak boleh sama dengan NIP' })
+    }
+    // batas panjang, karena endpoint ini publik
+    if (namaBersih.length > 100 || nipBersih.length > 50 || mapelBersih.length > 100) {
+      return res.status(400).json({ error: 'Data terlalu panjang' })
+    }
+
+    const [nipSudahAda] = await db
+      .select({ id: anggota.id })
+      .from(anggota)
+      .where(and(eq(anggota.sekolahId, sek.id), eq(anggota.nip, nipBersih)))
+      .limit(1)
+
+    if (nipSudahAda) {
+      return res.status(409).json({ error: 'NIP ini sudah terdaftar. Silakan langsung login.' })
+    }
+
+    const passwordHash = await bcrypt.hash(passwordStr, 10)
+
+    const [baru] = await db
+      .insert(anggota)
+      .values({
+        sekolahId: sek.id,
+        nama: namaBersih,
+        nip: nipBersih,
+        mapel: mapelBersih || null,
+        tanggalLahir: tgl,
+        kelas: null,
+        peran: 'guru',
+        password: passwordHash,
+        harusGantiPassword: false, // password dipilih sendiri
+      })
+      .returning()
+
+    res.status(201).json({
+      success: true,
+      message: 'Pendaftaran berhasil. Silakan login menggunakan NIP dan password Anda.',
+      guru: { id: baru.id, nama: baru.nama, nip: baru.nip },
+    })
+  } catch (err) {
+    if ((err.cause?.code || err.code) === '23505') {
+      return res.status(409).json({ error: 'NIP ini sudah terdaftar. Silakan langsung login.' })
+    }
+    console.error('[DAFTAR GURU ERROR]', err)
+    res.status(500).json({ error: 'Gagal mendaftar' })
   }
 })
 

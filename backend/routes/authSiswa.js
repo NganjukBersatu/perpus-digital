@@ -3,7 +3,7 @@ const router = express.Router()
 const jwt = require('jsonwebtoken')
 const { db } = require('../db/client')
 const { anggota } = require('../db/schema')
-const { eq, and } = require('drizzle-orm')
+const { eq, and, isNull } = require('drizzle-orm')
 const { loginLimiter, daftarLimiter } = require('../middleware/rateLimiter')
 const { normalisasiTanggal } = require('../utils/validasi')
 const { ambilSekolahAktif } = require('../utils/sekolah')
@@ -99,21 +99,38 @@ router.post('/daftar', daftarLimiter, async (req, res) => {
     if (!tgl) {
       return res.status(400).json({ error: 'Tanggal lahir wajib diisi (format YYYY-MM-DD)' })
     }
-    // batas panjang, karena endpoint ini publik
     if (namaBersih.length > 100 || nisBersih.length > 30 || kelasBersih.length > 30) {
       return res.status(400).json({ error: 'Data terlalu panjang' })
     }
 
-    const [nisSudahAda] = await db
-      .select({ id: anggota.id })
+    const [ada] = await db
+      .select()
       .from(anggota)
       .where(and(eq(anggota.sekolahId, sek.id), eq(anggota.nis, nisBersih)))
       .limit(1)
 
-    if (nisSudahAda) {
-      return res.status(409).json({ error: 'NIS ini sudah terdaftar. Silakan langsung login.' })
+    if (ada) {
+      // sudah punya tanggal lahir = akun sudah aktif
+      if (ada.peran !== 'siswa' || ada.tanggalLahir) {
+        return res.status(409).json({ error: 'NIS ini sudah terdaftar. Silakan langsung login.' })
+      }
+      // dibuat admin tanpa tanggal lahir -> lengkapi di baris yang sama
+      const [diperbarui] = await db
+        .update(anggota)
+        .set({ tanggalLahir: tgl, kelas: ada.kelas ?? kelasBersih })
+        .where(and(eq(anggota.id, ada.id), eq(anggota.sekolahId, sek.id), isNull(anggota.tanggalLahir)))
+        .returning()
+      if (!diperbarui) {
+        return res.status(409).json({ error: 'NIS ini sudah terdaftar. Silakan langsung login.' })
+      }
+      return res.status(201).json({
+        success: true,
+        message: 'Pendaftaran berhasil. Silakan login menggunakan NIS dan tanggal lahir Anda.',
+        siswa: { id: diperbarui.id, nama: diperbarui.nama, nis: diperbarui.nis, kelas: diperbarui.kelas },
+      })
     }
 
+    // NIS benar-benar baru
     const [baru] = await db
       .insert(anggota)
       .values({
@@ -137,7 +154,7 @@ router.post('/daftar', daftarLimiter, async (req, res) => {
       },
     })
   } catch (err) {
-    // dua pendaftaran dengan NIS sama yang masuk bersamaan (lolos cek di atas)
+    // dua pendaftaran dengan NIS sama yang masuk bersamaan
     if ((err.cause?.code || err.code) === '23505') {
       return res.status(409).json({ error: 'NIS ini sudah terdaftar. Silakan langsung login.' })
     }

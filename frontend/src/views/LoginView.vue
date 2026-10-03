@@ -84,12 +84,18 @@ const kontakAdminUrl = computed(() =>
   `https://wa.me/${nomorAdmin}?text=${encodeURIComponent(pesanTemplate)}`
 )
 
-// State untuk fitur "Lupa Password" khusus Guru
-const guruAuthMode = ref('login') // 'login' | 'lupa'
+// State untuk fitur "Lupa Password" dan "Daftar" khusus Guru
+const guruAuthMode = ref('login') // 'login' | 'lupa' | 'daftar'
 const lupaForm = ref({ nip: '', tanggalLahir: '' })
 const lupaError = ref('')
 const lupaMessage = ref('')
 const isLupaLoading = ref(false)
+
+// BARU: state pendaftaran guru
+const daftarGuruForm = ref({ nama: '', nip: '', mapel: '', tanggalLahir: '', password: '', konfirmasi: '' })
+const daftarGuruError = ref('')
+const daftarGuruMessage = ref('')
+const isDaftarGuruLoading = ref(false)
 
 // State untuk fitur "Daftar" khusus Siswa
 const siswaAuthMode = ref('login') // 'login' | 'daftar'
@@ -118,6 +124,10 @@ watch(selectedRole, () => {
   lupaForm.value = { nip: '', tanggalLahir: '' }
   lupaError.value = ''
   lupaMessage.value = ''
+  // BARU: reset form daftar guru
+  daftarGuruForm.value = { nama: '', nip: '', mapel: '', tanggalLahir: '', password: '', konfirmasi: '' }
+  daftarGuruError.value = ''
+  daftarGuruMessage.value = ''
   siswaAuthMode.value = 'login'
   daftarForm.value = { nama: '', nis: '', kelas: '', tanggalLahir: '' }
   daftarError.value = ''
@@ -282,6 +292,77 @@ async function handleLupaPassword() {
     lupaError.value = 'Tidak bisa terhubung ke server'
   } finally {
     isLupaLoading.value = false
+  }
+}
+
+// BARU: pendaftaran guru
+function bukaDaftarGuru() {
+  guruAuthMode.value = 'daftar'
+  daftarGuruForm.value = { nama: '', nip: '', mapel: '', tanggalLahir: '', password: '', konfirmasi: '' }
+  daftarGuruError.value = ''
+  daftarGuruMessage.value = ''
+  errorMessage.value = ''
+}
+
+function kembaliKeLoginGuru() {
+  guruAuthMode.value = 'login'
+  daftarGuruError.value = ''
+  daftarGuruMessage.value = ''
+}
+
+async function handleDaftarGuru() {
+  daftarGuruError.value = ''
+  daftarGuruMessage.value = ''
+  const f = daftarGuruForm.value
+
+  if (!sekolahId.value) {
+    daftarGuruError.value = 'Pilih sekolah terlebih dahulu'
+    return
+  }
+  if (!f.nama.trim() || !f.nip.trim() || !f.tanggalLahir || !f.password) {
+    daftarGuruError.value = 'Nama, NIP, tanggal lahir, dan password wajib diisi'
+    return
+  }
+  if (f.password.length < 8) {
+    daftarGuruError.value = 'Password minimal 8 karakter'
+    return
+  }
+  if (f.password !== f.konfirmasi) {
+    daftarGuruError.value = 'Konfirmasi password tidak sama'
+    return
+  }
+
+  isDaftarGuruLoading.value = true
+  try {
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/guru/daftar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nama: f.nama,
+        nip: f.nip,
+        mapel: f.mapel,
+        tanggalLahir: f.tanggalLahir,
+        password: f.password,
+        sekolahId: Number(sekolahId.value),
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      daftarGuruError.value = data.error || data.message || 'Gagal mendaftar'
+      return
+    }
+
+    // kembali ke login dengan NIP sudah terisi, password diketik ulang
+    form.value.nip = f.nip.trim()
+    form.value.password = ''
+    daftarGuruForm.value = { nama: '', nip: '', mapel: '', tanggalLahir: '', password: '', konfirmasi: '' }
+    guruAuthMode.value = 'login'
+    daftarGuruMessage.value = 'Pendaftaran berhasil! Masukkan password yang tadi Anda buat, lalu klik "Masuk sebagai Guru".'
+  } catch (err) {
+    console.error('DAFTAR GURU ERROR:', err)
+    daftarGuruError.value = 'Tidak bisa terhubung ke server'
+  } finally {
+    isDaftarGuruLoading.value = false
   }
 }
 
@@ -651,9 +732,12 @@ async function handleDaftarAdmin() {
                     </svg>
                   </button>
                 </div>
+                <!-- PERUBAHAN: tambah tautan Daftar di sebelah Lupa password -->
                 <div class="forgot-link">
+                  <button type="button" class="link-btn" @click="bukaDaftarGuru">Belum punya akun? Daftar</button>
                   <button type="button" class="link-btn" @click="bukaLupaPassword">Lupa password?</button>
                 </div>
+                <p v-if="daftarGuruMessage" class="success-text">{{ daftarGuruMessage }}</p>
               </div>
             </template>
 
@@ -696,6 +780,93 @@ async function handleDaftarAdmin() {
               </button>
 
               <button type="button" class="link-btn back-link" @click="kembaliKeLogin">
+                ← Kembali ke halaman login
+              </button>
+            </template>
+
+            <!-- BARU: form daftar guru (harus di antara blok 'lupa' dan blok admin login) -->
+            <template v-else-if="selectedRole === 'guru' && guruAuthMode === 'daftar'">
+              <p class="lupa-desc">Isi data diri Anda untuk membuat akun guru.</p>
+
+              <div class="field">
+                <label>Nama Lengkap</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="8" r="3" />
+                    <path d="M5 21a7 7 0 0 1 14 0" />
+                  </svg>
+                  <input v-model="daftarGuruForm.nama" type="text" placeholder="Masukkan nama lengkap" />
+                </div>
+              </div>
+
+              <div class="field">
+                <label>NIP</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    <path d="M3 9h18" />
+                  </svg>
+                  <input v-model="daftarGuruForm.nip" type="text" placeholder="Masukkan NIP" />
+                </div>
+              </div>
+
+              <div class="field">
+                <label>Mata Pelajaran (opsional)</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                  </svg>
+                  <input v-model="daftarGuruForm.mapel" type="text" placeholder="Contoh: Matematika" />
+                </div>
+              </div>
+
+              <div class="field">
+                <label>Tanggal Lahir</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  <input v-model="daftarGuruForm.tanggalLahir" type="date" />
+                </div>
+              </div>
+
+              <div class="field">
+                <label>Password</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="10" rx="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <input v-model="daftarGuruForm.password" type="password" placeholder="Minimal 8 karakter" autocomplete="new-password" />
+                </div>
+              </div>
+
+              <div class="field">
+                <label>Ulangi Password</label>
+                <div class="input-wrap">
+                  <svg class="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="10" rx="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <input v-model="daftarGuruForm.konfirmasi" type="password" placeholder="Ketik ulang password" autocomplete="new-password" />
+                </div>
+              </div>
+
+              <p v-if="daftarGuruError" class="error-text">{{ daftarGuruError }}</p>
+
+              <button
+                type="button"
+                class="btn-login"
+                :disabled="isDaftarGuruLoading"
+                :style="{ opacity: isDaftarGuruLoading ? 0.7 : 1, cursor: isDaftarGuruLoading ? 'not-allowed' : 'pointer' }"
+                @click="handleDaftarGuru"
+              >
+                {{ isDaftarGuruLoading ? 'Memproses...' : 'Daftar' }}
+              </button>
+
+              <button type="button" class="link-btn back-link" @click="kembaliKeLoginGuru">
                 ← Kembali ke halaman login
               </button>
             </template>
@@ -806,7 +977,8 @@ async function handleDaftarAdmin() {
               </button>
             </template>
 
-            <template v-if="!(selectedRole === 'guru' && guruAuthMode === 'lupa') && !(selectedRole === 'siswa' && siswaAuthMode === 'daftar') && !(selectedRole === 'admin' && adminAuthMode === 'daftar')">
+            <!-- PERUBAHAN: 'lupa' diganti guruAuthMode !== 'login' supaya tombol Masuk juga hilang di mode daftar guru -->
+            <template v-if="!(selectedRole === 'guru' && guruAuthMode !== 'login') && !(selectedRole === 'siswa' && siswaAuthMode === 'daftar') && !(selectedRole === 'admin' && adminAuthMode === 'daftar')">
               <p v-if="errorMessage" class="error-text">
                 {{ errorMessage }}
               </p>
@@ -855,6 +1027,7 @@ async function handleDaftarAdmin() {
   min-height: 560px;
   display: grid;
   grid-template-columns: 1fr 1fr;
+  align-items: stretch;
   background: #1e3a6e;
   border-radius: 28px;
   overflow: hidden;
@@ -1108,8 +1281,16 @@ async function handleDaftarAdmin() {
 
 .forgot-link {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-end; /* Rata kanan */
+  align-items: center;
+  gap: 12px;
   margin-top: 8px;
+}
+.forgot-link .link-btn:not(:last-child)::after {
+  content: '|';
+  margin-left: 12px;
+  color: #4a5b7a;
+  pointer-events: none;
 }
 
 .link-btn {

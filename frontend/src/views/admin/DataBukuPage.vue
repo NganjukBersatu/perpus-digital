@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import * as XLSX from 'xlsx'
 import { authHeaders } from '@/utils/auth'
 
 const API_URL = `${import.meta.env.VITE_API_BASE_URL}/buku`
@@ -49,6 +50,168 @@ const isSaving = ref(false)
 const formError = ref('')
 const bukuTersimpan = ref(false)
 const kodeBukuTersimpan = ref('')
+
+// ===== IMPORT SPREADSHEET =====
+const showImportModal = ref(false)
+const importFileName = ref('')
+const importRows = ref([])
+const importError = ref('')
+const isImporting = ref(false)
+const importProgress = ref(0)
+const importSelesai = ref(false)
+const importBerhasil = ref(0)
+const importGagal = ref([])
+const fileInputRef = ref(null)
+
+// Nama kolom spreadsheet (setelah dinormalisasi) -> field di tabel
+const KOLOM_ALIAS = {
+  judul: 'judul', judulbuku: 'judul', title: 'judul',
+  penulis: 'penulis', pengarang: 'penulis', author: 'penulis',
+  penerbit: 'penerbit', publisher: 'penerbit',
+  kategori: 'kategori', category: 'kategori',
+  isbn: 'isbn',
+  lokasi: 'lokasi', rak: 'lokasi', location: 'lokasi',
+  status: 'status',
+  barcode: 'barcode', kodebuku: 'barcode', kode: 'barcode',
+  jumlaheksemplar: 'jumlahEksemplar', eksemplar: 'jumlahEksemplar', jumlah: 'jumlahEksemplar', stok: 'jumlahEksemplar',
+  prefixeksemplar: 'prefixEksemplar', prefixbarcode: 'prefixEksemplar', prefix: 'prefixEksemplar',
+}
+
+function normalisasiHeader(h) {
+  return String(h || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+function nilaiAtauNull(v) {
+  if (v === undefined || v === null) return null
+  const s = String(v).trim()
+  return s === '' ? null : s
+}
+
+function cariKategoriId(nama) {
+  if (!nama) return null
+  const target = String(nama).trim().toLowerCase()
+  const ketemu = daftarKategori.value.find((k) => String(k.nama || '').trim().toLowerCase() === target)
+  return ketemu ? ketemu.id : null
+}
+
+function bukaImport() {
+  importFileName.value = ''
+  importRows.value = []
+  importError.value = ''
+  importProgress.value = 0
+  importSelesai.value = false
+  importBerhasil.value = 0
+  importGagal.value = []
+  isImporting.value = false
+  if (fileInputRef.value) fileInputRef.value.value = ''
+  showImportModal.value = true
+}
+
+function tutupImport() {
+  if (isImporting.value) return
+  showImportModal.value = false
+}
+
+function pilihFileImport() {
+  fileInputRef.value?.click()
+}
+
+async function bacaFileImport(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+
+  importError.value = ''
+  importRows.value = []
+  importSelesai.value = false
+  importFileName.value = file.name
+
+  try {
+    const buffer = await file.arrayBuffer()
+    const wb = XLSX.read(buffer, { type: 'array' })
+    const sheet = wb.Sheets[wb.SheetNames[0]]
+    const mentah = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: false })
+
+    if (!mentah.length) {
+      importError.value = 'File kosong atau tidak ada data pada sheet pertama.'
+      return
+    }
+
+    const hasil = []
+    for (const baris of mentah) {
+      const row = {
+        judul: null, penulis: null, penerbit: null, kategori: null, isbn: null,
+        lokasi: null, status: null, barcode: null, jumlahEksemplar: null, prefixEksemplar: null,
+      }
+      for (const [kolom, nilai] of Object.entries(baris)) {
+        const field = KOLOM_ALIAS[normalisasiHeader(kolom)]
+        if (field) row[field] = nilaiAtauNull(nilai)
+      }
+      // lewati baris yang benar-benar kosong
+      if (Object.values(row).every((v) => v === null)) continue
+
+      if (row.jumlahEksemplar !== null) {
+        const n = Number(row.jumlahEksemplar)
+        row.jumlahEksemplar = Number.isFinite(n) ? n : null
+      }
+      hasil.push(row)
+    }
+
+    if (!hasil.length) {
+      importError.value =
+        'Tidak ada kolom yang cocok. Gunakan header: Judul, Penulis, Penerbit, Kategori, ISBN, Lokasi, Status, Barcode, Jumlah Eksemplar, Prefix.'
+      return
+    }
+    importRows.value = hasil
+  } catch (err) {
+    console.error(err)
+    importError.value = 'Gagal membaca file. Pastikan formatnya .xlsx, .xls, atau .csv.'
+  }
+}
+
+async function jalankanImport() {
+  if (!importRows.value.length || isImporting.value) return
+
+  isImporting.value = true
+  importProgress.value = 0
+  importBerhasil.value = 0
+  importGagal.value = []
+  importSelesai.value = false
+
+  for (let i = 0; i < importRows.value.length; i++) {
+    const r = importRows.value[i]
+    const payload = {
+      judul: r.judul,
+      penulis: r.penulis,
+      penerbit: r.penerbit,
+      kategoriId: cariKategoriId(r.kategori),
+      isbn: r.isbn,
+      lokasi: r.lokasi,
+      status: r.status,
+      barcode: r.barcode,
+      jumlahEksemplar: r.barcode ? null : r.jumlahEksemplar,
+      prefixEksemplar: r.barcode ? null : r.prefixEksemplar,
+    }
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Ditolak server')
+      }
+      importBerhasil.value++
+    } catch (err) {
+      importGagal.value.push({ baris: i + 2, judul: r.judul, pesan: err.message || 'Gagal' })
+    }
+    importProgress.value = i + 1
+  }
+
+  isImporting.value = false
+  importSelesai.value = true
+  await ambilDataBuku()
+}
 
 // ===== OPSI A: Mode input saling eksklusif =====
 // True kalau barcode diisi (mode scan 1 buku)
@@ -389,12 +552,20 @@ onUnmounted(() => {
         <h1>Data Buku</h1>
         <p class="subtitle">Kelola koleksi buku yang tersedia di perpustakaan.</p>
       </div>
-      <button class="btn-tambah" type="button" @click="openTambah">
-        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 5v14M5 12h14" stroke-linecap="round" />
-        </svg>
-        Tambah Buku
-      </button>
+      <div class="header-actions">
+        <button class="btn-import" type="button" @click="bukaImport">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 4v11M7 10l5 5 5-5M5 20h14" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          Import
+        </button>
+        <button class="btn-tambah" type="button" @click="openTambah">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12h14" stroke-linecap="round" />
+          </svg>
+          Tambah Buku
+        </button>
+      </div>
     </div>
 
     <div v-if="errorMessage" class="banner error">⚠️ {{ errorMessage }}</div>
@@ -689,6 +860,108 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- MODAL IMPORT SPREADSHEET -->
+    <div v-if="showImportModal" class="modal-overlay" @click.self="tutupImport">
+      <div class="modal-box import-modal-box">
+        <div class="modal-header">
+          <h2>Import Data Buku</h2>
+          <button class="icon-btn" type="button" @click="tutupImport" title="Tutup" aria-label="Tutup">✕</button>
+        </div>
+
+        <div class="import-body">
+          <p class="hint import-help">
+            Pilih file .xlsx, .xls, atau .csv. Baris pertama harus berisi header:
+            <strong>Judul, Penulis, Penerbit, Kategori, ISBN, Lokasi, Status, Barcode, Jumlah Eksemplar, Prefix</strong>.
+            Kolom yang tidak ada atau sel yang kosong akan diisi <code>null</code>.
+          </p>
+
+          <input
+            ref="fileInputRef"
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            class="import-file-input"
+            @change="bacaFileImport"
+          />
+          <div class="import-picker">
+            <button type="button" class="btn-simpan btn-simpan--outline" :disabled="isImporting" @click="pilihFileImport">
+              Pilih File
+            </button>
+            <span class="import-filename">{{ importFileName || 'Belum ada file dipilih' }}</span>
+          </div>
+
+          <div v-if="importError" class="form-error">{{ importError }}</div>
+
+          <div v-if="importRows.length" class="import-preview">
+            <div class="import-preview-title">
+              Ditemukan {{ importRows.length }} baris. Pratinjau (maks. 5 baris):
+            </div>
+            <div class="import-preview-wrap">
+              <table class="import-preview-table">
+                <thead>
+                  <tr>
+                    <th>Judul</th>
+                    <th>Penulis</th>
+                    <th>Kategori</th>
+                    <th>ISBN</th>
+                    <th>Barcode</th>
+                    <th>Eksemplar</th>
+                    <th>Lokasi</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(r, i) in importRows.slice(0, 5)" :key="i">
+                    <td>{{ r.judul ?? 'null' }}</td>
+                    <td>{{ r.penulis ?? 'null' }}</td>
+                    <td>{{ r.kategori ?? 'null' }}</td>
+                    <td>{{ r.isbn ?? 'null' }}</td>
+                    <td>{{ r.barcode ?? 'null' }}</td>
+                    <td>{{ r.jumlahEksemplar ?? 'null' }}</td>
+                    <td>{{ r.lokasi ?? 'null' }}</td>
+                    <td>{{ r.status ?? 'null' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div v-if="isImporting" class="import-progress">
+            <div class="import-progress-bar">
+              <div
+                class="import-progress-fill"
+                :style="{ width: (importProgress / importRows.length * 100) + '%' }"
+              ></div>
+            </div>
+            <span>Mengimpor {{ importProgress }} / {{ importRows.length }}...</span>
+          </div>
+
+          <div v-if="importSelesai" class="form-sukses">
+            ✓ Import selesai: {{ importBerhasil }} berhasil, {{ importGagal.length }} gagal.
+          </div>
+          <div v-if="importSelesai && importGagal.length" class="form-error import-gagal">
+            <div v-for="g in importGagal.slice(0, 10)" :key="g.baris">
+              Baris {{ g.baris }}{{ g.judul ? ` (${g.judul})` : '' }}: {{ g.pesan }}
+            </div>
+            <div v-if="importGagal.length > 10">...dan {{ importGagal.length - 10 }} baris lainnya.</div>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-batal" :disabled="isImporting" @click="tutupImport">
+            {{ importSelesai ? 'Tutup' : 'Batal' }}
+          </button>
+          <button
+            type="button"
+            class="btn-simpan"
+            :disabled="!importRows.length || isImporting || importSelesai"
+            @click="jalankanImport"
+          >
+            {{ isImporting ? 'Mengimpor...' : `Import ${importRows.length || ''} Data` }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div v-if="showDetailModal" class="modal-overlay" @click.self="tutupDetail">
       <div class="modal-box detail-modal-box">
         <div class="modal-header modal-header-close-only">
@@ -884,6 +1157,12 @@ table {
   color: #6b7280;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .btn-tambah {
   display: inline-flex;
   align-items: center;
@@ -897,6 +1176,24 @@ table {
   font-weight: 600;
   cursor: pointer;
   box-shadow: 0 8px 16px rgba(91, 77, 255, 0.25);
+}
+
+.btn-import {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  color: #5b4dff;
+  border: 1px solid #5b4dff;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-import:hover {
+  background: #f3f2ff;
 }
 
 .search-box {
@@ -1417,6 +1714,11 @@ tbody tr:hover { background: #f9fafb; }
   cursor: pointer;
 }
 
+.btn-batal:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .btn-simpan {
   border: 0;
   background: #5b4dff;
@@ -1452,6 +1754,101 @@ tbody tr:hover { background: #f9fafb; }
   border: 1px solid #a7f3d0;
   border-radius: 8px;
   padding: 8px 12px;
+}
+
+/* ===== IMPORT SPREADSHEET ===== */
+.import-modal-box {
+  width: 640px;
+}
+
+.import-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.import-help {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.import-help code {
+  background: #f3f4f6;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.import-file-input {
+  display: none;
+}
+
+.import-picker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.import-filename {
+  font-size: 12px;
+  color: #6b7280;
+  word-break: break-all;
+}
+
+.import-preview-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.import-preview-wrap {
+  overflow-x: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.import-preview-table {
+  min-width: 560px;
+  font-size: 12px;
+}
+
+.import-preview-table th,
+.import-preview-table td {
+  position: static;
+  box-shadow: none;
+  padding: 8px 10px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.import-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.import-progress-bar {
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.import-progress-fill {
+  height: 100%;
+  background: #5b4dff;
+  transition: width 0.2s ease;
+}
+
+.import-gagal {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 140px;
+  overflow-y: auto;
 }
 
 .confirm-box {
@@ -1533,6 +1930,17 @@ tbody tr:hover { background: #f9fafb; }
 
   .header h1 {
     font-size: 18px;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .header-actions .btn-import,
+  .header-actions .btn-tambah {
+    flex: 1;
+    justify-content: center;
+    padding: 11px 16px;
   }
 
   .btn-tambah {

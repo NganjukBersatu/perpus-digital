@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "uniq_peminjaman_aktif_per_eksemplar" ON "peminjaman" USING btree ("eksemplar_id") WHERE "peminjaman"."tanggal_dikembalikan" IS NULL;

@@ -4,6 +4,7 @@ const db = require('../db')
 const { buku, kategori, eksemplarBuku, peminjaman, anggota } = require('../db/schema')
 const { eq, ilike, and, sql, isNull } = require('drizzle-orm')
 const { wajibLogin, wajibAdmin } = require('./auth')
+const { escapeLike } = require('../utils/validasi')
 
 // ============================================================
 // HELPER
@@ -90,7 +91,7 @@ router.get('/', wajibLogin, async (req, res) => {
   try {
     const { q, kategoriNama, status } = req.query
     const conditions = [eq(buku.sekolahId, req.user.sekolahId)]
-    if (q) conditions.push(ilike(buku.judul, `%${q}%`))
+    if (q) conditions.push(ilike(buku.judul, `%${escapeLike(String(q))}%`))
     if (status) conditions.push(eq(buku.status, status))
 
     const rows = await db
@@ -130,6 +131,7 @@ router.get('/', wajibLogin, async (req, res) => {
 router.get('/:id/detail', wajibAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id)
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'ID buku tidak valid' })
 
     const [bukuData] = await db
       .select({
@@ -188,7 +190,7 @@ router.get('/:id/detail', wajibAdmin, async (req, res) => {
 // ============================================================
 router.post('/', wajibAdmin, async (req, res) => {
   try {
-    const { judul, penulis, kategoriId, isbn, lokasi, status, barcode, jumlahEksemplar } = req.body || {}
+    const { judul, penulis, kategoriId, isbn, lokasi, status, barcode, jumlahEksemplar, prefixEksemplar } = req.body || {}
 
     const judulBersih = String(judul ?? '').trim()
     const penulisBersih = String(penulis ?? '').trim()
@@ -199,6 +201,7 @@ router.post('/', wajibAdmin, async (req, res) => {
     // Jumlah eksemplar: default 1, dibatasi 1-500 supaya tidak bisa dipakai membanjiri tabel
     const jumlahBaru = Math.min(Math.max(Math.floor(Number(jumlahEksemplar)) || 1, 1), 500)
     const barcodeBersih = bersihkanBarcode(barcode)
+    const prefixBersih = String(prefixEksemplar ?? '').trim().slice(0, 40)
     const { sekolahId } = req.user
 
     const hasil = await db.transaction(async (tx) => {
@@ -262,7 +265,7 @@ router.post('/', wajibAdmin, async (req, res) => {
         // Tidak ada barcode fisik -> generate otomatis. buatBarcodeOtomatis()
         // menghitung eksemplar yang SUDAH ADA dulu, supaya nomor urutnya tidak
         // bentrok saat buku duplikat ditambahkan berkali-kali.
-        const eksemplarBaru = await buatBarcodeOtomatis(tx, bukuId, isbn || bukuSama?.isbn, jumlahBaru)
+        const eksemplarBaru = await buatBarcodeOtomatis(tx, bukuId, prefixBersih || isbn || bukuSama?.isbn, jumlahBaru)
         await tx.insert(eksemplarBuku).values(eksemplarBaru.map((e) => ({ ...e, sekolahId })))
       }
 
@@ -357,6 +360,7 @@ router.post('/:id/eksemplar', wajibAdmin, async (req, res) => {
 router.get('/:id/untuk-pinjam', wajibAdmin, async (req, res) => {
   try {
     const bukuId = Number(req.params.id)
+    if (!Number.isInteger(bukuId)) return res.status(400).json({ message: 'ID buku tidak valid' })
 
     const [bukuData] = await db.select().from(buku).where(and(eq(buku.id, bukuId), eq(buku.sekolahId, req.user.sekolahId)))
     if (!bukuData) {
@@ -464,6 +468,7 @@ router.put('/:id', wajibAdmin, async (req, res) => {
 router.delete('/:id', wajibAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id)
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'ID buku tidak valid' })
 
     const [bukuAda] = await db.select().from(buku).where(and(eq(buku.id, id), eq(buku.sekolahId, req.user.sekolahId)))
     if (!bukuAda) {
@@ -518,9 +523,9 @@ router.delete('/:id', wajibAdmin, async (req, res) => {
   } catch (err) {
     console.error(err)
 
-    // Kode 23001 = foreign key RESTRICT (masih ada riwayat di tabel peminjaman,
+    // Kode 23503 = pelanggaran foreign key (masih ada riwayat di tabel peminjaman,
     // walaupun status peminjamannya sudah "dikembalikan")
-    if (err.cause?.code === '23001') {
+    if ((err.cause?.code || err.code) === '23503') {
       return res.status(409).json({
         error: 'Buku ini tidak bisa dihapus karena masih memiliki riwayat peminjaman (pernah dipinjam/dikembalikan).',
       })

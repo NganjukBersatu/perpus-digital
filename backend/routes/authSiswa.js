@@ -2,8 +2,8 @@ const express = require('express')
 const router = express.Router()
 const jwt = require('jsonwebtoken')
 const { db } = require('../db/client')
-const { anggota } = require('../db/schema')
-const { eq, and, isNull } = require('drizzle-orm')
+const { anggota, kelas: tabelKelas } = require('../db/schema')
+const { eq, and, sql } = require('drizzle-orm')
 const { loginLimiter, daftarLimiter } = require('../middleware/rateLimiter')
 const { normalisasiTanggal } = require('../utils/validasi')
 const { ambilSekolahAktif } = require('../utils/sekolah')
@@ -84,7 +84,7 @@ router.post('/daftar', daftarLimiter, async (req, res) => {
 
     const namaBersih = String(nama ?? '').trim()
     const nisBersih = String(nis ?? '').trim()
-    const kelasBersih = String(kelas ?? '').trim().replace(/\s+/g, ' ').toUpperCase()
+    const kelasBersih = String(kelas ?? '').trim().replace(/\s+/g, ' ')
 
     if (!namaBersih) {
       return res.status(400).json({ error: 'Nama wajib diisi' })
@@ -103,8 +103,20 @@ router.post('/daftar', daftarLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Data terlalu panjang' })
     }
 
-    const [ada] = await db
-      .select()
+    const [kelasResmi] = await db
+      .select({ namaKelas: tabelKelas.namaKelas })
+      .from(tabelKelas)
+      .where(and(
+        eq(tabelKelas.sekolahId, sek.id),
+        sql`lower(${tabelKelas.namaKelas}) = lower(${kelasBersih})`
+      ))
+      .limit(1)
+    if (!kelasResmi) {
+      return res.status(400).json({ error: 'Kelas tidak terdaftar di sekolah ini' })
+    }
+
+    const [nisSudahAda] = await db
+      .select({ id: anggota.id })
       .from(anggota)
       .where(and(eq(anggota.sekolahId, sek.id), eq(anggota.nis, nisBersih)))
       .limit(1)
@@ -137,7 +149,7 @@ router.post('/daftar', daftarLimiter, async (req, res) => {
         sekolahId: sek.id,
         nama: namaBersih,
         nis: nisBersih,
-        kelas: kelasBersih,
+        kelas: kelasResmi.namaKelas,
         tanggalLahir: tgl,
         peran: 'siswa',
       })
@@ -164,7 +176,7 @@ router.post('/daftar', daftarLimiter, async (req, res) => {
 })
 
 // Middleware untuk lindungi endpoint yang butuh login siswa
-function wajibLoginSiswa(req, res, next) {
+async function wajibLoginSiswa(req, res, next) {
   const authHeader = req.headers.authorization
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Belum login' })
@@ -180,6 +192,14 @@ function wajibLoginSiswa(req, res, next) {
   }
   if (!Number.isInteger(payload.sekolahId)) {
     return res.status(401).json({ error: 'Sesi tidak valid, silakan login ulang' })
+  }
+  try {
+    if (!(await ambilSekolahAktif(payload.sekolahId))) {
+      return res.status(401).json({ error: 'Sekolah tidak aktif, silakan login ulang' })
+    }
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'Gagal memeriksa sesi' })
   }
   req.user = payload // data siswa (id, role, sekolahId) dipakai route di bawahnya
   req.siswa = payload  

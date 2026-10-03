@@ -195,7 +195,7 @@ async function handleLogin() {
 
     // Ambil nama sesuai bentuk response masing-masing role
     let nama = ''
-    if (data.role === 'admin') nama = data.admin?.namaLengkap || data.nama
+    if (data.role === 'admin') nama = data.admin?.admin?.namaLengkap || data.nama
     else if (data.role === 'siswa') nama = data.siswa?.nama
     else if (data.role === 'guru') nama = data.guru?.nama
 
@@ -206,7 +206,7 @@ async function handleLogin() {
       localStorage.setItem('sekolahNama', data.sekolah.nama || '')
     }
     localStorage.setItem('user', JSON.stringify({
-      id: data.siswa?.id || data.guru?.id,
+      id: data.siswa?.id || data.guru?.id || data.admin?.admin?.id,
       role: data.role || selectedRole.value,
       nama,
       kelas: data.siswa?.kelas || data.guru?.kelas,
@@ -480,8 +480,6 @@ async function handleDaftarAdmin() {
       return
     }
 
-    // sekolah baru langsung terpilih di dropdown
-    if (data.sekolah?.id) sekolahId.value = String(data.sekolah.id)
     await muatDaftarSekolah()
 
     // kembali ke form login dengan username sudah terisi

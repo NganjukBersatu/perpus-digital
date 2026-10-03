@@ -1,7 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 
-// samakan dengan cara halaman lain memanggil backend (cek VITE_API_URL / baseURL Anda)
 const API = import.meta.env.VITE_API_BASE_URL
 const KUNCI = 'superadmin_token'
 
@@ -69,7 +68,7 @@ async function muat() {
   memuat.value = true
   pesan.value = ''
   try {
-daftar.value = await panggil('/sekolah')
+    daftar.value = await panggil('/sekolah')
   } catch (e) {
     pesan.value = e.message
   } finally {

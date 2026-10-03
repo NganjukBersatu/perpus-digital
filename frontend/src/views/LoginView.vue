@@ -108,7 +108,7 @@ const usernameStatus = ref('') // '' | 'memeriksa' | 'tersedia' | 'dipakai'
 
 // BARU: State untuk form "Laporkan Kendala" (laporan masuk ke superadmin)
 const kendalaMode = ref(false)
-const kendalaForm = ref({ kontak: '', jenis: '', pesan: '' })
+const kendalaForm = ref({ nama: '', nisNip: '', kontak: '', jenis: '', pesan: '' })
 const kendalaError = ref('')
 const kendalaMessage = ref('')
 const isKendalaLoading = ref(false)

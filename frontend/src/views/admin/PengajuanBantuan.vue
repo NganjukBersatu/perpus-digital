@@ -8,10 +8,10 @@ const memuat = ref(false)
 const pesan = ref('')
 const filterStatus = ref('Semua')
 const kataKunci = ref('')
-const terpilih = ref(null) // pengajuan yang dibuka detailnya
+const terpilih = ref(null) // laporan yang dibuka detailnya
 
-const TAB = ['Semua', 'baru', 'diproses', 'selesai']
-const LABEL = { baru: 'Baru', diproses: 'Diproses', selesai: 'Selesai' }
+const TAB = ['Semua', 'baru', 'selesai']
+const LABEL = { baru: 'Baru', selesai: 'Selesai' }
 
 async function panggil(path, opsi = {}) {
   const res = await fetch(API + path, {
@@ -30,7 +30,7 @@ async function muat() {
   memuat.value = true
   pesan.value = ''
   try {
-    daftar.value = await panggil('/bantuan')
+    daftar.value = await panggil('/admin/kendala')
   } catch (e) {
     pesan.value = e.message
   } finally {
@@ -38,14 +38,12 @@ async function muat() {
   }
 }
 
-async function ubahStatus(item, status) {
+async function tandaiSelesai(item) {
   pesan.value = ''
   try {
-    const baru = await panggil(`/bantuan/${item.id}/status`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status }),
-    })
-    item.status = baru.status ?? status
+    await panggil(`/admin/kendala/${item.id}/selesai`, { method: 'PATCH' })
+    item.status = 'selesai'
+    if (terpilih.value && terpilih.value.id === item.id) terpilih.value = null
   } catch (e) {
     pesan.value = e.message
   }
@@ -57,7 +55,7 @@ const tampil = computed(() => {
     const cocokStatus = filterStatus.value === 'Semua' || d.status === filterStatus.value
     const cocokCari =
       !q ||
-      [d.nama, d.nisNip, d.jenis, d.pesan].some((v) => String(v ?? '').toLowerCase().includes(q))
+      [d.kontak, d.jenis, d.pesan, d.role].some((v) => String(v ?? '').toLowerCase().includes(q))
     return cocokStatus && cocokCari
   })
 })
@@ -78,7 +76,7 @@ onMounted(muat)
     <div class="judul-baris">
       <div>
         <h1>Pengajuan Bantuan</h1>
-        <p class="sub">Kendala login dan pendaftaran yang diajukan siswa dan guru.</p>
+        <p class="sub">Kendala login yang dilaporkan siswa dan guru di sekolah Anda.</p>
       </div>
       <button class="btn-garis" :disabled="memuat" @click="muat">
         {{ memuat ? 'Memuat...' : 'Muat ulang' }}
@@ -88,7 +86,7 @@ onMounted(muat)
     <div class="filter-baris">
       <div class="cari">
         <span>⌕</span>
-        <input v-model="kataKunci" type="text" placeholder="Cari nama, NIS/NIP, atau kendala..." />
+        <input v-model="kataKunci" type="text" placeholder="Cari kontak, peran, atau kendala..." />
       </div>
       <div class="tab">
         <button
@@ -103,7 +101,7 @@ onMounted(muat)
     </div>
 
     <p v-if="pesan" class="galat">{{ pesan }}</p>
-    <p v-if="!memuat && tampil.length === 0" class="kosong">
+    <p v-if="!memuat && !pesan && tampil.length === 0" class="kosong">
       Tidak ada pengajuan yang cocok.
     </p>
 
@@ -112,9 +110,8 @@ onMounted(muat)
         <thead>
           <tr>
             <th>No</th>
-            <th>Nama</th>
             <th>Peran</th>
-            <th>NIS / NIP</th>
+            <th>Kontak</th>
             <th>Kendala</th>
             <th>Tanggal</th>
             <th>Status</th>
@@ -124,27 +121,19 @@ onMounted(muat)
         <tbody>
           <tr v-for="(d, i) in tampil" :key="d.id">
             <td>{{ i + 1 }}</td>
-            <td class="tebal">{{ d.nama }}</td>
-            <td class="kapital">{{ d.peran }}</td>
-            <td>{{ d.nisNip || '-' }}</td>
+            <td class="kapital tebal">{{ d.role }}</td>
+            <td>{{ d.kontak || '-' }}</td>
             <td>{{ d.jenis }}</td>
-            <td>{{ tanggal(d.createdAt) }}</td>
+            <td>{{ tanggal(d.dibuat_pada) }}</td>
             <td>
               <span class="lencana" :class="d.status">{{ LABEL[d.status] || d.status }}</span>
             </td>
             <td class="aksi">
               <button class="btn-garis biru" @click="terpilih = d">Detail</button>
               <button
-                v-if="d.status === 'baru'"
-                class="btn-garis biru"
-                @click="ubahStatus(d, 'diproses')"
-              >
-                Proses
-              </button>
-              <button
                 v-if="d.status !== 'selesai'"
                 class="btn-garis hijau"
-                @click="ubahStatus(d, 'selesai')"
+                @click="tandaiSelesai(d)"
               >
                 Selesai
               </button>
@@ -159,27 +148,18 @@ onMounted(muat)
       <div class="modal">
         <h2>Detail Pengajuan</h2>
         <dl>
-          <dt>Nama</dt><dd>{{ terpilih.nama }}</dd>
-          <dt>Peran</dt><dd class="kapital">{{ terpilih.peran }}</dd>
-          <dt>NIS / NIP</dt><dd>{{ terpilih.nisNip || '-' }}</dd>
+          <dt>Peran</dt><dd class="kapital">{{ terpilih.role }}</dd>
           <dt>Kendala</dt><dd>{{ terpilih.jenis }}</dd>
           <dt>Pesan</dt><dd class="pesan">{{ terpilih.pesan || '-' }}</dd>
           <dt>Kontak balasan</dt><dd>{{ terpilih.kontak || '-' }}</dd>
-          <dt>Tanggal</dt><dd>{{ tanggal(terpilih.createdAt) }}</dd>
+          <dt>Tanggal</dt><dd>{{ tanggal(terpilih.dibuat_pada) }}</dd>
         </dl>
         <div class="modal-aksi">
           <button class="btn-garis" @click="terpilih = null">Tutup</button>
           <button
-            v-if="terpilih.status === 'baru'"
-            class="btn-utama"
-            @click="ubahStatus(terpilih, 'diproses')"
-          >
-            Tandai Diproses
-          </button>
-          <button
             v-if="terpilih.status !== 'selesai'"
             class="btn-utama hijau-bg"
-            @click="ubahStatus(terpilih, 'selesai')"
+            @click="tandaiSelesai(terpilih)"
           >
             Tandai Selesai
           </button>

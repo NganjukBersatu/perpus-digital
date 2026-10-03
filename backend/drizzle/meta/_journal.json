@@ -113,6 +113,13 @@
       "when": 1790929315446,
       "tag": "0015_sekolah_id_not_null",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1791008939550,
+      "tag": "0016_faulty_wendigo",
+      "breakpoints": true
     }
   ]
 }

@@ -77,6 +77,8 @@ let jumlahTerakhirDiketahui = null
 async function fetchNotifikasi() {
   try {
     const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/dashboard/notifikasi`, { headers: { ...authHeaders() } })
+    if (res.status === 401) { logoutUser(router); return }
+    if (!res.ok) return
     const data = await res.json()
     const sekarang = new Date().toISOString()
 

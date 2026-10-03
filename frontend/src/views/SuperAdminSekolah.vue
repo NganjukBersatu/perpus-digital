@@ -1,8 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 
-// samakan dengan cara halaman lain memanggil backend (cek VITE_API_URL / baseURL Anda)
-const API = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+const API = import.meta.env.VITE_API_BASE_URL
 const KUNCI = 'superadmin_token'
 
 const token = ref(localStorage.getItem(KUNCI) || '')
@@ -49,7 +48,7 @@ async function masuk() {
   memuat.value = true
   try {
     // tanpa sekolahId, backend hanya mencari akun superadmin
-    const data = await panggil('/api/auth/login', {
+    const data = await panggil('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ username: username.value.trim(), password: password.value }),
     })
@@ -69,7 +68,7 @@ async function muat() {
   memuat.value = true
   pesan.value = ''
   try {
-    daftar.value = await panggil('/api/sekolah')
+    daftar.value = await panggil('/sekolah')
   } catch (e) {
     pesan.value = e.message
   } finally {
@@ -81,7 +80,7 @@ async function ubahStatus(s, status, tanya) {
   if (!window.confirm(`${tanya} "${s.nama}"?`)) return
   pesan.value = ''
   try {
-    const baru = await panggil(`/api/sekolah/${s.id}/status`, {
+    const baru = await panggil(`/sekolah/${s.id}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     })

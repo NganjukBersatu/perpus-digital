@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { authHeaders } from '@/utils/auth'
 
 const API_URL = `${import.meta.env.VITE_API_BASE_URL}/buku`
 const KATEGORI_URL = `${import.meta.env.VITE_API_BASE_URL}/kategori`
@@ -77,7 +78,7 @@ const barcodeValid = computed(() => {
 
 async function ambilDaftarKategori() {
   try {
-    const res = await fetch(KATEGORI_URL)
+    const res = await fetch(KATEGORI_URL, { headers: { ...authHeaders() } })
     if (res.ok) daftarKategori.value = await res.json()
   } catch (err) {
     console.error('Gagal mengambil kategori', err)
@@ -88,7 +89,7 @@ async function ambilDataBuku() {
   isLoading.value = true
   errorMessage.value = ''
   try {
-    const res = await fetch(API_URL)
+    const res = await fetch(API_URL, { headers: { ...authHeaders() } })
     if (!res.ok) throw new Error()
     bukuList.value = await res.json()
   } catch (err) {
@@ -174,7 +175,7 @@ async function simpanBuku() {
     }
     const res = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(payload),
     })
     if (!res.ok) throw new Error()
@@ -222,6 +223,7 @@ async function konfirmasiHapus() {
   try {
     const res = await fetch(`${API_URL}/${bukuToDelete.value.id}`, {
       method: 'DELETE',
+      headers: { ...authHeaders() },
     })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
@@ -247,6 +249,31 @@ async function konfirmasiHapus() {
 function batalHapus() {
   showConfirmModal.value = false
   bukuToDelete.value = null
+}
+
+async function bukaDetail(buku) {
+  detailBuku.value = null
+  detailLoading.value = true
+  showDetailModal.value = true
+  try {
+    const res = await fetch(`${API_URL}/${buku.id}/detail`, {
+      headers: { ...authHeaders() },
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || 'Gagal memuat detail buku')
+    detailBuku.value = data // bentuknya { buku: {...}, eksemplar: [...] }
+  } catch (err) {
+    console.error(err)
+    showDetailModal.value = false
+    errorMessage.value = err.message || 'Gagal memuat detail buku'
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+function tutupDetail() {
+  showDetailModal.value = false
+  detailBuku.value = null
 }
 
 const filteredList = computed(() => {

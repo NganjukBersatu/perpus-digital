@@ -309,7 +309,7 @@ router.post('/guru/lupa-password', loginLimiter, async (req, res) => {
 })
 
 // Verifikasi token saja, tanpa cek peran. Dipakai wajibLogin dan wajibSuperAdmin.
-function verifikasiToken(req, res, next) {
+async function verifikasiToken(req, res, next) {
   const authHeader = req.headers.authorization
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Belum login' })
@@ -320,12 +320,20 @@ function verifikasiToken(req, res, next) {
   } catch {
     return res.status(401).json({ error: 'Sesi tidak valid, silakan login ulang' })
   }
-  // token lama (sebelum multi-sekolah) tidak punya sekolahId → paksa login ulang
   if (payload.role !== 'superadmin' && !Number.isInteger(payload.sekolahId)) {
     return res.status(401).json({ error: 'Sesi tidak valid, silakan login ulang' })
   }
+  if (payload.role !== 'superadmin') {
+    try {
+      if (!(await ambilSekolahAktif(payload.sekolahId))) {
+        return res.status(401).json({ error: 'Sekolah tidak aktif, silakan login ulang' })
+      }
+    } catch (err) {
+      console.error(err)
+      return res.status(500).json({ error: 'Gagal memeriksa sesi' })
+    }
+  }
   req.user = payload
-  // Alias lama, dipertahankan sementara. Hapus setelah `grep -rn "req\.admin" routes/` kosong.
   req.admin = payload
   next()
 }

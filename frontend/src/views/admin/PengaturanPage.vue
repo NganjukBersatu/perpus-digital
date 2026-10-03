@@ -84,7 +84,9 @@ function showToast(text) {
 
 async function loadSettings() {
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/pengaturan`)
+    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/pengaturan`, {
+      headers: { ...authHeaders() },
+    })
     if (!res.ok) throw new Error('Gagal memuat')
     const data = await res.json()
 

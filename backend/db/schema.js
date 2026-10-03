@@ -10,7 +10,9 @@ const {
   boolean,
   index,
   unique,
+  uniqueIndex,
 } = require("drizzle-orm/pg-core")
+const { sql } = require("drizzle-orm")
 
 // ============================================================
 // 1. TABEL YANG TIDAK PUNYA FK (didefinisikan paling atas)
@@ -172,6 +174,9 @@ const peminjaman = pgTable("peminjaman", {
   tanggalPinjamIdx: index("peminjaman_tanggal_pinjam_idx").on(table.tanggalPinjam),
   tanggalKembaliIdx: index("peminjaman_tanggal_kembali_idx").on(table.tanggalKembali),
   tanggalDikembalikanIdx: index("peminjaman_tanggal_dikembalikan_idx").on(table.tanggalDikembalikan),
+  aktifPerEksemplarUnik: uniqueIndex("uniq_peminjaman_aktif_per_eksemplar")
+    .on(table.eksemplarId)
+    .where(sql`${table.tanggalDikembalikan} IS NULL`),
 }))
 
 module.exports = {

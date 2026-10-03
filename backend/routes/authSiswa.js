@@ -3,7 +3,7 @@ const router = express.Router()
 const jwt = require('jsonwebtoken')
 const { db } = require('../db/client')
 const { anggota, kelas: tabelKelas } = require('../db/schema')
-const { eq, and, sql } = require('drizzle-orm')
+const { eq, and, sql, isNull } = require('drizzle-orm')
 const { loginLimiter, daftarLimiter } = require('../middleware/rateLimiter')
 const { normalisasiTanggal } = require('../utils/validasi')
 const { ambilSekolahAktif } = require('../utils/sekolah')
@@ -115,11 +115,16 @@ router.post('/daftar', daftarLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Kelas tidak terdaftar di sekolah ini' })
     }
 
-    const [nisSudahAda] = await db
-      .select({ id: anggota.id })
-      .from(anggota)
-      .where(and(eq(anggota.sekolahId, sek.id), eq(anggota.nis, nisBersih)))
-      .limit(1)
+    const [ada] = await db
+  .select({
+    id: anggota.id,
+    peran: anggota.peran,
+    tanggalLahir: anggota.tanggalLahir,
+    kelas: anggota.kelas,
+  })
+  .from(anggota)
+  .where(and(eq(anggota.sekolahId, sek.id), eq(anggota.nis, nisBersih)))
+  .limit(1)
 
     if (ada) {
       // sudah punya tanggal lahir = akun sudah aktif
@@ -128,10 +133,10 @@ router.post('/daftar', daftarLimiter, async (req, res) => {
       }
       // dibuat admin tanpa tanggal lahir -> lengkapi di baris yang sama
       const [diperbarui] = await db
-        .update(anggota)
-        .set({ tanggalLahir: tgl, kelas: ada.kelas ?? kelasBersih })
-        .where(and(eq(anggota.id, ada.id), eq(anggota.sekolahId, sek.id), isNull(anggota.tanggalLahir)))
-        .returning()
+       .update(anggota)
+       .set({ tanggalLahir: tgl, kelas: ada.kelas ?? kelasResmi.namaKelas })
+       .where(and(eq(anggota.id, ada.id), eq(anggota.sekolahId, sek.id), isNull(anggota.tanggalLahir)))
+       .returning()
       if (!diperbarui) {
         return res.status(409).json({ error: 'NIS ini sudah terdaftar. Silakan langsung login.' })
       }

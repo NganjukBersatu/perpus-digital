@@ -138,10 +138,6 @@ function formatTanggal(tgl) {
 }
 
 async function tandaiDikembalikan(item) {
-  if (!confirm(`Tandai buku "${item.judulBuku}" sebagai sudah dikembalikan?`)) {
-    return
-  }
-
   try {
     const res = await fetch(`${API}/peminjaman/${item.id}/kembalikan`, {
       method: 'PATCH',
@@ -156,6 +152,34 @@ async function tandaiDikembalikan(item) {
   } catch (err) {
     console.error(err)
     alert('Gagal menandai buku sebagai dikembalikan. Coba lagi.')
+  }
+}
+
+// ===== Modal konfirmasi tandai kembali =====
+const showKembaliModal = ref(false)
+const peminjamanTarget = ref(null)
+const sedangMengembalikan = ref(false)
+
+function mintaKembalikan(item) {
+  peminjamanTarget.value = item
+  showKembaliModal.value = true
+}
+
+function batalKembalikan() {
+  if (sedangMengembalikan.value) return
+  showKembaliModal.value = false
+  peminjamanTarget.value = null
+}
+
+async function konfirmasiKembalikan() {
+  if (!peminjamanTarget.value) return
+  sedangMengembalikan.value = true
+  try {
+    await tandaiDikembalikan(peminjamanTarget.value)
+    showKembaliModal.value = false
+    peminjamanTarget.value = null
+  } finally {
+    sedangMengembalikan.value = false
   }
 }
 
@@ -552,11 +576,11 @@ onUnmounted(() => {
               </button>
 
               <button
-                v-if="!item.tanggalDikembalikan"
-                class="detail-btn"
-                @click="tandaiDikembalikan(item)"
-              >
-                Tandai Kembali
+               v-if="!item.tanggalDikembalikan"
+               class="detail-btn"
+               @click="mintaKembalikan(item)"
+               >
+              Tandai Kembali
               </button>
 
               <span v-else class="sub-text">-</span>
@@ -617,6 +641,36 @@ onUnmounted(() => {
             {{ n }} / halaman
           </li>
         </ul>
+      </div>
+    </div>
+
+    <div v-if="showKembaliModal" class="modal-overlay" @click.self="batalKembalikan">
+      <div class="confirm-box">
+        <div class="confirm-icon">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+
+        <h3>Tandai Dikembalikan?</h3>
+        <p>
+          Yakin buku
+          <strong>"{{ peminjamanTarget?.judulBuku }}"</strong>
+          oleh <strong>{{ peminjamanTarget?.namaPeminjam }}</strong>
+          sudah dikembalikan?
+        </p>
+
+        <div class="confirm-actions">
+          <button type="button" class="btn-batal" @click="batalKembalikan">Batal</button>
+          <button
+            type="button"
+            class="btn-konfirmasi"
+            :disabled="sedangMengembalikan"
+            @click="konfirmasiKembalikan"
+          >
+            {{ sedangMengembalikan ? 'Memproses...' : 'Ya, Kembalikan' }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -983,6 +1037,98 @@ tbody tr:hover {
 .perpage-dropdown-list li:hover,
 .perpage-dropdown-list li.aktif {
   background: #dbeafe;
+}
+
+/* ===== Modal konfirmasi ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.confirm-box {
+  background: #fff;
+  border-radius: 14px;
+  width: 380px;
+  max-width: 92%;
+  padding: 28px 24px 24px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  text-align: center;
+}
+
+.confirm-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #d1fae5;
+  color: #059669;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+}
+
+.confirm-icon .icon-svg {
+  width: 24px;
+  height: 24px;
+}
+
+.confirm-box h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 8px;
+}
+
+.confirm-box p {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+.confirm-box p strong {
+  color: #374151;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.btn-batal {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #374151;
+  border-radius: 8px;
+  padding: 9px 18px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-konfirmasi {
+  border: 0;
+  background: #16a34a;
+  color: #fff;
+  border-radius: 8px;
+  padding: 9px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-konfirmasi:hover {
+  background: #15803d;
+}
+
+.btn-konfirmasi:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 @media (max-width: 640px) {
